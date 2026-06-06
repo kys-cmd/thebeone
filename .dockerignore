@@ -1,0 +1,11 @@
+# .dockerignore
+node_modules
+dist
+.git
+.github
+.vscode
+.env
+.env.local
+README.md
+Dockerfile
+cloudbuild.yaml

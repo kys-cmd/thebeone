@@ -1,0 +1,8 @@
+{
+  "name": "Remix: BE ONE: 비원아카데미",
+  "description": "정규강의, 특강, 그리고 강력한 커뮤니티가 결합된 비원아카데미입니다.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

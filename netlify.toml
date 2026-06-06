@@ -1,0 +1,80 @@
+# netlify.toml
+# Netlify 빌드 및 배포 설정
+
+[build]
+  command = "npm run build:netlify"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["rss-parser"]
+
+# 1. API Redirects to Netlify Functions
+[[redirects]]
+  from = "/api/payment/inicis/sign"
+  to = "/.netlify/functions/payment-sign"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/payment/inicis/notify"
+  to = "/.netlify/functions/payment-notify"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/payment/inicis/callback"
+  to = "/.netlify/functions/payment-callback"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/payment/close"
+  to = "/payment/close.html"
+  status = 200
+
+[[redirects]]
+  from = "/api/naver-blog"
+  to = "/.netlify/functions/naver-blog"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/test"
+  to = "/.netlify/functions/test"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/auth/send-reset-otp"
+  to = "/.netlify/functions/auth"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/auth/verify-reset-otp"
+  to = "/.netlify/functions/auth"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/auth/confirm-reset-password"
+  to = "/.netlify/functions/auth"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+# 2. SPA Fallback (Redirect all other routes to index.html)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[build.environment]
+  NODE_VERSION = "20"
