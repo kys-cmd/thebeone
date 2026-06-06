@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { authService } from '@/services/authService';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Header from './components/layout/Header';
 import { FloatingChat } from './components/community/FloatingChat';
 import Footer from './components/layout/Footer';
@@ -174,6 +175,7 @@ export default function App() {
   }, [setUser, setLoading]);
 
   return (
+    <ErrorBoundary>
     <Router>
       <div className="flex min-h-screen flex-col font-sans antialiased">
         <Routes>
@@ -245,5 +247,6 @@ export default function App() {
         <FloatingChat />
       </div>
     </Router>
+    </ErrorBoundary>
   );
 }

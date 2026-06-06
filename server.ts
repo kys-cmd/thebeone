@@ -9,15 +9,26 @@ import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import cors from "cors";
 import nodemailer from "nodemailer";
+import { rateLimit } from "express-rate-limit";
 
 // In-memory OTP Cache for password resets
+// NOTE: This is process-local. For multi-instance deployments, migrate to Redis or Supabase.
 interface OTPRecord {
   email: string;
   code: string;
   expiresAt: number;
   verified: boolean;
+  attempts: number;
 }
 const otpStorage = new Map<string, OTPRecord>();
+
+// Purge expired OTP records every 10 minutes to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of otpStorage.entries()) {
+    if (record.expiresAt < now) otpStorage.delete(key);
+  }
+}, 10 * 60 * 1000);
 
 // Load .env variables
 config();
@@ -44,8 +55,42 @@ async function startServer() {
   
   app.use(cors());
   // Use body-parser for payment notifications
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: "2mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "2mb" }));
+
+  // Global rate limiter – 200 req / 15 min per IP
+  const globalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { status: "error", message: "Too many requests, please try again later." },
+  });
+
+  // Strict limiter for auth / OTP endpoints (brute-force protection)
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { status: "error", message: "요청 횟수가 초과되었습니다. 잠시 후 다시 시도해주세요." },
+  });
+
+  // Payment endpoints – tighter limit to prevent abuse
+  const paymentLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { status: "error", message: "결제 요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+  });
+
+  app.use("/api", globalLimiter);
+  app.use("/api/auth/send-reset-otp", authLimiter);
+  app.use("/api/auth/verify-reset-otp", authLimiter);
+  app.use("/api/auth/reset-password-with-token", authLimiter);
+  app.use("/api/init-pay", paymentLimiter);
+  app.use("/api/inicis-callback", paymentLimiter);
 
   // Log all requests
   app.use((req, res, next) => {
