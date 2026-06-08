@@ -131,7 +131,7 @@ export interface Post {
   content: string;
   content_json?: any;
   hashtags?: string[];
-  type: 'notice' | 'general';
+  type: 'notice' | 'general' | 'mission_template' | 'mission_verification';
   views: number;
   image_urls?: string[];
   file_urls?: string[];

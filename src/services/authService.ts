@@ -26,7 +26,6 @@ export const authService = {
         .maybeSingle();
 
       const metadataRole = session.user.user_metadata?.role;
-      const isMasterEmail = session.user.email === 'kys@k-learn.co.kr';
 
       // If profile doesn't exist, try to create it (Self-Healing)
       if (!data && !error) {
@@ -37,7 +36,7 @@ export const authService = {
             nickname: session.user.user_metadata?.nickname || null,
             email: session.user.email || '',
             avatar_url: session.user.user_metadata?.avatar_url || '',
-            role: isMasterEmail ? 'super_admin' : (metadataRole || 'user'),
+            role: metadataRole || 'user',
             gender: session.user.user_metadata?.gender || null,
             birthdate: session.user.user_metadata?.birthdate || null,
             phone: session.user.user_metadata?.phone || null,
@@ -65,11 +64,9 @@ export const authService = {
       }
 
       if (data && !error) {
-        let finalRole = (metadataRole === 'super_admin' || metadataRole === 'admin')
+        const finalRole = (metadataRole === 'super_admin' || metadataRole === 'admin')
           ? metadataRole
           : (data.role || 'user');
-        
-        if (isMasterEmail) finalRole = 'super_admin';
 
         // Self-Healing / Syncing metadata to database if missing in profiles table
         const metadata = session.user.user_metadata;
@@ -114,7 +111,7 @@ export const authService = {
         name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
         nickname: session.user.user_metadata?.nickname || null,
         avatar_url: session.user.user_metadata?.avatar_url || '',
-        role: isMasterEmail ? 'super_admin' : (metadataRole || 'user'),
+        role: metadataRole || 'user',
         gender: session.user.user_metadata?.gender || null,
         birthdate: session.user.user_metadata?.birthdate || null,
         mobile_phone: session.user.user_metadata?.phone || null,
@@ -229,32 +226,8 @@ export const authService = {
   },
 
   async initializeAdminAccounts() {
-    // This is for development/initial setup
-    const accounts = [
-      { email: 'admin@beone.internal', password: '123456', role: 'super_admin', name: '슈퍼어드민' },
-      { email: 'beone@beone.internal', password: '123456', role: 'admin', name: '어드민' }
-    ];
-
-    const results = [];
-    for (const acc of accounts) {
-      const res = await supabase.auth.signUp({
-        email: acc.email,
-        password: acc.password,
-        options: { data: { full_name: acc.name, role: acc.role } }
-      });
-      
-      if (res.data.user) {
-        await supabase.from('profiles').upsert({
-          id: res.data.user.id,
-          name: acc.name,
-          email: acc.email,
-          role: acc.role as any,
-          is_deleted: false
-        });
-      }
-      results.push(res);
-    }
-    return results;
+    console.warn('initializeAdminAccounts: Hardcoded test accounts have been removed for security reasons.');
+    return [];
   },
 
   async updateAdditionalInfo(id: string, data: { name: string, nickname: string, phone: string, gender: string, birthdate: string }) {

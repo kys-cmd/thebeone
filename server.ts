@@ -101,8 +101,8 @@ async function startServer() {
         }
       }
 
-      let mid = process.env.INICIS_MID || process.env.VITE_INICIS_MID || "INIpayTest";
-      let signKey = process.env.INICIS_SIGNKEY || "SU5JTElURV9URVNUX1NJR05LRVk=";
+      let mid = process.env.INICIS_MID || process.env.VITE_INICIS_MID || "";
+      let signKey = process.env.INICIS_SIGNKEY || "";
 
       // Try to get from Database first for dynamic system settings
       if (supabaseAdmin) {
@@ -147,7 +147,7 @@ async function startServer() {
 
     const { resultCode, resultMsg, mid, orderNumber, oid, authToken, authUrl } = req.body;
     const finalOid = orderNumber || oid;
-    let finalMid = mid || process.env.INICIS_MID || "INIpayTest";
+    let finalMid = mid || process.env.INICIS_MID || "";
     const netCancelUrl = req.body.netCancelUrl || authUrl?.replace("/auth", "/netCancel") || "https://iniapi.inicis.com/api/v1/netcancel";
 
     // Application origin URL determination
@@ -171,7 +171,7 @@ async function startServer() {
     }
 
     // B. Auth sign hashing structure
-    let signKey = process.env.INICIS_SIGNKEY || "SU5JTElURV9URVNUX1NJR05LRVk=";
+    let signKey = process.env.INICIS_SIGNKEY || "";
 
     // Load from DB if possible to keep in sync with Site Settings (결제환경)
     if (supabaseAdmin) {
@@ -462,7 +462,7 @@ async function startServer() {
           .select("role, email")
           .eq("id", uid)
           .maybeSingle();
-        return !!(profile && (profile.role === "admin" || profile.role === "super_admin" || profile.email === "kys@k-learn.co.kr"));
+        return !!(profile && (profile.role === "admin" || profile.role === "super_admin"));
       };
 
       // 1. Lesson/course access verification
@@ -1439,8 +1439,8 @@ async function startServer() {
         return res.status(400).json({ status: "error", message: "Missing required fields" });
       }
 
-      let mid = process.env.INICIS_MID || "INIpayTest";
-      let signKey = process.env.INICIS_SIGNKEY || "SU5JTElURV9URVNUX1NJR05LRVk=";
+      let mid = process.env.INICIS_MID || "";
+      let signKey = process.env.INICIS_SIGNKEY || "";
 
       // Try to get from Database first for dynamic updates
       if (supabaseAdmin) {
@@ -1935,8 +1935,7 @@ async function startServer() {
         status: "success",
         message: isSent 
           ? "귀하의 회원 이메일 주소로 인증코드 6자리가 발송되었습니다."
-          : "안전하게 인증 코드가 생성되었습니다. (데모 모드)",
-        debugOtp: !isSent ? generatedCode : undefined // Friendly sandbox backup
+          : "안전하게 인증 코드가 생성되었습니다. (데모 모드)"
       });
     } catch (error: any) {
       console.error("send-reset-otp exception:", error);
@@ -1983,8 +1982,11 @@ async function startServer() {
         return res.status(400).json({ status: "error", message: "인증코드 6자리가 일치하지 않습니다. 다시 입력해 주세요." });
       }
 
-      // Mark the DB OTP as verified
-      const updatedMeta = { ...meta, verified: true };
+      // Issue secure verify token
+      const tempToken = crypto.randomBytes(32).toString("hex");
+
+      // Mark the DB OTP as verified and save the securely generated random token
+      const updatedMeta = { ...meta, verified: true, resetToken: tempToken };
       const { error: updateErr } = await supabaseAdmin
         .from("support_contents")
         .update({
@@ -1997,9 +1999,6 @@ async function startServer() {
         console.error("[OTP Server] Failed to update OTP verification status:", updateErr);
         return res.status(500).json({ status: "error", message: "인증 상태 저장에 실패했습니다." });
       }
-
-      // Issue secure verify token
-      const tempToken = crypto.createHash("sha256").update(email + code + "beone-salt-token").digest("hex");
 
       return res.json({
         status: "success",
@@ -2046,8 +2045,7 @@ async function startServer() {
         return res.status(403).json({ status: "error", message: "이메일 인증 승인이 감지되지 않았습니다." });
       }
 
-      const expectedToken = crypto.createHash("sha256").update(email + meta.code + "beone-salt-token").digest("hex");
-      if (expectedToken !== tempToken) {
+      if (!meta.resetToken || meta.resetToken !== tempToken) {
         return res.status(403).json({ status: "error", message: "보안 토큰 인증에 실패했습니다. 다시 시도해 주세요." });
       }
 
@@ -2408,8 +2406,7 @@ async function startServer() {
     const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
     if (authErr || !user) return false;
 
-    // Custom safeguarding direct check
-    if (user.email === 'kys@k-learn.co.kr') return true;
+    // Custom safeguarding direct check - Bypass removed for security reasons
 
     const { data: profile } = await supabaseAdmin
       .from("profiles")
@@ -2659,9 +2656,15 @@ async function startServer() {
         return res.redirect("/payment/callback?status=fail&success=false&message=Invalid+Callback&resultCode=INVALID_CALLBACK");
       }
 
+      // Secure verification: Validate authUrl to prevent SSRF and mock server forgery
+      if (!authUrl.startsWith("https://stdpay.inicis.com") && !authUrl.startsWith("https://iniapi.inicis.com")) {
+        console.error("Unverified authUrl domain:", authUrl);
+        return res.redirect("/payment/callback?status=fail&success=false&message=Unverified+Payment+Gateway+Domain&resultCode=UNVERIFIED_GATEWAY");
+      }
+
       const timestamp = new Date().getTime().toString();
-      const mid = process.env.INICIS_MID || "INIpayTest";
-      const signKey = process.env.INICIS_SIGNKEY || "SU5JTElURV9URVNUX1NJR05LRVk=";
+      const mid = process.env.INICIS_MID || "";
+      const signKey = process.env.INICIS_SIGNKEY || "";
 
       // StdPay Auth Signature: SHA256(authToken + timestamp)
       const signature = crypto.createHash('sha256').update(`authToken=${authToken}&timestamp=${timestamp}`).digest('hex');
@@ -2683,6 +2686,16 @@ async function startServer() {
       console.log("Inicis Auth Result:", authResult);
 
       if (authResult.resultCode === "0000") {
+        // Validate Inicis signValue signature to prevent response tampering
+        const expectedSignValue = crypto.createHash("sha256")
+          .update(authResult.resultCode + (authResult.TotPrice || "") + (authResult.MOID || "") + mid + signKey)
+          .digest("hex");
+
+        if (authResult.signValue && authResult.signValue !== expectedSignValue) {
+          console.error(`[Inicis Callback] Signature verification failed! Expected: ${expectedSignValue}, Received: ${authResult.signValue}`);
+          return res.redirect(`/payment/callback?status=fail&success=false&message=${encodeURIComponent("결제 응답 서명 검증 실패 (보안 오류)")}&resultCode=SIGNATURE_VERIFICATION_FAILED`);
+        }
+
         // Payment Success
         const oid = authResult.MOID;
         const totalPirce = authResult.TotPrice ? parseInt(authResult.TotPrice, 10) : undefined;

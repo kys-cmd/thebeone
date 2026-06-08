@@ -401,7 +401,8 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
         type: activeWidget,
         data: activeWidget === 'attendance' ? attendanceConfig :
               activeWidget === 'todo' ? todoConfig : pollConfig
-      } : null
+      } : null,
+      mission_id: initialPost?.content_json?.mission_id || initialPost?.mission_id || null
     };
 
     // Extract hashtags
@@ -431,7 +432,7 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
         content: editor.getText(),
         content_json,
         hashtags,
-        type: 'general' as const,
+        type: (initialPost?.type || 'general') as any,
         image_urls: mediaUrls.filter(m => m.type === 'image').map(m => m.url),
         file_urls: mediaUrls.filter(m => m.type !== 'image').map(m => m.url),
         metadata: content_json.widget ? content_json.widget.data : null

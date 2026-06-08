@@ -34,6 +34,22 @@ export const logger = {
   },
 
   log(message: string, error?: any, type: 'runtime' | 'promise' | 'manual' = 'manual', additionalInfo?: string) {
+    // Gracefully ignore normal Supabase lifecycle refresh token messages
+    const messageStr = String(message || '');
+    const errorStr = error ? String(error.message || error) : '';
+    const infoStr = String(additionalInfo || '');
+    const isRefreshTokenError = 
+      messageStr.includes('Refresh Token Not Found') || 
+      messageStr.includes('Invalid Refresh Token') ||
+      errorStr.includes('Refresh Token Not Found') ||
+      errorStr.includes('Invalid Refresh Token') ||
+      infoStr.includes('Refresh Token Not Found') ||
+      infoStr.includes('Invalid Refresh Token');
+
+    if (isRefreshTokenError) {
+      return;
+    }
+
     const logs = this.getLogs();
     
     // Extract message and stack trace safely
@@ -93,13 +109,20 @@ export const logger = {
 
     // 1. Unhandled JS Errors
     window.addEventListener('error', (event) => {
+      // Ignore resource loading errors (images, stylesheets, scripts, sourcemaps) - target will be an HTMLElement/element
+      if (event.target && event.target !== window) {
+        return;
+      }
+
       const msg = event.message || '';
-      // Ignore normal react dev-server socket failure or normal iframe cross-origin warnings
+      // Ignore normal react dev-server socket failure, token refreshes or normal iframe cross-origin warnings
       if (
         msg.includes('ResizeObserver') || 
         msg.toLowerCase().includes('websocket') || 
         msg.toLowerCase().includes('hmr') ||
-        msg.includes('WebSocket closed without opened')
+        msg.includes('WebSocket closed without opened') ||
+        msg.includes('Refresh Token Not Found') ||
+        msg.includes('Invalid Refresh Token')
       ) {
         return;
       }
@@ -116,12 +139,14 @@ export const logger = {
         msg = String(reason);
       }
       
-      // Filter out dynamic import failures that can happen during app reloads
+      // Filter out dynamic import failures and user auth expiration events
       if (
         msg.includes('Failed to fetch dynamically imported module') || 
         msg.toLowerCase().includes('websocket') ||
         msg.toLowerCase().includes('hmr') ||
-        msg.includes('WebSocket closed without opened')
+        msg.includes('WebSocket closed without opened') ||
+        msg.includes('Refresh Token Not Found') ||
+        msg.includes('Invalid Refresh Token')
       ) {
         return;
       }

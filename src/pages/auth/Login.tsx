@@ -161,9 +161,6 @@ export default function Login() {
       if (response.ok && result.status === 'success') {
         toast.success(result.message);
         setForgotStep('code');
-        if (result.debugOtp) {
-          setDemoOtpNotice(result.debugOtp);
-        }
       } else {
         toast.error(result.message || '인증번호 발송에 실패했습니다.');
       }

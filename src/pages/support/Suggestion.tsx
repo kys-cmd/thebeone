@@ -65,7 +65,7 @@ export default function SuggestionPage() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] pt-32 pb-20">
-      <div className="container mx-auto px-4 max-w-2xl text-left">
+      <div className="container mx-auto px-4 max-w-7xl text-left">
         <div className="space-y-12">
           <div className="space-y-4 text-center">
             <Badge className="bg-yellow-100 text-yellow-600 border-none px-4 py-1.5 rounded-full font-black text-xs uppercase tracking-widest">
@@ -78,7 +78,7 @@ export default function SuggestionPage() {
             </p>
           </div>
 
-          <div className="bg-white p-6 md:p-10 rounded-[48px] border border-slate-100 shadow-xl space-y-8">
+          <div className="bg-white p-6 md:p-10 rounded-[48px] border border-slate-100 shadow-xl space-y-8 max-w-3xl mx-auto w-full">
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="text-sm font-extrabold text-gray-900 ml-1">희망하는 강의 주제 <span className="text-red-500">*</span></label>

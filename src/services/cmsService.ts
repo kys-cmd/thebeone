@@ -194,17 +194,29 @@ export const cmsService = {
 
   async deleteSupportContent(id: string): Promise<void> {
     if (id && !id.startsWith('new')) {
-      await supabase.from('support_contents').update({ is_deleted: true }).eq('id', id);
+      const { error } = await supabase.from('support_contents').update({ is_deleted: true }).eq('id', id);
+      if (error) {
+        console.error('[CMS DB Error] deleteSupportContent failed:', error);
+        throw new Error(error.message || '데이터베이스 삭제 처리 중 오류가 발생했습니다.');
+      }
     }
   },
 
   async saveSupportContent(content: SupportContent[]): Promise<void> {
     for (const item of content) {
       if (item.id && !item.id.toString().startsWith('new')) {
-        await supabase.from('support_contents').update(item).eq('id', item.id);
+        const { error } = await supabase.from('support_contents').update(item).eq('id', item.id);
+        if (error) {
+          console.error('[CMS DB Error] updateSupportContent failed:', error);
+          throw new Error(error.message || '데이터베이스 업데이트 처리 중 오류가 발생했습니다.');
+        }
       } else {
         const { id, createdAt, ...newItem } = item;
-        await supabase.from('support_contents').insert([newItem]);
+        const { error } = await supabase.from('support_contents').insert([newItem]);
+        if (error) {
+          console.error('[CMS DB Error] insertSupportContent failed:', error);
+          throw new Error(error.message || '데이터베이스 신규 저장 중 오류가 발생했습니다.');
+        }
       }
     }
   },

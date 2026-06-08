@@ -43,7 +43,7 @@ export const handler: Handler = async (event) => {
 
   const resultCode = inicisData.resultCode; // '0000' 성공
   const resultMsg = inicisData.resultMsg;
-  let mid = inicisData.mid || process.env.INICIS_MID || "INIpayTest";
+  let mid = inicisData.mid || process.env.INICIS_MID || "";
   const oid = inicisData.orderNumber || inicisData.oid;
   const authToken = inicisData.authToken;
   const authUrl = inicisData.authUrl;
@@ -75,8 +75,20 @@ export const handler: Handler = async (event) => {
     };
   }
 
+  // Secure verification: Validate authUrl to prevent SSRF and mock server forgery
+  if (!authUrl.startsWith("https://stdpay.inicis.com") && !authUrl.startsWith("https://iniapi.inicis.com")) {
+    console.error("Unverified authUrl domain:", authUrl);
+    return {
+      statusCode: 302,
+      headers: {
+        "Location": `${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent("위변조가 의심되는 결제 게이트웨이 도메인입니다.")}&oid=${oid || ""}&resultCode=UNVERIFIED_GATEWAY`
+      },
+      body: ""
+    };
+  }
+
   // 2. 최종 승인 요청 (Auth API) 준비
-  let signKey = process.env.INICIS_SIGNKEY || "SU5JTElURV9URVNUX1NJR05LRVk=";
+  let signKey = process.env.INICIS_SIGNKEY || "";
 
   if (supabaseAdmin) {
     try {
@@ -209,7 +221,46 @@ export const handler: Handler = async (event) => {
       throw new Error(`주문 id [${oid}] 정보를 데이터베이스에서 찾을 수 없습니다.`);
     }
 
-    // A. Orders 테이블 성공 업데이트
+    // A. 중복 결제 처리 방지 (Idempotency)
+    if (orderData.status === "COMPLETED") {
+      console.log(`[INICIS-RETURN] OID ${oid} is already COMPLETED. Skipping duplicate transition (Idempotency).`);
+      return {
+        statusCode: 302,
+        headers: {
+          "Location": `${clientOrigin}/payment/callback?status=success&oid=${oid}&message=${encodeURIComponent("결제가 완료되었습니다!")}&resultCode=0000`
+        },
+        body: ""
+      };
+    }
+
+    // B. 결제 금액 정밀 검증 (Amount Verification)
+    const expectedAmount = Number(orderData.amount);
+    const receivedAmount = Number(authResponseData?.TotPrice || 0);
+
+    if (expectedAmount !== receivedAmount) {
+      console.error(`[INICIS-RETURN] Amount mismatch! Expected: ${expectedAmount}, Received: ${receivedAmount} -> Running NetCancel fallback!`);
+      await triggerNetCancel(netCancelUrl, mid, authToken, timestamp, authSignature);
+      if (supabaseAdmin) {
+        await writePaymentLog(supabaseAdmin, oid || null, "FAILED", {
+          step: "결제금액검증(Amount Verification)",
+          expected: expectedAmount,
+          received: receivedAmount,
+          netCancelExecuted: true
+        }, {
+          error_message: "위변조가 의심되는 결제 요청입니다 (금액 불일치).",
+          error_code: "AMOUNT_MISMATCH"
+        });
+      }
+      return {
+        statusCode: 302,
+        headers: {
+          "Location": `${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent("위변조가 의심되는 결제 요청입니다 (금액 불일치).")}&oid=${oid || ""}&resultCode=AMOUNT_MISMATCH`
+        },
+        body: ""
+      };
+    }
+
+    // C. Orders 테이블 성공 업데이트
     const { error: updateError } = await supabaseAdmin
       .from("orders")
       .update({
@@ -220,7 +271,7 @@ export const handler: Handler = async (event) => {
 
     if (updateError) throw updateError;
 
-    // B. 유실 방지를 위한 결제 성공 로그(payment_logs) 추가 기록
+    // D. 유실 방지를 위한 결제 성공 로그(payment_logs) 추가 기록
     try {
       await supabaseAdmin.from("payment_logs").insert([{
         order_id: orderData.id,
@@ -237,22 +288,31 @@ export const handler: Handler = async (event) => {
       await writePaymentLog(supabaseAdmin, oid, "SUCCESS", authResponseData);
     }
 
-    // C. 유료 회원 승인 및 강좌권한 추가 비즈니스 로직
+    // E. 유료 회원 승인 및 강좌권한 추가 비즈니스 로직
     const userId = orderData.user_id;
     const courseId = orderData.course_id;
 
     if (userId && courseId) {
       // 1) 수강생 전용 권한 생성 및 삽입
       try {
-        const { error: enrollError } = await supabaseAdmin
+        const { data: existingEnroll } = await supabaseAdmin
           .from("course_enrollments")
-          .insert([{
-            user_id: userId,
-            course_id: courseId,
-            status: "active",
-            enrolled_at: new Date().toISOString()
-          }]);
-        if (enrollError) console.warn("[INICIS-RETURN] course_enrollments 등록 누락(이미 수강 중일 수 있음):", enrollError.message);
+          .select("id")
+          .eq("user_id", userId)
+          .eq("course_id", courseId)
+          .maybeSingle();
+
+        if (!existingEnroll) {
+          const { error: enrollError } = await supabaseAdmin
+            .from("course_enrollments")
+            .insert([{
+              user_id: userId,
+              course_id: courseId,
+              status: "active",
+              enrolled_at: new Date().toISOString()
+            }]);
+          if (enrollError) console.warn("[INICIS-RETURN] course_enrollments 등록 누락:", enrollError.message);
+        }
       } catch (enrollErr) {
         console.error("[INICIS-RETURN] enroll 처리 예외 발생:", enrollErr);
       }

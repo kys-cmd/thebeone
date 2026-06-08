@@ -69,7 +69,7 @@ function AdminPrivateRoute({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timeout);
   }, [isLoading, setLoading]);
 
-  const isAdmin = user && (user.role === 'super_admin' || user.role === 'admin' || user.email === 'kys@k-learn.co.kr');
+  const isAdmin = user && (user.role === 'super_admin' || user.role === 'admin');
   
   useEffect(() => {
     if (!isLoading && user && !isAdmin) {

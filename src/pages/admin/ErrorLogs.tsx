@@ -46,6 +46,8 @@ export default function ErrorLogs() {
 
   // Utility to copy logs transformed specifically for Google AI Studio
   const handleCopyToAIStudio = (log: ErrorLog) => {
+    const ticks = "```";
+    const tick = "`";
     const markdownTemplate = `---
 [AI STUDIO DEBUGGING REPORT]
 ---
@@ -58,12 +60,12 @@ export default function ErrorLogs() {
 - ⚙️ **로그 유형**: ${log.type.toUpperCase()} / Error Source
 
 ## 2. 브라우저 및 기기 환경 (Diagnostic Environment)
-- 💻 **상세 정보 (User Agent)**: \`${log.userAgent}\`
+- 💻 **상세 정보 (User Agent)**: ${tick}${log.userAgent}${tick}
 
 ## 3. 에러 추적 스택트레이스 (Error Stack Trace)
-\`\`\`javascript
+${ticks}javascript
 ${log.stack || 'No Stack Trace Available'}
-\`\`\`
+${ticks}
 
 ---
 ## 🤖 AI 수석 개발자에게 보내는 메모
@@ -71,15 +73,47 @@ ${log.stack || 'No Stack Trace Available'}
 - **해결 지침**: 발생한 오류의 원인을 설명하고, 해당 소스 파일을 찾아 안전하게 수정해 주세요.
 `;
 
-    navigator.clipboard.writeText(markdownTemplate).then(() => {
-      setCopiedId(log.id);
-      toast.success('구글 AI 스튜디오 맞춤형 오류 보고서가 복사되었습니다!', {
-        description: '구글 AI 스튜디오에 바로 붙여넣기(Ctrl+V)하여 수정을 요청하세요.'
+    const fallbackCopy = (text: string, logId: string) => {
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.top = "0";
+        textArea.style.left = "0";
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        if (successful) {
+          setCopiedId(logId);
+          toast.success('구글 AI 스튜디오 맞춤형 오류 보고서가 복사되었습니다!', {
+            description: '구글 AI 스튜디오에 바로 붙여넣기(Ctrl+V)하여 수정을 요청하세요.'
+          });
+          setTimeout(() => setCopiedId(null), 3000);
+        } else {
+          toast.error('오류 보고서 자동 복사에 실패했습니다. 직접 복사해 주세요.');
+        }
+      } catch (err) {
+        console.error('Fallback copy failed', err);
+        toast.error('오류 보고서 복사에 실패했습니다.');
+      }
+    };
+
+    if (navigator && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(markdownTemplate).then(() => {
+        setCopiedId(log.id);
+        toast.success('구글 AI 스튜디오 맞춤형 오류 보고서가 복사되었습니다!', {
+          description: '구글 AI 스튜디오에 바로 붙여넣기(Ctrl+V)하여 수정을 요청하세요.'
+        });
+        setTimeout(() => setCopiedId(null), 3000);
+      }).catch(() => {
+        fallbackCopy(markdownTemplate, log.id);
       });
-      setTimeout(() => setCopiedId(null), 3000);
-    }).catch(() => {
-      toast.error('클립보드 복사에 실패했습니다.');
-    });
+    } else {
+      fallbackCopy(markdownTemplate, log.id);
+    }
   };
 
   // Clear all localStorage based error logs

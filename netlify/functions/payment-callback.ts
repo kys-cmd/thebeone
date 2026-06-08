@@ -48,7 +48,7 @@ export const handler: Handler = async (event) => {
 
   const clientOrigin = process.env.APP_URL || process.env.VITE_APP_URL || "http://localhost:3000";
 
-  // 1. Check early abort if认证 실패
+  // 1. Check early abort if 인증 실패
   if (resultCode !== "0000" || !authToken || !authUrl) {
     console.error(`[PAYMENT-CALLBACK] Auth Phase Error info: ${resultCode} - ${resultMsg}`);
     if (supabaseAdmin) {
@@ -71,9 +71,21 @@ export const handler: Handler = async (event) => {
     };
   }
 
+  // Secure verification: Validate authUrl to prevent SSRF and mock server forgery
+  if (!authUrl.startsWith("https://stdpay.inicis.com") && !authUrl.startsWith("https://iniapi.inicis.com")) {
+    console.error("Unverified authUrl domain:", authUrl);
+    return {
+      statusCode: 302,
+      headers: {
+        "Location": `/payment/callback?status=fail&message=${encodeURIComponent("위변조가 의심되는 결제 게이트웨이 도메인입니다.")}&oid=${oid || ""}&resultCode=UNVERIFIED_GATEWAY`
+      },
+      body: ""
+    };
+  }
+
   // 2. Setup dynamic keys
-  let mid = inicisData.mid || process.env.INICIS_MID || "INIpayTest";
-  let signKey = process.env.INICIS_SIGNKEY || "SU5JTElURV9URVNUX1NJR05LRVk=";
+  let mid = inicisData.mid || process.env.INICIS_MID || "";
+  let signKey = process.env.INICIS_SIGNKEY || "";
 
   if (supabaseAdmin) {
     try {
@@ -194,10 +206,49 @@ export const handler: Handler = async (event) => {
 
     if (findError) throw findError;
     if (!orderData) {
-      throw new Error(`OID [${oid}] matching database records could not be found.`);
+      throw new Error(`주문 id [${oid}] 정보를 데이터베이스에서 찾을 수 없습니다.`);
     }
 
-    // A. Update Order Status
+    // A. 중복 결제 처리 방지 (Idempotency)
+    if (orderData.status === "COMPLETED") {
+      console.log(`[PAYMENT-CALLBACK] OID ${oid} is already COMPLETED. Skipping duplicate transition (Idempotency).`);
+      return {
+        statusCode: 302,
+        headers: {
+          "Location": `/payment/callback?status=success&oid=${oid}&message=${encodeURIComponent("결제가 완료되었습니다!")}&resultCode=0000`
+        },
+        body: ""
+      };
+    }
+
+    // B. 결제 금액 정밀 검증 (Amount Verification)
+    const expectedAmount = Number(orderData.amount);
+    const receivedAmount = Number(authResponseData?.TotPrice || 0);
+
+    if (expectedAmount !== receivedAmount) {
+      console.error(`[PAYMENT-CALLBACK] Amount mismatch! Expected: ${expectedAmount}, Received: ${receivedAmount} -> Running NetCancel fallback!`);
+      await triggerNetCancel(netCancelUrl, mid, authToken, timestamp, authSignature);
+      if (supabaseAdmin) {
+        await writePaymentLog(supabaseAdmin, oid || null, "FAILED", {
+          step: "결제금액검증(Amount Verification)",
+          expected: expectedAmount,
+          received: receivedAmount,
+          netCancelExecuted: true
+        }, {
+          error_message: "위변조가 의심되는 결제 요청입니다 (금액 불일치).",
+          error_code: "AMOUNT_MISMATCH"
+        });
+      }
+      return {
+        statusCode: 302,
+        headers: {
+          "Location": `/payment/callback?status=fail&message=${encodeURIComponent("위변조가 의심되는 결제 요청입니다 (금액 불일치).")}&oid=${oid || ""}&resultCode=AMOUNT_MISMATCH`
+        },
+        body: ""
+      };
+    }
+
+    // C. Update Order Status
     const { error: updateError } = await supabaseAdmin
       .from("orders")
       .update({
@@ -208,7 +259,7 @@ export const handler: Handler = async (event) => {
 
     if (updateError) throw updateError;
 
-    // B. Logs
+    // D. Logs
     try {
       await supabaseAdmin.from("payment_logs").insert([{
         order_id: orderData.id,
@@ -224,18 +275,27 @@ export const handler: Handler = async (event) => {
       await writePaymentLog(supabaseAdmin, oid, "SUCCESS", authResponseData);
     }
 
-    // C. Grant privileges
+    // E. Grant privileges
     const userId = orderData.user_id;
     const courseId = orderData.course_id;
 
     if (userId && courseId) {
       try {
-        await supabaseAdmin.from("course_enrollments").insert([{
-          user_id: userId,
-          course_id: courseId,
-          status: "active",
-          enrolled_at: new Date().toISOString()
-        }]);
+        const { data: existingEnroll } = await supabaseAdmin
+          .from("course_enrollments")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("course_id", courseId)
+          .maybeSingle();
+
+        if (!existingEnroll) {
+          await supabaseAdmin.from("course_enrollments").insert([{
+            user_id: userId,
+            course_id: courseId,
+            status: "active",
+            enrolled_at: new Date().toISOString()
+          }]);
+        }
       } catch (enrollErr: any) {
         console.warn("[PAYMENT-CALLBACK] enroll warning:", enrollErr.message);
       }

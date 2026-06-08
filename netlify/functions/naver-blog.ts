@@ -18,11 +18,13 @@ export const handler: Handler = async (event) => {
       author: item.author || item.creator
     })).slice(0, 5);
 
+    const allowedOrigin = process.env.APP_URL || process.env.VITE_APP_URL || "*";
+
     return {
       statusCode: 200,
       headers: { 
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*" // Allow CORS if needed
+        "Access-Control-Allow-Origin": allowedOrigin
       },
       body: JSON.stringify({ status: "success", posts }),
     };

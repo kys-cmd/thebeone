@@ -142,7 +142,7 @@ export default function CourseDetail() {
         setEnrolledCount(count || 0);
         
         if (user) {
-          const isAdmin = user.role === 'super_admin' || user.role === 'admin' || user.email === 'kys@k-learn.co.kr';
+          const isAdmin = user.role === 'super_admin' || user.role === 'admin';
           const enrolled = isAdmin ? true : await courseService.checkEnrollment(user.id, id);
           setIsEnrolled(enrolled);
         }

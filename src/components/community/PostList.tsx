@@ -18,6 +18,10 @@ interface PostListProps {
   onVotePoll: (postId: string, optionIndex: number) => void;
   onDelete?: (postId: string) => void;
   onEdit?: (post: Post) => void;
+  accessibleCommunityIds?: Set<string>;
+  isFeedMode?: boolean;
+  allCommunities?: any[];
+  onCardClick?: (post: Post) => void;
 }
 
 export function PostList({ 
@@ -33,7 +37,11 @@ export function PostList({
   onToggleTodo,
   onVotePoll,
   onDelete,
-  onEdit
+  onEdit,
+  accessibleCommunityIds,
+  isFeedMode = false,
+  allCommunities = [],
+  onCardClick
 }: PostListProps) {
   if (isLoading) {
     return (
@@ -85,6 +93,10 @@ export function PostList({
             onVotePoll={onVotePoll}
             onDelete={onDelete}
             onEdit={onEdit}
+            isRestricted={accessibleCommunityIds ? !accessibleCommunityIds.has(post.community_id) : false}
+            isFeedMode={isFeedMode}
+            communityName={allCommunities?.find((c: any) => c.id === post.community_id)?.name}
+            onCardClick={onCardClick}
           />
         </motion.div>
       ))}

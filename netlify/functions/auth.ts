@@ -77,12 +77,14 @@ async function sendOTPEmail(email: string, code: string): Promise<boolean> {
 }
 
 export const handler: Handler = async (event) => {
+  const allowedOrigin = process.env.APP_URL || process.env.VITE_APP_URL || "*";
+
   // CORS support
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 200,
       headers: {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": allowedOrigin,
         "Access-Control-Allow-Headers": "Content-Type",
         "Access-Control-Allow-Methods": "POST, OPTIONS"
       },
@@ -99,7 +101,7 @@ export const handler: Handler = async (event) => {
 
   const responseHeaders = {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*"
+    "Access-Control-Allow-Origin": allowedOrigin
   };
 
   try {
@@ -191,8 +193,7 @@ export const handler: Handler = async (event) => {
           status: "success",
           message: isSent 
             ? "귀하의 회원 이메일 주소로 인증코드 6자리가 발송되었습니다."
-            : "안전하게 인증 코드가 생성되었습니다. (데모 모드)",
-          debugOtp: !isSent ? generatedCode : undefined
+            : "안전하게 인증 코드가 생성되었습니다. (데모 모드)"
         })
       };
     }
@@ -246,8 +247,11 @@ export const handler: Handler = async (event) => {
         };
       }
 
+      // Issue temporary recovery security token
+      const tempToken = crypto.randomBytes(32).toString("hex");
+
       // Mark the DB OTP as verified
-      const updatedMeta = { ...meta, verified: true };
+      const updatedMeta = { ...meta, verified: true, resetToken: tempToken };
       const { error: updateErr } = await supabaseAdmin
         .from("support_contents")
         .update({
@@ -264,9 +268,6 @@ export const handler: Handler = async (event) => {
           body: JSON.stringify({ status: "error", message: "인증 상태 저장에 실패했습니다." })
         };
       }
-
-      // Issue temporary recovery security token
-      const tempToken = crypto.createHash("sha256").update(email + code + "beone-salt-token").digest("hex");
 
       return {
         statusCode: 200,
@@ -319,8 +320,7 @@ export const handler: Handler = async (event) => {
         };
       }
 
-      const expectedToken = crypto.createHash("sha256").update(email + meta.code + "beone-salt-token").digest("hex");
-      if (expectedToken !== tempToken) {
+      if (!meta.resetToken || meta.resetToken !== tempToken) {
         return {
           statusCode: 403,
           headers: responseHeaders,

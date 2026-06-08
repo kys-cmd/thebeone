@@ -39,20 +39,21 @@ async function isAdminUser(userId: string) {
   if (profile) {
     return (
       profile.role === "admin" ||
-      profile.role === "super_admin" ||
-      profile.email === "kys@k-learn.co.kr"
+      profile.role === "super_admin"
     );
   }
   return false;
 }
 
 export const handler: Handler = async (event, context) => {
+  const allowedOrigin = process.env.APP_URL || process.env.VITE_APP_URL || "*";
+
   // CORS support
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 200,
       headers: {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": allowedOrigin,
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
         "Access-Control-Allow-Methods": "POST, OPTIONS"
       },
@@ -69,7 +70,7 @@ export const handler: Handler = async (event, context) => {
 
   const responseHeaders = {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*"
+    "Access-Control-Allow-Origin": allowedOrigin
   };
 
   try {

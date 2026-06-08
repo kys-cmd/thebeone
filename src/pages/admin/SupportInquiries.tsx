@@ -15,7 +15,8 @@ import {
   X,
   UserCheck,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Calendar
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,8 +42,16 @@ export default function SupportInquiries() {
   const [formTitle, setFormTitle] = useState('');
   const [formContent, setFormContent] = useState('');
   const [formActive, setFormActive] = useState(true);
+  // Delete confirm modal state
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   // FAQ specific category
   const [faqCategory, setFaqCategory] = useState('강의');
+
+  // Schedule specific fields
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
+  const [scheduleCategory, setScheduleCategory] = useState('정규 강의');
+  const [scheduleColor, setScheduleColor] = useState('purple');
 
   // Load support contents based on tab
   const loadTabContents = async (tab: string) => {
@@ -56,6 +65,7 @@ export default function SupportInquiries() {
     if (tab === 'faqs') dbType = 'faq';
     if (tab === 'suggestions') dbType = 'suggestion';
     if (tab === 'master_applies') dbType = 'master_apply';
+    if (tab === 'schedules') dbType = 'schedule';
 
     try {
       const data = await cmsService.getSupportContent(dbType);
@@ -78,17 +88,29 @@ export default function SupportInquiries() {
     setFormActive(true);
     setFaqCategory('강의');
     setEditId(null);
+    setScheduleDate(new Date().toISOString().split('T')[0]);
+    setScheduleTime('19:30 - 21:00');
+    setScheduleCategory('정규 강의');
+    setScheduleColor('purple');
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('정말로 이 항목을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.')) {
-      try {
-        await cmsService.deleteSupportContent(id);
-        toast.success('항목이 정상적으로 삭제되었습니다.');
-        loadTabContents(activeTab);
-      } catch (err: any) {
-        toast.error('삭제 중 오류가 발생했습니다.');
-      }
+    setDeleteConfirmId(id);
+  };
+
+  const executeDelete = async () => {
+    if (!deleteConfirmId) return;
+    try {
+      setLoading(true);
+      await cmsService.deleteSupportContent(deleteConfirmId);
+      toast.success('항목이 정상적으로 삭제되었습니다.');
+      setDeleteConfirmId(null);
+      loadTabContents(activeTab);
+    } catch (err: any) {
+      console.error('Delete failed:', err);
+      toast.error('삭제 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -111,6 +133,21 @@ export default function SupportInquiries() {
         setFormContent(item.content || '');
         setFaqCategory('기타');
       }
+    } else if (activeTab === 'schedules') {
+      try {
+        const parsed = JSON.parse(item.content);
+        setScheduleDate(parsed.date || '');
+        setScheduleTime(parsed.time || '');
+        setScheduleCategory(parsed.category || '정규 강의');
+        setScheduleColor(parsed.color || 'purple');
+        setFormContent(parsed.description || '');
+      } catch (e) {
+        setScheduleDate('');
+        setScheduleTime('');
+        setScheduleCategory('정규 강의');
+        setScheduleColor('purple');
+        setFormContent(item.content || '');
+      }
     } else {
       setFormContent(item.content || '');
     }
@@ -120,11 +157,11 @@ export default function SupportInquiries() {
 
   const handleSave = async () => {
     if (!formTitle.trim()) {
-      toast.error('제목(질문)을 작성해주세요.');
+      toast.error('제목을 작성해주세요.');
       return;
     }
     if (!formContent.trim()) {
-      toast.error('본문(답변) 내용을 작성해주세요.');
+      toast.error('설명 또는 본문 내용을 작성해주세요.');
       return;
     }
 
@@ -137,9 +174,19 @@ export default function SupportInquiries() {
           answer: formContent,
           category: faqCategory
         });
+      } else if (activeTab === 'schedules') {
+        finalContent = JSON.stringify({
+          date: scheduleDate,
+          time: scheduleTime,
+          category: scheduleCategory,
+          color: scheduleColor,
+          description: formContent
+        });
       }
 
-      let typeCode = activeTab === 'notices' ? 'notice' : 'faq';
+      let typeCode = 'faq';
+      if (activeTab === 'notices') typeCode = 'notice';
+      if (activeTab === 'schedules') typeCode = 'schedule';
 
       const payload: any = {
         type: typeCode,
@@ -155,13 +202,13 @@ export default function SupportInquiries() {
 
       await cmsService.saveSupportContent([payload]);
       
-      toast.success(editId ? '수정이 완려되었습니다.' : '성공적으로 등록되었습니다.');
+      toast.success(editId ? '수정이 완료되었습니다.' : '성공적으로 등록되었습니다.');
       setIsEditing(false);
       clearForm();
       loadTabContents(activeTab);
     } catch (err: any) {
       console.error('Save failed:', err);
-      toast.error('저장 중 오루가 발생했습니다.');
+      toast.error('저장 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -198,13 +245,13 @@ export default function SupportInquiries() {
           </p>
         </div>
         <div className="flex items-center gap-2 self-start md:self-auto">
-          {['notices', 'faqs'].includes(activeTab) && !isEditing && (
+          {['notices', 'faqs', 'schedules'].includes(activeTab) && !isEditing && (
             <Button 
               onClick={startCreate}
               className="bg-purple-600 hover:bg-purple-700 text-white font-black hover:scale-105 transition-all gap-1.5 shadow-lg shadow-purple-100"
             >
               <Plus className="w-4 h-4" /> 
-              {activeTab === 'notices' ? '공지사항 등록' : 'FAQ 추가'}
+              {activeTab === 'notices' ? '공지사항 등록' : activeTab === 'schedules' ? '강의 일정 추가' : 'FAQ 추가'}
             </Button>
           )}
           <Button 
@@ -230,6 +277,9 @@ export default function SupportInquiries() {
           </TabsTrigger>
           <TabsTrigger value="faqs" className="rounded-xl font-bold gap-1 px-4 py-2 text-xs md:text-sm">
             <HelpCircle className="w-4 h-4 text-purple-500" /> FAQ 관리
+          </TabsTrigger>
+          <TabsTrigger value="schedules" className="rounded-xl font-bold gap-1 px-4 py-2 text-xs md:text-sm">
+            <Calendar className="w-4 h-4 text-purple-500" /> 강의 일정 관리
           </TabsTrigger>
           <TabsTrigger value="suggestions" className="rounded-xl font-bold gap-1 px-4 py-2 text-xs md:text-sm">
             <UserCheck className="w-4 h-4 text-purple-500" /> 강의 건의내역
@@ -308,6 +358,129 @@ export default function SupportInquiries() {
                   />
                 </Card>
               </div>
+            ) : activeTab === 'schedules' ? (
+              <Card className="border border-slate-150 shadow-2xl rounded-3xl overflow-hidden animate-fade-in bg-white">
+                <CardHeader className="bg-slate-50 border-b p-6 flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-xl font-black text-slate-900">
+                      {editId ? '강의 일정 수정' : '새 강의 일정 등록'}
+                    </CardTitle>
+                    <CardDescription className="text-xs text-slate-500 font-bold mt-1">
+                      월별 캘린더 및 강의 일정 목록에 표시되는 일정을 직접 등록/관리합니다.
+                    </CardDescription>
+                  </div>
+                  <Button variant="ghost" size="icon" className="rounded-full hover:bg-slate-200" onClick={() => setIsEditing(false)}>
+                    <X className="w-5 h-5 text-gray-500" />
+                  </Button>
+                </CardHeader>
+                <CardContent className="p-8 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-extrabold text-slate-800">일정 구분 카테고리</label>
+                      <select
+                        value={scheduleCategory}
+                        onChange={(e) => setScheduleCategory(e.target.value)}
+                        className="w-full h-12 bg-slate-50 border rounded-xl font-bold px-4 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                      >
+                        <option value="정규 강의">정규 강의 📚</option>
+                        <option value="특강(오프라인)">특강(오프라인) 🚀</option>
+                        <option value="특강(온라인)">특강(온라인) 💻</option>
+                        <option value="비원Live">비원Live 🎥</option>
+                        <option value="회원모임">회원모임 👥</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-extrabold text-slate-800">새 테마 컬러 지정</label>
+                      <div className="flex items-center gap-3 h-12">
+                        {['purple', 'rose', 'blue', 'emerald', 'amber'].map((c) => {
+                          const bgMap: Record<string, string> = {
+                            purple: 'bg-purple-500',
+                            rose: 'bg-rose-500',
+                            blue: 'bg-blue-500',
+                            emerald: 'bg-emerald-500',
+                            amber: 'bg-amber-500',
+                          };
+                          return (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => setScheduleColor(c)}
+                              className={`w-8 h-8 rounded-full ${bgMap[c]} border-2 transition-all ${
+                                scheduleColor === c ? 'border-slate-800 scale-110 shadow-md' : 'border-transparent hover:opacity-80'
+                              }`}
+                              title={c}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-extrabold text-slate-800">일정 날짜 (Date)</label>
+                      <Input
+                        type="date"
+                        value={scheduleDate}
+                        onChange={(e) => setScheduleDate(e.target.value)}
+                        className="h-12 bg-slate-50 rounded-xl font-bold"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-extrabold text-slate-800">일정 시간 (Time range)</label>
+                      <Input
+                        type="text"
+                        value={scheduleTime}
+                        onChange={(e) => setScheduleTime(e.target.value)}
+                        placeholder="예: 19:30 - 21:00"
+                        className="h-12 bg-slate-50 rounded-xl font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-extrabold text-slate-800">일정 제목</label>
+                    <Input
+                      value={formTitle}
+                      onChange={(e) => setFormTitle(e.target.value)}
+                      placeholder="예: 6월 정규 1기 오리엔테이션 및 오프라인 실습 가동"
+                      className="h-12 bg-slate-50 rounded-xl font-bold"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-extrabold text-slate-800">상세 내용</label>
+                    <Textarea
+                      value={formContent}
+                      onChange={(e) => setFormContent(e.target.value)}
+                      placeholder="줌 접속 좌표, 준비물, 또는 세부적인 진행 타임라인 등을 상세 안내하세요."
+                      className="min-h-[140px] bg-slate-50 rounded-2xl font-semibold p-4"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2 border-t">
+                    <input
+                      type="checkbox"
+                      id="form_active"
+                      checked={formActive}
+                      onChange={(e) => setFormActive(e.target.checked)}
+                      className="w-5 h-5 accent-purple-600 rounded cursor-pointer"
+                    />
+                    <label htmlFor="form_active" className="text-sm font-extrabold text-slate-700 cursor-pointer select-none">
+                      사용자 화면 노출 활성화 (Active)
+                    </label>
+                  </div>
+
+                  <div className="flex gap-3 justify-end pt-4">
+                    <Button variant="outline" className="rounded-xl font-bold px-6 h-12" onClick={() => setIsEditing(false)}>
+                      취소하기
+                    </Button>
+                    <Button className="bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl px-8 h-12 gap-1.5" onClick={handleSave}>
+                      <Save className="w-4 h-4" /> 저장하기
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             ) : (
               <Card className="border border-slate-100 shadow-2xl rounded-3xl overflow-hidden animate-fade-in bg-white">
                 <CardHeader className="bg-slate-50 border-b p-6 flex flex-row items-center justify-between">
@@ -526,6 +699,57 @@ export default function SupportInquiries() {
                         );
                       }
 
+                      if (activeTab === 'schedules') {
+                        let parsed = { date: '', time: '', category: '정규 강의', color: 'purple', description: item.content || '' };
+                        try {
+                          if (item.content?.startsWith('{')) {
+                            parsed = JSON.parse(item.content);
+                          }
+                        } catch (e) {}
+
+                        const colorClasses: Record<string, string> = {
+                          purple: 'bg-purple-50 text-purple-700 border-purple-200',
+                          rose: 'bg-rose-50 text-rose-700 border-rose-200',
+                          blue: 'bg-blue-50 text-blue-700 border-blue-200',
+                          emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                          amber: 'bg-amber-50 text-amber-700 border-amber-200',
+                        };
+
+                        return (
+                          <div key={item.id} className="p-6 border rounded-2xl hover:border-purple-200 transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-left">
+                            <div className="space-y-1.5 flex-1 min-w-0">
+                              <div className="flex items-center flex-wrap gap-2">
+                                <Badge className={colorClasses[parsed.color || 'purple'] || colorClasses.purple}>
+                                  {parsed.category}
+                                </Badge>
+                                <span className="text-xs bg-slate-100 text-slate-750 font-bold px-2 py-0.5 rounded flex items-center gap-1 font-mono">
+                                  📅 {parsed.date || '날짜 미정'}
+                                </span>
+                                <span className="text-xs bg-slate-100 text-slate-750 font-bold px-2 py-0.5 rounded flex items-center gap-1 font-mono">
+                                  ⏱️ {parsed.time || '시간 미정'}
+                                </span>
+                                <Badge className={item.active ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" : "bg-gray-100 text-gray-400"}>
+                                  {item.active ? '노출중' : '비활성'}
+                                </Badge>
+                              </div>
+                              <h4 className="font-extrabold text-slate-900 text-base">{item.title}</h4>
+                              {parsed.description && (
+                                <p className="text-xs sm:text-sm text-slate-500 whitespace-pre-wrap font-medium leading-relaxed mt-1">{parsed.description}</p>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+                              <Button variant="outline" size="sm" className="h-9 px-3 rounded-xl border-slate-200 font-bold gap-1" onClick={() => startEdit(item)}>
+                                <Edit className="w-3.5 h-3.5" /> 수정
+                              </Button>
+                              <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 h-9 rounded-xl font-bold" onClick={() => handleDelete(item.id)}>
+                                <Trash2 className="w-4 h-4" /> 
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      }
+
                       if (activeTab === 'suggestions') {
                         let parsed = { suggestionDetail: item.content || '', master: '없음', authorName: '익명', authorEmail: 'anonymous' };
                         try {
@@ -622,6 +846,42 @@ export default function SupportInquiries() {
           </div>
         )}
       </Tabs>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setDeleteConfirmId(null)} />
+          
+          <Card className="relative w-full max-w-md border border-slate-200 bg-white p-6 shadow-2xl rounded-3xl text-center">
+            <div className="pt-4 flex flex-col items-center">
+              <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4 animate-pulse">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900">정말로 삭제하시겠습니까?</h3>
+              <p className="text-sm font-semibold text-slate-500 mt-2">
+                이 작업은 되돌릴 수 없습니다. 삭제 후 화면에서 영구적으로 숨겨집니다.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 mt-6">
+              <Button
+                variant="outline"
+                className="w-full h-12 rounded-2xl font-bold border-slate-200 hover:bg-slate-50"
+                onClick={() => setDeleteConfirmId(null)}
+                disabled={loading}
+              >
+                취소
+              </Button>
+              <Button
+                className="w-full h-12 rounded-2xl font-black bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-100"
+                onClick={executeDelete}
+                disabled={loading}
+              >
+                {loading ? '삭제 중...' : '확인 및 삭제'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

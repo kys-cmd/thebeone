@@ -117,6 +117,106 @@ export const communityService = {
     }) as Post[];
   },
 
+  async getAllPosts() {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    let { data, error } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        profiles(name, nickname, avatar_url),
+        post_likes(user_id),
+        post_comments(id),
+        post_reactions(user_id, emoji),
+        post_attendance(user_id),
+        post_poll_votes(user_id, option_index),
+        post_todo_checks(user_id, todo_index)
+      `)
+      .or('is_deleted.eq.false,is_deleted.is.null')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error && (error.message.includes('relationship') || error.message.includes('is_deleted'))) {
+      console.warn('Advanced fetch failed, using fallback query:', error.message);
+      const query = supabase.from('posts').select('*');
+      
+      if (!error.message.includes('is_deleted')) {
+        query.or('is_deleted.eq.false,is_deleted.is.null');
+      }
+      
+      const { data: posts, error: basicError } = await query
+        .order('created_at', { ascending: false })
+        .limit(100);
+      
+      if (basicError) throw basicError;
+      if (!posts) return [];
+
+      const userIds = [...new Set(posts.map(p => p.user_id))];
+      const postIds = posts.map(p => p.id);
+
+      const [profiles, likes, comments, reactions, attendance, pollVotes, todoChecks] = await Promise.all([
+        supabase.from('profiles').select('id, name, nickname, avatar_url').in('id', userIds),
+        supabase.from('post_likes').select('post_id, user_id').in('post_id', postIds),
+        supabase.from('post_comments').select('id, post_id').in('post_id', postIds),
+        supabase.from('post_reactions').select('post_id, user_id, emoji').in('post_id', postIds),
+        supabase.from('post_attendance').select('post_id, user_id').in('post_id', postIds),
+        supabase.from('post_poll_votes').select('post_id, user_id, option_index').in('post_id', postIds),
+        supabase.from('post_todo_checks').select('post_id, user_id, todo_index').in('post_id', postIds)
+      ]);
+
+      return posts.map(p => {
+        const pLikes = likes.data?.filter(l => l.post_id === p.id) || [];
+        const pComments = comments.data?.filter(c => c.post_id === p.id) || [];
+        const pReactions: any = {};
+        reactions.data?.filter(r => r.post_id === p.id).forEach(r => {
+          if (!pReactions[r.emoji]) pReactions[r.emoji] = { count: 0, user_ids: [] };
+          pReactions[r.emoji].count++;
+          pReactions[r.emoji].user_ids.push(r.user_id);
+        });
+
+        return {
+          ...p,
+          profiles: profiles.data?.find(pr => pr.id === p.user_id) || null,
+          likes_count: pLikes.length,
+          comments_count: pComments.length,
+          is_liked: user ? pLikes.some(l => l.user_id === user.id) : false,
+          reactions: pReactions,
+          attendance_count: attendance.data?.filter(a => a.post_id === p.id).length || 0,
+          has_attended: user ? attendance.data?.some(a => a.post_id === p.id && a.user_id === user.id) : false,
+          poll_votes: pollVotes.data?.filter(v => v.post_id === p.id) || [],
+          user_poll_vote: user ? pollVotes.data?.find(v => v.post_id === p.id && v.user_id === user.id)?.option_index : null,
+          todo_checks: todoChecks.data?.filter(c => c.post_id === p.id) || [],
+          user_todo_checks: user ? todoChecks.data?.filter(c => c.post_id === p.id && c.user_id === user.id).map(c => c.todo_index) : []
+        };
+      }) as Post[];
+    }
+
+    if (error) throw error;
+
+    return (data || []).map((p: any) => {
+      const pReactions: Record<string, { count: number; user_ids: string[] }> = {};
+      p.post_reactions?.forEach((r: any) => {
+        if (!pReactions[r.emoji]) pReactions[r.emoji] = { count: 0, user_ids: [] };
+        pReactions[r.emoji].count++;
+        pReactions[r.emoji].user_ids.push(r.user_id);
+      });
+
+      return {
+        ...p,
+        likes_count: p.post_likes?.length || 0,
+        comments_count: p.post_comments?.length || 0,
+        is_liked: user ? p.post_likes?.some((l: any) => l.user_id === user.id) : false,
+        reactions: pReactions,
+        attendance_count: p.post_attendance?.length || 0,
+        has_attended: user ? p.post_attendance?.some((a: any) => a.user_id === user.id) : false,
+        poll_votes: p.post_poll_votes || [],
+        user_poll_vote: user ? p.post_poll_votes?.find((v: any) => v.user_id === user.id)?.option_index : null,
+        todo_checks: p.post_todo_checks || [],
+        user_todo_checks: user ? p.post_todo_checks?.filter((c: any) => c.user_id === user.id).map((c: any) => c.todo_index) : []
+      };
+    }) as Post[];
+  },
+
   async createPost(post: Partial<Post>) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('로그인이 필요합니다.');

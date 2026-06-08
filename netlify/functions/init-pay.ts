@@ -10,12 +10,14 @@ const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
   : null;
 
 export const handler: Handler = async (event) => {
+  const allowedOrigin = process.env.APP_URL || process.env.VITE_APP_URL || "*";
+
   // CORS Preflight
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 200,
       headers: {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": allowedOrigin,
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
       },
@@ -26,7 +28,7 @@ export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { 
       statusCode: 405, 
-      headers: { "Access-Control-Allow-Origin": "*" },
+      headers: { "Access-Control-Allow-Origin": allowedOrigin },
       body: "Method Not Allowed" 
     };
   }
@@ -37,7 +39,7 @@ export const handler: Handler = async (event) => {
     if (!price || !oid || !timestamp) {
       return {
         statusCode: 400,
-        headers: { "Access-Control-Allow-Origin": "*" },
+        headers: { "Access-Control-Allow-Origin": allowedOrigin },
         body: JSON.stringify({ status: "error", message: "필수 입력값(price, oid, timestamp)이 누락되었습니다." }),
       };
     }
@@ -69,8 +71,8 @@ export const handler: Handler = async (event) => {
     }
 
     // 2. KG 이니시스 환경변수 로딩 및 기본 테스트 설정 매핑 (데이터베이스 값 우선 적용)
-    let mid = process.env.INICIS_MID || process.env.VITE_INICIS_MID || "INIpayTest";
-    let signKey = process.env.INICIS_SIGNKEY || "SU5JTElURV9URVNUX1NJR05LRVk=";
+    let mid = process.env.INICIS_MID || process.env.VITE_INICIS_MID || "";
+    let signKey = process.env.INICIS_SIGNKEY || "";
 
     if (supabaseAdmin) {
       try {
@@ -99,7 +101,7 @@ export const handler: Handler = async (event) => {
       statusCode: 200,
       headers: {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": allowedOrigin,
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
         "Access-Control-Allow-Methods": "POST, OPTIONS"
       },
@@ -117,7 +119,7 @@ export const handler: Handler = async (event) => {
     console.error("Signature Initializer Serverless 에러:", error);
     return {
       statusCode: 500,
-      headers: { "Access-Control-Allow-Origin": "*" },
+      headers: { "Access-Control-Allow-Origin": allowedOrigin },
       body: JSON.stringify({ status: "error", message: error.message || "서버 내부 오류가 발생했습니다." }),
     };
   }

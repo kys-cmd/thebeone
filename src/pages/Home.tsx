@@ -11,6 +11,7 @@ import { courseService } from '@/services/courseService';
 import { reviewService, Review } from '@/services/reviewService';
 import { Course } from '@/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { supabase } from '@/lib/supabase';
 
 export default function Home() {
   const [banners, setBanners] = useState<Banner[]>([]);
@@ -69,7 +70,37 @@ export default function Home() {
             .then(data => setCourses(data || []))
             .catch(err => console.error("Failed to load courses in loadData", err)),
           reviewService.getBestReviews()
-            .then(data => setBestReviews(data || []))
+            .then(async (data) => {
+              if (data && data.length > 0) {
+                const userIds = data.map(r => r.user_id).filter(id => !!id);
+                if (userIds.length > 0) {
+                  try {
+                    const { data: profiles, error } = await supabase
+                      .from('profiles')
+                      .select('id, name, nickname, avatar_url')
+                      .in('id', userIds);
+                    if (profiles && !error) {
+                      const updatedReviews = data.map(r => {
+                        const prof = profiles.find(p => p.id === r.user_id);
+                        if (prof) {
+                          return {
+                            ...r,
+                            user_name: prof.nickname || prof.name || r.user_name || '익명 수강생',
+                            user_avatar: prof.avatar_url || r.user_avatar
+                          };
+                        }
+                        return r;
+                      });
+                      setBestReviews(updatedReviews);
+                      return;
+                    }
+                  } catch (pErr) {
+                    console.error("Failed to fetch profiles for reviews", pErr);
+                  }
+                }
+              }
+              setBestReviews(data || []);
+            })
             .catch(err => console.error("Failed to load reviews in loadData", err)),
           cmsService.getSiteConfig()
             .then(data => setSiteConfig(data))
@@ -331,40 +362,43 @@ export default function Home() {
               <Badge variant="outline" className="text-purple-600 border-purple-200 bg-purple-50 px-3 py-1 font-bold">REVIEWS</Badge>
               <h2 className="text-4xl font-black tracking-tighter text-gray-900">베스트 수강후기</h2>
             </div>
-            <Link to="/reviews" className="flex items-center gap-2 text-gray-500 font-bold hover:text-purple-600 transition-colors">
-              전체 후기 보기 <ArrowRight className="w-4 h-4" />
-            </Link>
           </div>
           
-          <div className="flex gap-6 overflow-x-auto pb-8 no-scrollbar scroll-smooth snap-x">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {bestReviews.length > 0 ? (
               bestReviews.map((review, idx) => (
                 <motion.div 
                   key={review.id || idx}
-                  whileHover={{ y: -10 }}
-                  className="min-w-[320px] md:min-w-[400px] bg-white p-8 rounded-3xl shadow-sm border border-gray-100 snap-start flex flex-col"
+                  whileHover={{ y: -5 }}
+                  className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between"
                 >
-                  <div className="flex items-center gap-1 text-yellow-400 mb-6">
-                    {[...Array(5)].map((_, j) => (
-                      <Star key={j} className={`w-5 h-5 ${j < review.rating ? 'fill-current' : 'text-gray-300'}`} />
-                    ))}
+                  <div>
+                    <div className="flex items-center gap-1 text-yellow-400 mb-6">
+                      {[...Array(5)].map((_, j) => (
+                        <Star key={j} className={`w-5 h-5 ${j < review.rating ? 'fill-current' : 'text-gray-300'}`} />
+                      ))}
+                    </div>
+                    <p className="text-base font-bold leading-relaxed text-gray-800 line-clamp-4 whitespace-pre-wrap mb-6">
+                      "{review.content}"
+                    </p>
                   </div>
-                  <p className="text-lg font-bold leading-relaxed text-gray-800 flex-1 whitespace-pre-wrap">
-                    "{review.content}"
-                  </p>
-                  <div className="flex items-center gap-4 border-t pt-6 mt-6">
-                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100">
+                  <div className="flex items-center gap-4 border-t pt-6 mt-auto">
+                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 flex-shrink-0">
                       <img src={review.user_avatar || `https://i.pravatar.cc/150?u=${review.user_id}`} alt="User" className="w-full h-full object-cover" />
                     </div>
-                    <div>
-                      <p className="font-bold text-gray-900">{review.user_name || '익명 수강생'}</p>
-                      <p className="text-xs text-purple-600 font-medium line-clamp-1">{review.course_title || '비원아카데미 강의 수강'}</p>
+                    <div className="min-w-0">
+                      <p className="font-bold text-gray-900 truncate">
+                        {review.user_name || '익명 수강생'}
+                      </p>
+                      <p className="text-xs text-purple-600 font-medium line-clamp-1">
+                        {review.course_title || '비원아카데미 강의 수강'}
+                      </p>
                     </div>
                   </div>
                 </motion.div>
               ))
             ) : (
-              <div className="w-full text-center py-12 bg-white rounded-3xl border border-gray-100 text-gray-500 font-bold">
+              <div className="col-span-full w-full text-center py-12 bg-white rounded-3xl border border-gray-100 text-gray-500 font-bold">
                 베스트 수강후기가 아직 없습니다.
               </div>
             )}

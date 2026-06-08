@@ -158,7 +158,7 @@ export default function NoticePage() {
         }
       `}} />
 
-      <div className="container mx-auto px-4 max-w-4xl">
+      <div className="container mx-auto px-4 max-w-7xl">
         <div className="space-y-10">
           {/* Header */}
           <div className="space-y-4 text-center">

@@ -939,7 +939,7 @@ export default function AdminCommunityManagement() {
                           <td className="px-6 py-5">
                             <span className="font-extrabold text-purple-700 block">{reqComm.name || '알 수 없는 커뮤니티'}</span>
                             <span className="text-[10px] text-gray-400 font-bold uppercase">
-                              {reqComm.type === 'course' ? '강의 동문' : 
+                              {reqComm.type === 'course' ? '강의 회원' : 
                                reqComm.type === 'season' ? '시즌 클럽' : '일반 공간'}
                             </span>
                           </td>

@@ -172,7 +172,7 @@ export default function ChatPage() {
     '🚀', '⭐', '✨', '🎈', '🎁', '🎂', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍'
   ];
 
-  const isAdmin = user && (user.role === 'super_admin' || user.role === 'admin' || user.email === 'kys@k-learn.co.kr');
+  const isAdmin = user && (user.role === 'super_admin' || user.role === 'admin');
 
   // 방 이름 도우미
   const getRoomDisplayName = (room: any) => {

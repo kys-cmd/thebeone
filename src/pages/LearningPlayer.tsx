@@ -156,7 +156,7 @@ export default function LearningPlayer() {
             });
             const result = await response.json();
             if (result.status === 'db_table_missing' && isMounted) {
-              const isAdmin = user?.role === 'super_admin' || user?.role === 'admin' || user?.email === 'kys@k-learn.co.kr';
+              const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
               if (isAdmin) {
                 toast.error(
                   <div className="space-y-2 text-left">
@@ -386,7 +386,7 @@ export default function LearningPlayer() {
     try {
       setLoading(true);
       if (user) {
-        const isAdmin = user.role === 'super_admin' || user.role === 'admin' || user.email === 'kys@k-learn.co.kr';
+        const isAdmin = user.role === 'super_admin' || user.role === 'admin';
         if (!isAdmin) {
           const isEnrolled = await courseService.checkEnrollment(user.id, id!);
           if (!isEnrolled) {

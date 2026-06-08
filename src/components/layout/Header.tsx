@@ -401,7 +401,7 @@ export default function Header() {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => navigate('/mypage')} className="p-3 rounded-lg cursor-pointer">마이페이지</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/mypage?tab=classroom')} className="p-3 rounded-lg cursor-pointer">내 강의실</DropdownMenuItem>
-                    {(user.role === 'admin' || user.role === 'super_admin' || user.email === 'kys@k-learn.co.kr') && (
+                    {(user.role === 'admin' || user.role === 'super_admin') && (
                       <DropdownMenuItem 
                         onClick={() => navigate('/admin')}
                         className="p-3 rounded-lg text-purple-600 font-bold cursor-pointer"

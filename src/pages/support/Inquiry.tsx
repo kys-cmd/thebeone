@@ -66,7 +66,7 @@ export default function InquiryPage() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] pt-32 pb-20">
-      <div className="container mx-auto px-4 max-w-2xl">
+      <div className="container mx-auto px-4 max-w-7xl">
         <div className="space-y-12">
           <div className="space-y-4 text-center">
             <Badge className="bg-blue-100 text-blue-600 border-none px-4 py-1.5 rounded-full font-black text-xs uppercase tracking-widest">
@@ -79,7 +79,7 @@ export default function InquiryPage() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="bg-white p-10 rounded-[48px] border border-gray-100 shadow-2xl space-y-8">
+          <form onSubmit={handleSubmit} className="bg-white p-10 rounded-[48px] border border-gray-100 shadow-2xl space-y-8 max-w-3xl mx-auto w-full">
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">

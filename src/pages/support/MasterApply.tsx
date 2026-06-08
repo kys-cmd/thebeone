@@ -74,7 +74,7 @@ export default function MasterApplyPage() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] pt-32 pb-20">
-      <div className="container mx-auto px-4 max-w-4xl text-left">
+      <div className="container mx-auto px-4 max-w-7xl text-left">
         <div className="space-y-16">
           <div className="space-y-6 text-center">
             <Badge className="bg-purple-600 text-white border-none px-6 py-2 rounded-full font-black text-sm uppercase tracking-widest">
@@ -106,7 +106,7 @@ export default function MasterApplyPage() {
             ))}
           </div>
 
-          <div className="bg-white p-6 md:p-16 rounded-[48px] border border-slate-100 shadow-2xl space-y-10">
+          <div className="bg-white p-6 md:p-16 rounded-[48px] border border-slate-100 shadow-2xl space-y-10 max-w-4xl mx-auto w-full">
             <div className="border-b-4 border-gray-900 pb-6">
               <h2 className="text-2xl font-black text-gray-900">강사 지원 양식</h2>
             </div>

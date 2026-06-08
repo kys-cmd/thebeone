@@ -10,6 +10,20 @@ const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
   : null;
 
 export const handler: Handler = async (event) => {
+  const allowedOrigin = process.env.APP_URL || process.env.VITE_APP_URL || "*";
+
+  if (event.httpMethod === "OPTIONS") {
+    return {
+      statusCode: 200,
+      headers: {
+        "Access-Control-Allow-Origin": allowedOrigin,
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "POST, OPTIONS"
+      },
+      body: ""
+    };
+  }
+
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
   }
@@ -20,6 +34,7 @@ export const handler: Handler = async (event) => {
     if (!price || !oid || !timestamp) {
       return {
         statusCode: 400,
+        headers: { "Access-Control-Allow-Origin": allowedOrigin },
         body: JSON.stringify({ status: "error", message: "Missing required fields" }),
       };
     }
@@ -41,8 +56,8 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    let mid = process.env.INICIS_MID || process.env.VITE_INICIS_MID || "INIpayTest";
-    let signKey = process.env.INICIS_SIGNKEY || process.env.VITE_INICIS_SIGNKEY || "SU5JTElURV9URVNUX1NJR05LRVk=";
+    let mid = process.env.INICIS_MID || process.env.VITE_INICIS_MID || "";
+    let signKey = process.env.INICIS_SIGNKEY || process.env.VITE_INICIS_SIGNKEY || "";
 
     if (supabaseAdmin) {
       try {
@@ -69,7 +84,7 @@ export const handler: Handler = async (event) => {
       statusCode: 200,
       headers: { 
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": allowedOrigin,
         "Access-Control-Allow-Headers": "Content-Type",
         "Access-Control-Allow-Methods": "POST, OPTIONS"
       },
