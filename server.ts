@@ -37,6 +37,63 @@ const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
   ? createClient(supabaseUrl, supabaseServiceRoleKey)
   : null;
 
+// ==========================================
+// KG INICIS CONFIGURATION & ENDPOINTS (Task 2 & 3)
+// ==========================================
+const INICIS_ENDPOINTS = {
+  sandbox: {
+    stdpay: "https://stgstdpay.inicis.com/api/payAuth",
+    cancel: "https://stginiapi.inicis.com/v2/cancel",
+    stdjs: "https://stgstdpay.inicis.com/stdjs/INIStdPay.js",
+  },
+  production: {
+    stdpay: "https://stdpay.inicis.com/api/payAuth",
+    cancel: "https://iniapi.inicis.com/v2/cancel",
+    stdjs: "https://stdpay.inicis.com/stdjs/INIStdPay.js",
+  },
+};
+
+// Unified Sign Generator (Task 4)
+function generateInicisSignature(
+  mid: string,
+  signKey: string,
+  oid: string,
+  price: number,
+  timestamp: string
+): string {
+  const hashTarget = `oid=${oid}&price=${price}&timestamp=${timestamp}`;
+  return crypto.createHash("sha256").update(hashTarget).digest("hex");
+}
+
+// Retrieve from Database primary, fallback to configuration settings (Task 2)
+async function getInicisConfig() {
+  if (supabaseAdmin) {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("payment_settings")
+        .select("pg_id, inicis_sign_key, is_sandbox")
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data?.pg_id && data?.inicis_sign_key) {
+        return {
+          mid: data.pg_id,
+          signKey: data.inicis_sign_key,
+          isSandbox: data.is_sandbox !== false,
+        };
+      }
+    } catch (e) {
+      console.warn("[getInicisConfig] DB loading from payment_settings failed, fallback defaults used:", e);
+    }
+  }
+
+  return {
+    mid: process.env.INICIS_MID || process.env.VITE_INICIS_MID || "INIpayTest",
+    signKey: process.env.INICIS_SIGNKEY || "SU5JQ0lTX1NJR05LRVlfVEVTVF9LRVk=",
+    isSandbox: process.env.NODE_ENV !== "production",
+  };
+}
+
 async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.PORT || "3000", 10);
@@ -101,39 +158,19 @@ async function startServer() {
         }
       }
 
-      let mid = process.env.INICIS_MID || process.env.VITE_INICIS_MID || "";
-      let signKey = process.env.INICIS_SIGNKEY || "";
-
-      // Try to get from Database first for dynamic system settings
-      if (supabaseAdmin) {
-        try {
-          const { data: settings } = await supabaseAdmin
-            .from("payment_settings")
-            .select("pg_id, inicis_sign_key")
-            .limit(1)
-            .maybeSingle();
-
-          if (settings) {
-            if (settings.pg_id) mid = settings.pg_id;
-            if (settings.inicis_sign_key) signKey = settings.inicis_sign_key;
-          }
-        } catch (dbSettingsErr) {
-          console.warn("[INIT-PAY] Could not fetch payment_settings from DB, using fallback defaults:", dbSettingsErr);
-        }
-      }
-
-      const hashTarget = `oid=${oid}&price=${price}&timestamp=${timestamp}`;
-      const signature = crypto.createHash("sha256").update(hashTarget).digest("hex");
-      const mKey = crypto.createHash("sha256").update(signKey).digest("hex");
+      const config = await getInicisConfig();
+      const signature = generateInicisSignature(config.mid, config.signKey, oid, Number(price), timestamp);
+      const mKey = crypto.createHash("sha256").update(config.signKey).digest("hex");
 
       return res.json({
         status: "success",
         signature,
         mKey,
-        mid,
+        mid: config.mid,
         oid,
         price,
         timestamp,
+        isSandbox: config.isSandbox,
       });
     } catch (error: any) {
       console.error("[INIT-PAY] API Error:", error);
@@ -147,8 +184,11 @@ async function startServer() {
 
     const { resultCode, resultMsg, mid, orderNumber, oid, authToken, authUrl } = req.body;
     const finalOid = orderNumber || oid;
-    let finalMid = mid || process.env.INICIS_MID || "";
-    const netCancelUrl = req.body.netCancelUrl || authUrl?.replace("/auth", "/netCancel") || "https://iniapi.inicis.com/api/v1/netcancel";
+    const config = await getInicisConfig();
+    const finalMid = mid || config.mid;
+    const signKey = config.signKey;
+    const resolvedCancelUrl = config.isSandbox ? INICIS_ENDPOINTS.sandbox.cancel : INICIS_ENDPOINTS.production.cancel;
+    const netCancelUrl = req.body.netCancelUrl || authUrl?.replace("/auth", "/netCancel") || resolvedCancelUrl;
 
     // Application origin URL determination
     const clientOrigin = process.env.APP_URL || process.env.VITE_APP_URL || `http://localhost:${PORT}`;
@@ -168,27 +208,6 @@ async function startServer() {
         });
       }
       return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent(resultMsg || "인증 실패")}&oid=${finalOid || ""}&resultCode=${resultCode || "UNKNOWN"}`);
-    }
-
-    // B. Auth sign hashing structure
-    let signKey = process.env.INICIS_SIGNKEY || "";
-
-    // Load from DB if possible to keep in sync with Site Settings (결제환경)
-    if (supabaseAdmin) {
-      try {
-        const { data: settings } = await supabaseAdmin
-          .from("payment_settings")
-          .select("pg_id, inicis_sign_key")
-          .limit(1)
-          .maybeSingle();
-
-        if (settings) {
-          if (settings.pg_id && !mid) finalMid = settings.pg_id;
-          if (settings.inicis_sign_key) signKey = settings.inicis_sign_key;
-        }
-      } catch (dbSettingsErr) {
-        console.warn("[INICIS-RETURN] Could not fetch payment_settings dynamically:", dbSettingsErr);
-      }
     }
 
     const timestamp = new Date().toISOString().replace(/[-T:.Z]/g, "").substring(0, 14); // YYYYMMDDHHmmss
@@ -1439,26 +1458,9 @@ async function startServer() {
         return res.status(400).json({ status: "error", message: "Missing required fields" });
       }
 
-      let mid = process.env.INICIS_MID || "";
-      let signKey = process.env.INICIS_SIGNKEY || "";
+      const config = await getInicisConfig();
 
-      // Try to get from Database first for dynamic updates
       if (supabaseAdmin) {
-        try {
-          const { data: settings, error: settingsError } = await supabaseAdmin
-            .from("payment_settings")
-            .select("pg_id, inicis_sign_key")
-            .limit(1)
-            .maybeSingle();
-          
-          if (!settingsError && settings) {
-            if (settings.pg_id) mid = settings.pg_id;
-            if (settings.inicis_sign_key) signKey = settings.inicis_sign_key;
-          }
-        } catch (e) {
-          console.warn("Could not fetch payment_settings, using defaults or env.");
-        }
-
         console.log(`Creating order record on server: oid=${oid}, userId=${userId}, amount=${price}`);
 
         // Create ORDER record here (Bypassing RLS)
@@ -1479,14 +1481,14 @@ async function startServer() {
         console.warn("Supabase Admin NOT initialized. Order record NOT created.");
       }
       
-      const hashTarget = `oid=${oid}&price=${price}&timestamp=${timestamp}`;
-      const signature = crypto.createHash('sha256').update(hashTarget).digest('hex');
-      const mKey = crypto.createHash('sha256').update(signKey).digest('hex');
+      const signature = generateInicisSignature(config.mid, config.signKey, oid, Number(price), timestamp);
+      const mKey = crypto.createHash('sha256').update(config.signKey).digest('hex');
       
       res.json({
-        mid,
+        mid: config.mid,
         signature,
         mKey,
+        isSandbox: config.isSandbox,
         status: "success"
       });
     } catch (error) {
@@ -2656,15 +2658,24 @@ async function startServer() {
         return res.redirect("/payment/callback?status=fail&success=false&message=Invalid+Callback&resultCode=INVALID_CALLBACK");
       }
 
-      // Secure verification: Validate authUrl to prevent SSRF and mock server forgery
-      if (!authUrl.startsWith("https://stdpay.inicis.com") && !authUrl.startsWith("https://iniapi.inicis.com")) {
+      const config = await getInicisConfig();
+      const mid = config.mid;
+      const signKey = config.signKey;
+
+      const allowedDomains = [
+        "https://stdpay.inicis.com",
+        "https://iniapi.inicis.com",
+        "https://stgstdpay.inicis.com",
+        "https://stginiapi.inicis.com"
+      ];
+
+      const isVerifiedDomain = allowedDomains.some((domain) => authUrl.startsWith(domain));
+      if (!isVerifiedDomain) {
         console.error("Unverified authUrl domain:", authUrl);
         return res.redirect("/payment/callback?status=fail&success=false&message=Unverified+Payment+Gateway+Domain&resultCode=UNVERIFIED_GATEWAY");
       }
 
       const timestamp = new Date().getTime().toString();
-      const mid = process.env.INICIS_MID || "";
-      const signKey = process.env.INICIS_SIGNKEY || "";
 
       // StdPay Auth Signature: SHA256(authToken + timestamp)
       const signature = crypto.createHash('sha256').update(`authToken=${authToken}&timestamp=${timestamp}`).digest('hex');
