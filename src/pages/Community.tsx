@@ -3122,102 +3122,141 @@ export default function CommunityPage() {
                         <Input 
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="내 커뮤니티 게시글 검색 및 태그(#) 검색..."
+                          placeholder="회원 게시글 검색 및 태그(#) 검색..."
                           className="h-10 pl-9.5 pr-4 bg-slate-50 border-transparent rounded-2xl focus:bg-white focus:ring-purple-650 font-bold text-xs sm:text-sm text-slate-705"
                         />
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-2.5">
-                        <div className="bg-purple-600 w-1.5 h-5 rounded-full" />
-                        내 커뮤니티 최근 게시글
-                        {user && (isAdmin || accessibleCommunityIds.size > 0) && (
-                          <span className="text-purple-600 ml-1 font-black text-sm">
-                            {
-                              posts.filter(post => 
-                                accessibleCommunityIds.has(post.community_id) && 
-                                post.type !== 'mission_template' && 
-                                !post.is_deleted &&
-                                (!searchQuery ||
-                                  post.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                  post.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                  post.profiles?.nickname?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                  post.profiles?.name?.toLowerCase().includes(searchQuery.toLowerCase()))
-                              ).length
-                            }
-                          </span>
-                        )}
-                      </h2>
-                    </div>
+                    {/* Communities Grid with Latest 3 Posts */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                      {allCommunitiesReady.map((community) => {
+                        // Filter posts belonging to this community, excluding templates and deleted ones
+                        const communityPosts = posts
+                          .filter(
+                            (p) =>
+                              p.community_id === community.id &&
+                              p.type !== 'mission_template' &&
+                              !p.is_deleted
+                          )
+                          // Sort by created_at descending (newest first)
+                          .sort(
+                            (a, b) =>
+                              new Date(b.created_at).getTime() -
+                              new Date(a.created_at).getTime()
+                          );
 
-                    {!user || (!isAdmin && accessibleCommunityIds.size === 0) ? (
-                      <div className="py-20 text-center bg-white rounded-3xl border border-slate-100 shadow-xs flex flex-col items-center justify-center p-8 space-y-4 text-left">
-                        <div className="w-16 h-16 rounded-3xl bg-purple-50 flex items-center justify-center text-purple-600 border border-purple-100/50">
-                          <MessageSquareIcon className="w-8 h-8" />
-                        </div>
-                        <div className="space-y-1 text-center">
-                          <p className="text-sm text-slate-700 font-extrabold leading-normal">
-                            아직 가입된 커뮤니티가 없습니다. 커뮤니티에 가입해보세요.
-                          </p>
-                          <p className="text-xs text-slate-405 font-bold leading-normal">
-                            좌측 채널 목록에서 원하시는 커뮤니티에 가입해보세요.
-                          </p>
-                        </div>
-                      </div>
-                    ) : (() => {
-                      const myJoinedPosts = posts.filter(post => 
-                        accessibleCommunityIds.has(post.community_id) && 
-                        post.type !== 'mission_template' && 
-                        !post.is_deleted
-                      );
+                        // If there is a search query, filter the posts matching the query
+                        const filteredCommPosts = searchQuery
+                          ? communityPosts.filter(
+                              (p) =>
+                                p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                p.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                p.profiles?.nickname?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                p.profiles?.name?.toLowerCase().includes(searchQuery.toLowerCase())
+                            )
+                          : communityPosts;
 
-                      const sortedMyPosts = [...myJoinedPosts].sort(
-                        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-                      );
+                        // If searching, and neither community name nor any post matches, skip
+                        const matchesSearch =
+                          !searchQuery ||
+                          community.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          filteredCommPosts.length > 0;
 
-                      const filteredMyPosts = sortedMyPosts.filter(post => 
-                        !searchQuery ||
-                        post.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        post.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        post.profiles?.nickname?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        post.profiles?.name?.toLowerCase().includes(searchQuery.toLowerCase())
-                      );
+                        if (!matchesSearch) return null;
 
-                      if (filteredMyPosts.length === 0) {
+                        // Slice the latest 3 posts
+                        const latest3Posts = filteredCommPosts.slice(0, 3);
+
                         return (
-                          <div className="py-20 text-center bg-white rounded-3xl border border-slate-100 shadow-xs">
-                            <p className="text-xs text-slate-405 font-bold leading-normal">
-                              {searchQuery ? "검색 결과에 맞는 게시글이 없습니다." : "가입된 커뮤니티의 최근 게시글이 없습니다."}
-                            </p>
+                          <div
+                            key={community.id}
+                            className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs hover:border-purple-200 hover:shadow-sm transition-all text-left flex flex-col justify-between space-y-4"
+                          >
+                            <div className="space-y-3.5">
+                              {/* Community Header */}
+                              <div className="flex items-center justify-between border-b border-slate-50 pb-3 gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-lg text-purple-600 font-extrabold shrink-0">#</span>
+                                  <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight truncate">
+                                    {community.name}
+                                  </h3>
+                                  {communityPosts.length > 0 && (
+                                    <Badge className="bg-purple-50 text-purple-600 hover:bg-purple-100 border-none font-bold text-[9.5px] px-1.5 py-0.5 rounded-full shrink-0">
+                                      {communityPosts.length}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => handleMenuClick(community.id)}
+                                  className="text-[11px] font-black text-purple-600 hover:text-purple-700 bg-transparent border-none outline-none cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap transition-colors"
+                                >
+                                  채널 입장하기
+                                  <ChevronRight className="w-3 h-3" />
+                                </button>
+                              </div>
+
+                              {/* Description, if exists */}
+                              {community.description && (
+                                <p className="text-[11.5px] text-slate-450 font-medium leading-normal line-clamp-1 pb-1">
+                                  {community.description}
+                                </p>
+                              )}
+
+                              {/* Latest 3 Posts List */}
+                              <div className="space-y-2 pt-1 font-sans">
+                                {latest3Posts.length === 0 ? (
+                                  <div className="py-8 text-center bg-slate-50/20 rounded-2xl border border-dashed border-slate-105">
+                                    <p className="text-[11px] text-slate-400 font-bold leading-normal">
+                                      ⏳ 아직 등록된 소식이 없습니다. 첫 글을 등록해 보셔요!
+                                    </p>
+                                  </div>
+                                ) : (
+                                  latest3Posts.map((post) => {
+                                    // Strip html tags for plain preview comparison
+                                    const plainContent = (post.content || '').replace(/<[^>]*>/g, '');
+                                    const titleStr = post.title || plainContent.substring(0, 25);
+                                    
+                                    return (
+                                      <div
+                                        key={post.id}
+                                        onClick={() => handlePostClick(post)}
+                                        className="p-3 bg-slate-50 hover:bg-purple-50/40 rounded-2xl transition-all cursor-pointer flex items-center justify-between gap-3 text-left group"
+                                      >
+                                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                                          {post.image_urls && post.image_urls.length > 0 && (
+                                            <Badge className="bg-purple-100 text-purple-700 border-none font-extrabold text-[8px] px-1 py-0 scale-95 shrink-0 select-none">
+                                              사진
+                                            </Badge>
+                                          )}
+                                          <span className="text-xs sm:text-sm font-semibold text-slate-755 group-hover:text-purple-700 transition-colors truncate max-w-full">
+                                            {titleStr}
+                                          </span>
+                                          {post.comments_count && post.comments_count > 0 ? (
+                                            <span className="text-purple-650 text-[11px] font-black shrink-0">
+                                              [{post.comments_count}]
+                                            </span>
+                                          ) : null}
+                                        </div>
+
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <span className="text-[10px] font-bold text-slate-400 truncate max-w-[65px]">
+                                            {post.profiles?.nickname || post.profiles?.name || '익명'}
+                                          </span>
+                                          <span className="text-[10px] text-slate-400 font-bold font-mono">
+                                            {getKoreanRelativeTime(post.created_at)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
                           </div>
                         );
-                      }
-
-                      return (
-                        <div className="space-y-4">
-                          <PostList 
-                            posts={filteredMyPosts}
-                            isLoading={loading}
-                            currentUserId={user?.id}
-                            isAdmin={isAdmin}
-                            postComments={postComments}
-                            onLike={handleToggleLike}
-                            onCommentToggle={handleToggleComments}
-                            onCommentSubmit={handleAddComment}
-                            onJoinAttendance={handleJoinAttendance}
-                            onToggleTodo={handleToggleTodo}
-                            onVotePoll={handleVotePoll}
-                            onDelete={handleDeletePost}
-                            onEdit={handleEditPost}
-                            accessibleCommunityIds={accessibleCommunityIds}
-                            isFeedMode={true}
-                            allCommunities={allCommunitiesReady}
-                            onCardClick={(post) => handlePostClick(post)}
-                          />
-                        </div>
-                      );
-                    })()}
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

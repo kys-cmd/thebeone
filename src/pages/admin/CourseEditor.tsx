@@ -131,6 +131,7 @@ export default function AdminCourseEditor() {
     study_start_date: string;
     study_end_date: string;
     access_type: string;
+    min_member_grade: string | null;
     thumbnail: string;
     hero_bg_color: string;
     hero_text_color: string;
@@ -163,6 +164,7 @@ export default function AdminCourseEditor() {
     study_start_date: new Date().toISOString(),
     study_end_date: new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString(),
     access_type: "automatic",
+    min_member_grade: null,
     thumbnail: "",
     hero_bg_color: "#0f172a",
     hero_text_color: "#ffffff",
@@ -400,6 +402,7 @@ export default function AdminCourseEditor() {
         study_start_date: data.study_start_date || new Date().toISOString(),
         study_end_date: data.study_end_date || new Date().toISOString(),
         access_type: data.access_type || "automatic",
+        min_member_grade: data.min_member_grade || null,
         thumbnail: data.thumbnail || "",
         hero_bg_color: data.hero_bg_color || "#0f172a",
         hero_text_color: data.hero_text_color || "#ffffff",
@@ -750,9 +753,20 @@ export default function AdminCourseEditor() {
                         <Label>카테고리</Label>
                         <Select
                           value={courseInfo.category || '기본'}
-                          onValueChange={(val) =>
-                            setCourseInfo({ ...courseInfo, category: val })
-                          }
+                          onValueChange={(val) => {
+                            const isBeOne = val === 'beone_exclusive_online' || val === 'beone_exclusive_offline';
+                            setCourseInfo({ 
+                              ...courseInfo, 
+                              category: val,
+                              ...(isBeOne ? {
+                                access_type: 'manual',
+                                is_free: true,
+                                price: 0,
+                                discount_price: 0,
+                                min_member_grade: courseInfo.min_member_grade || 'bione_member'
+                              } : {})
+                            });
+                          }}
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -767,6 +781,30 @@ export default function AdminCourseEditor() {
                           </SelectContent>
                         </Select>
                       </div>
+                      
+                      {(courseInfo.category === 'beone_exclusive_online' || courseInfo.category === 'beone_exclusive_offline') && (
+                        <div className="space-y-2">
+                          <Label>수강 가능 회원 등급</Label>
+                          <Select
+                            value={courseInfo.min_member_grade || 'bione_member'}
+                            onValueChange={(val) =>
+                              setCourseInfo({ ...courseInfo, min_member_grade: val })
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="회원 등급 선택" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="bione_member">비원아카데미 회원</SelectItem>
+                              <SelectItem value="paid_member">유료 회원</SelectItem>
+                              <SelectItem value="regular_member">일반 회원</SelectItem>
+                              <SelectItem value="user">회원</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-purple-600 font-bold">선택하신 등급과 같거나 높은 등급을 가진 회원이 강의 진행 및 비원 전용 컨텐츠 학습을 시작할 수 있습니다.</p>
+                        </div>
+                      )}
+
                       {(courseInfo.category === 'special_offline' || courseInfo.category === 'beone_exclusive_offline') && (
                         <div className="space-y-2">
                           <Label>수강 최대 정원 (명)</Label>
@@ -783,10 +821,12 @@ export default function AdminCourseEditor() {
                           />
                         </div>
                       )}
+                      
                       <div className="space-y-2">
                         <Label>수강권 부여 방식</Label>
                         <Select
                           value={courseInfo.access_type}
+                          disabled={courseInfo.category === 'beone_exclusive_online' || courseInfo.category === 'beone_exclusive_offline'}
                           onValueChange={(val) =>
                             setCourseInfo({ ...courseInfo, access_type: val })
                           }
@@ -803,19 +843,25 @@ export default function AdminCourseEditor() {
                             </SelectItem>
                           </SelectContent>
                         </Select>
+                        {(courseInfo.category === 'beone_exclusive_online' || courseInfo.category === 'beone_exclusive_offline') && (
+                          <p className="text-xs text-amber-600 font-bold">비원회원전용 강의는 수동승인(관리자) 방식만 적용 가능합니다.</p>
+                        )}
                       </div>
-                      <div className="space-y-2">
-                        <Label>유료/무료 설정</Label>
-                        <div className="flex items-center space-x-2 pt-2">
-                          <Switch 
-                            checked={courseInfo.is_free} 
-                            onCheckedChange={(checked) => setCourseInfo({...courseInfo, is_free: checked, price: checked ? 0 : courseInfo.price})} 
-                          />
-                          <span className="text-sm font-medium">{courseInfo.is_free ? '무료 강의' : '유료 강의'}</span>
+
+                      {!(courseInfo.category === 'beone_exclusive_online' || courseInfo.category === 'beone_exclusive_offline') && (
+                        <div className="space-y-2">
+                          <Label>유료/무료 설정</Label>
+                          <div className="flex items-center space-x-2 pt-2">
+                            <Switch 
+                              checked={courseInfo.is_free} 
+                              onCheckedChange={(checked) => setCourseInfo({...courseInfo, is_free: checked, price: checked ? 0 : courseInfo.price})} 
+                            />
+                            <span className="text-sm font-medium">{courseInfo.is_free ? '무료 강의' : '유료 강의'}</span>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
-                {!courseInfo.is_free && (
+                {!(courseInfo.category === 'beone_exclusive_online' || courseInfo.category === 'beone_exclusive_offline') && !courseInfo.is_free && (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>가격 (원)</Label>

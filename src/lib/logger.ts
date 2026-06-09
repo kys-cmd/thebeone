@@ -18,7 +18,9 @@ export const logger = {
   getLogs(): ErrorLog[] {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
+      if (!stored) return [];
+      const parsed = JSON.parse(stored);
+      return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
       console.error('Failed to load error logs from localStorage:', e);
       return [];

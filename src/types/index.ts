@@ -52,6 +52,7 @@ export interface Course {
   study_start_date?: string | null;
   study_end_date?: string | null;
   access_type: string; // 'automatic', 'manual'
+  min_member_grade?: string | null; // e.g. 'bione_member', 'paid_member', etc.
   curriculum: CurriculumSection[];
   layout?: CourseLayout | null;
   created_at: string;

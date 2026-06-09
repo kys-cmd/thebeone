@@ -309,65 +309,116 @@ export default function CourseDetail() {
                       {course.is_duration_based ? `수강 기간: ${course.duration_days}일` : '강의 기간: 상시/일정'}
                     </span>
                   </div>
-                  <div className="text-right">
-                    <p className="text-gray-400 line-through text-sm font-bold">{(course.price || 0).toLocaleString()}원</p>
-                    <p className="text-4xl font-black tracking-tighter">{(course.discount_price || course.price || 0).toLocaleString()}원</p>
-                  </div>
+                  {!(course.category === 'beone_exclusive_online' || course.category === 'beone_exclusive_offline') ? (
+                    <div className="text-right">
+                      <p className="text-gray-400 line-through text-sm font-bold">{(course.price || 0).toLocaleString()}원</p>
+                      <p className="text-4xl font-black tracking-tighter">{(course.discount_price || course.price || 0).toLocaleString()}원</p>
+                    </div>
+                  ) : (
+                    <div className="text-right">
+                      <p className="text-2xl font-black text-purple-600 tracking-tighter">비원회원전용</p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-3">
-                  {isEnrolled ? (
-                    <Button 
-                      size="lg" 
-                      className="flex-1 h-16 bg-green-600 hover:bg-green-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-green-200"
-                      onClick={() => navigate(`/course/${course.id}/learn`)}
-                    >
-                      강의 이어학습하기
-                    </Button>
-                  ) : isSoldOut ? (
-                    <Button 
-                      size="lg" 
-                      disabled
-                      className="flex-1 h-16 bg-gray-200 text-gray-500 font-black text-xl rounded-2xl cursor-not-allowed"
-                    >
-                      모집이 마감되었습니다
-                    </Button>
-                  ) : course.is_free ? (
-                    <Button 
-                      size="lg" 
-                      className="flex-1 h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200"
-                      onClick={async () => {
-                        if (!user) {
-                          toast.error('로그인이 필요합니다.');
-                          navigate('/auth/login');
-                          return;
-                        }
-                        try {
-                          await courseService.enrollCourse(user.id, course.id);
-                          toast.success('수강 신청이 완료되었습니다. 내 강의실에서 확인하세요!');
-                          setIsEnrolled(true);
-                        } catch (err: any) {
-                          console.error('Enrollment Error:', err);
-                          toast.error(`수강 신청 실패: ${err.message || '알 수 없는 오류'}`);
-                        }
-                      }}
-                    >
-                      지금 바로 무료 수강하기
-                    </Button>
-                  ) : (
-                    <PaymentButton 
-                      lecture={{
-                        id: course.id,
-                        title: course.title,
-                        price: course.discount_price || course.price || 0
-                      }}
-                      user={{
-                        id: user?.id || '',
-                        email: user?.email || '',
-                        name: user?.name || user?.email?.split('@')[0] || '수강생'
-                      }}
-                    />
-                  )}
+                  {(() => {
+                    const requiredGrade = course.min_member_grade || ((course.category === 'beone_exclusive_online' || course.category === 'beone_exclusive_offline') ? 'bione_member' : null);
+                    
+                    if (requiredGrade) {
+                      const ROLE_RANK: Record<string, number> = {
+                        'user': 0,
+                        'regular_member': 1,
+                        'paid_member': 2,
+                        'bione_member': 3,
+                        'admin': 100,
+                        'super_admin': 100
+                      };
+                      const userRank = user ? (ROLE_RANK[user.role || 'user'] || 0) : 0;
+                      const requiredRank = ROLE_RANK[requiredGrade] || 0;
+                      const isGradeAuthorized = userRank >= requiredRank || (user && (user.role === 'admin' || user.role === 'super_admin'));
+
+                      if (!isGradeAuthorized) {
+                        return (
+                          <div className="flex-1 p-5 bg-purple-50 text-purple-700 rounded-2xl border border-purple-200 text-center font-black text-[15px] leading-snug tracking-tight">
+                            비원아카데미 회원으로 가입하시면 이용하실 수 있습니다.
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <Button 
+                            size="lg" 
+                            className="flex-1 h-16 bg-green-600 hover:bg-green-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-green-200"
+                            onClick={() => navigate(`/course/${course.id}/learn`)}
+                          >
+                            강의 이어학습하기
+                          </Button>
+                        );
+                      }
+                    }
+
+                    // Fallback to original flow for non-grade-restricted courses
+                    if (isEnrolled) {
+                      return (
+                        <Button 
+                          size="lg" 
+                          className="flex-1 h-16 bg-green-600 hover:bg-green-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-green-200"
+                          onClick={() => navigate(`/course/${course.id}/learn`)}
+                        >
+                          강의 이어학습하기
+                        </Button>
+                      );
+                    } else if (isSoldOut) {
+                      return (
+                        <Button 
+                          size="lg" 
+                          disabled
+                          className="flex-1 h-16 bg-gray-200 text-gray-500 font-black text-xl rounded-2xl cursor-not-allowed"
+                        >
+                          모집이 마감되었습니다
+                        </Button>
+                      );
+                    } else if (course.is_free) {
+                      return (
+                        <Button 
+                          size="lg" 
+                          className="flex-1 h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200"
+                          onClick={async () => {
+                            if (!user) {
+                              toast.error('로그인이 필요합니다.');
+                              navigate('/auth/login');
+                              return;
+                            }
+                            try {
+                              await courseService.enrollCourse(user.id, course.id);
+                              toast.success('수강 신청이 완료되었습니다. 내 강의실에서 확인하세요!');
+                              setIsEnrolled(true);
+                            } catch (err: any) {
+                              console.error('Enrollment Error:', err);
+                              toast.error(`수강 신청 실패: ${err.message || '알 수 없는 오류'}`);
+                            }
+                          }}
+                        >
+                          지금 바로 무료 수강하기
+                        </Button>
+                      );
+                    } else {
+                      return (
+                        <PaymentButton 
+                          lecture={{
+                            id: course.id,
+                            title: course.title,
+                            price: course.discount_price || course.price || 0
+                          }}
+                          user={{
+                            id: user?.id || '',
+                            email: user?.email || '',
+                            name: user?.name || user?.email?.split('@')[0] || '수강생'
+                          }}
+                        />
+                      );
+                    }
+                  })()}
                 </div>
                 <p className="text-center text-xs text-gray-400 font-bold">
                   카드 결제, 계좌이체 가능 | 지금 바로 수강 시작

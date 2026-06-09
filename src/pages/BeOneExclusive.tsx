@@ -289,7 +289,7 @@ function CourseCard({ course, type }: { course: Course, type: 'online' | 'offlin
         )}
 
         <div className="flex items-center justify-between pt-1">
-          <p className="text-xl font-black text-gray-900">{(course.price || 0).toLocaleString()}원</p>
+          <p className="text-lg font-black text-purple-600">비원회원전용</p>
           <div className="p-1.5 bg-gray-50 rounded-full group-hover:bg-purple-600 group-hover:text-white transition-colors">
             <ChevronRight className="w-4 h-4" />
           </div>

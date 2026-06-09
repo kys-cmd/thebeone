@@ -48,27 +48,23 @@ export default function ErrorLogs() {
   const handleCopyToAIStudio = (log: ErrorLog) => {
     const ticks = "```";
     const tick = "`";
-    const safeDate = log?.timestamp ? new Date(log.timestamp) : new Date();
-    const formattedDate = isNaN(safeDate.getTime()) ? '알 수 없는 시간' : safeDate.toLocaleString('ko-KR');
-    const safeType = (log?.type || 'manual').toUpperCase();
-
     const markdownTemplate = `---
 [AI STUDIO DEBUGGING REPORT]
 ---
 # 🐛 오류 디버깅 요청 (Error Debugging Request)
 
 ## 1. 에러 핵심 정보 (Core Summary)
-- 🔴 **에러 메시지**: ${log?.message || '에러 메시지 없음'}
-- 📅 **발생 시간**: ${formattedDate} (UTC/Local)
-- 🔗 **발생 URL**: ${log?.url || 'URL 없음'}
-- ⚙️ **로그 유형**: ${safeType} / Error Source
+- 🔴 **에러 메시지**: ${log.message}
+- 📅 **발생 시간**: ${new Date(log.timestamp).toLocaleString('ko-KR')} (UTC/Local)
+- 🔗 **발생 URL**: ${log.url}
+- ⚙️ **로그 유형**: ${log.type.toUpperCase()} / Error Source
 
 ## 2. 브라우저 및 기기 환경 (Diagnostic Environment)
-- 💻 **상세 정보 (User Agent)**: ${tick}${log?.userAgent || '알 수 없는 기기/브라우저'}${tick}
+- 💻 **상세 정보 (User Agent)**: ${tick}${log.userAgent}${tick}
 
 ## 3. 에러 추적 스택트레이스 (Error Stack Trace)
 ${ticks}javascript
-${log?.stack || 'No Stack Trace Available'}
+${log.stack || 'No Stack Trace Available'}
 ${ticks}
 
 ---
@@ -150,9 +146,7 @@ ${ticks}
   };
 
   // Type count helpers
-  const countByType = (type: string) => {
-    return (logs || []).filter(l => l && (l.type || 'manual') === type).length;
-  };
+  const countByType = (type: string) => Array.isArray(logs) ? logs.filter(l => l.type === type).length : 0;
 
   return (
     <div className="space-y-8">
@@ -189,7 +183,7 @@ ${ticks}
           <Button 
             variant="outline"
             onClick={handleClearLogs}
-            disabled={logs.length === 0}
+            disabled={!Array.isArray(logs) || logs.length === 0}
             className="rounded-2xl border-red-200 hover:bg-red-50 text-red-600 disabled:opacity-50 font-black text-xs h-12"
           >
             <Trash2 className="w-4 h-4 mr-2" />
@@ -203,7 +197,7 @@ ${ticks}
         <Card className="p-6 bg-white border border-gray-100 rounded-3xl shadow-sm flex items-center justify-between">
           <div className="space-y-1">
             <p className="text-xs font-black text-gray-400 uppercase">전체 오류 로그</p>
-            <p className="text-3xl font-black text-gray-900">{logs.length} <span className="text-sm font-bold text-gray-400">건</span></p>
+            <p className="text-3xl font-black text-gray-900">{(Array.isArray(logs) ? logs.length : 0)} <span className="text-sm font-bold text-gray-400">건</span></p>
           </div>
           <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600">
             <ShieldAlert className="w-6 h-6" />
@@ -254,7 +248,7 @@ ${ticks}
           </span>
         </div>
 
-        {logs.length === 0 ? (
+        {!Array.isArray(logs) || logs.length === 0 ? (
           <div className="py-20 text-center space-y-4">
             <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto text-gray-400">
               <Check className="w-8 h-8 text-green-500" />
@@ -266,11 +260,8 @@ ${ticks}
           </div>
         ) : (
           <div className="space-y-4">
-            {(logs || []).filter(Boolean).map((log) => {
+            {logs.map((log) => {
               const isExpanded = expandedLogId === log.id;
-              const safeType = log.type || 'manual';
-              const logDate = log.timestamp ? new Date(log.timestamp) : new Date();
-              const formattedLogDate = isNaN(logDate.getTime()) ? '알 수 없는 시간' : logDate.toLocaleString('ko-KR');
               return (
                 <div 
                   key={log.id} 
@@ -287,9 +278,9 @@ ${ticks}
                   >
                     <div className="flex items-start gap-4 flex-1">
                       <div className={`mt-1 p-2 rounded-xl shrink-0 ${
-                        safeType === 'runtime' 
+                        log.type === 'runtime' 
                           ? 'bg-red-50 text-red-600' 
-                          : safeType === 'promise' 
+                          : log.type === 'promise' 
                           ? 'bg-amber-50 text-amber-500' 
                           : 'bg-blue-50 text-blue-600'
                       }`}>
@@ -298,25 +289,25 @@ ${ticks}
                       <div className="space-y-1 overflow-hidden">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                            safeType === 'runtime' 
+                            log.type === 'runtime' 
                               ? 'bg-red-100 text-red-700' 
-                              : safeType === 'promise' 
+                              : log.type === 'promise' 
                               ? 'bg-amber-100 text-amber-700' 
                               : 'bg-blue-100 text-blue-700'
                           }`}>
-                            {safeType.toUpperCase()}
+                            {log.type.toUpperCase()}
                           </span>
                           <span className="text-xs text-gray-400 font-bold flex items-center gap-1">
                             <Clock className="w-3 h-3" />
-                            {formattedLogDate}
+                            {new Date(log.timestamp).toLocaleString('ko-KR')}
                           </span>
                         </div>
                         <h3 className="font-black text-gray-900 text-sm md:text-base leading-tight truncate max-w-2xl">
-                          {log.message || '메시지 없음'}
+                          {log.message}
                         </h3>
                         <p className="text-xs text-gray-400 font-bold flex items-center gap-1.5 truncate">
                           <Globe className="w-3.5 h-3.5 text-gray-300" />
-                          <span>URL: {log.url || '알 수 없음'}</span>
+                          <span>URL: {log.url}</span>
                         </p>
                       </div>
                     </div>
@@ -356,14 +347,14 @@ ${ticks}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-bold text-gray-500">
                         <div className="p-3 bg-white rounded-xl border border-gray-100 space-y-1">
                           <p className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Device / Browser Environment</p>
-                          <p className="font-mono text-gray-700 truncate" title={log.userAgent || ''}>
-                            {log.userAgent || '알 수 없는 단말'}
+                          <p className="font-mono text-gray-700 truncate" title={log.userAgent}>
+                            {log.userAgent}
                           </p>
                         </div>
                         <div className="p-3 bg-white rounded-xl border border-gray-100 space-y-1">
                           <p className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Exact Source Webpage</p>
-                          <p className="font-mono text-gray-700 truncate" title={log.url || ''}>
-                            {log.url || '알 수 없는 주소'}
+                          <p className="font-mono text-gray-700 truncate" title={log.url}>
+                            {log.url}
                           </p>
                         </div>
                       </div>

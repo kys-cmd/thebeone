@@ -45,9 +45,8 @@ export default function Header() {
     if (!user) return;
     try {
       const data = await notificationService.getNotificationsForUser(user.id);
-      const safeData = data || [];
-      setNotifications(safeData);
-      setUnreadCount(safeData.filter(n => !n.isRead).length);
+      setNotifications(data || []);
+      setUnreadCount(data.filter(n => !n.isRead).length);
     } catch (err) {
       console.error('[Header] Notify fetch err:', err);
     }
