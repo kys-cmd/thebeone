@@ -266,9 +266,9 @@ export default function CourseDetail() {
                      course.category === 'special_online' ? '온라인 특강' :
                      course.category === 'special_offline' ? '오프라인 특강' :
                      course.category === 'special' ? '특강' : 
-                     course.category === 'beone_exclusive_online' ? '온라인 비원회원전용' :
-                     course.category === 'beone_exclusive_offline' ? '오프라인 비원회원전용' :
-                     course.category === 'beone_exclusive' ? '비원회원전용' : '라이브'}
+                     course.category === 'beone_exclusive_online' ? '온라인 비원커뮤니티회원전용' :
+                     course.category === 'beone_exclusive_offline' ? '오프라인 비원커뮤니티회원전용' :
+                     course.category === 'beone_exclusive' ? '비원커뮤니티회원전용' : '라이브'}
                   </p>
                 </div>
                 <div className="space-y-1 border-l border-white/10 pl-8">
@@ -316,7 +316,7 @@ export default function CourseDetail() {
                     </div>
                   ) : (
                     <div className="text-right">
-                      <p className="text-2xl font-black text-purple-600 tracking-tighter">비원회원전용</p>
+                      <p className="text-2xl font-black text-purple-600 tracking-tighter">비원커뮤니티회원전용</p>
                     </div>
                   )}
                 </div>

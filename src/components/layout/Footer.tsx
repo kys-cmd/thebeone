@@ -52,7 +52,7 @@ export default function Footer() {
               <li><Link to="/courses" className="hover:text-purple-400 transition-colors">정규강의</Link></li>
               <li><Link to="/special?type=online" className="hover:text-purple-400 transition-colors">온라인 특강</Link></li>
               <li><Link to="/special?type=offline" className="hover:text-purple-400 transition-colors">오프라인 특강</Link></li>
-              <li><Link to="/beone" className="hover:text-purple-400 transition-colors">비원회원전용</Link></li>
+              <li><Link to="/beone" className="hover:text-purple-400 transition-colors">비원커뮤니티회원전용</Link></li>
               <li><Link to="/live" className="hover:text-purple-400 transition-colors">비원아카데미 Live</Link></li>
               <li><Link to="/lifecoaching" className="hover:text-purple-400 transition-colors">라이프코칭</Link></li>
               <li><Link to="/techtree" className="hover:text-purple-400 transition-colors">자본주의 테크트리</Link></li>

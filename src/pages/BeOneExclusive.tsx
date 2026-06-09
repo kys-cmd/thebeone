@@ -183,7 +183,7 @@ export default function BeOneExclusive() {
           <div className="h-full flex items-center justify-center bg-[#0a0a0a] relative overflow-hidden">
              <div className="absolute inset-0 bg-gradient-to-r from-red-900 via-gray-900 to-black opacity-90" />
              <div className="relative z-10 text-center">
-                <h1 className="text-4xl font-black text-white">온라인/오프라인 비원회원전용 강의</h1>
+                <h1 className="text-4xl font-black text-white">온라인/오프라인 비원커뮤니티회원전용 강의</h1>
                 <p className="text-gray-400 mt-2 font-medium">비원아카데미의 프리미엄 마스터 클래스</p>
              </div>
           </div>
@@ -199,7 +199,7 @@ export default function BeOneExclusive() {
         <section className="space-y-12">
           <div className="flex items-end justify-between border-b-4 border-purple-600 pb-6">
             <div className="space-y-2">
-              <h2 className="text-4xl font-black text-gray-900 tracking-tighter">온라인 비원회원전용 강의</h2>
+              <h2 className="text-4xl font-black text-gray-900 tracking-tighter">온라인 비원커뮤니티회원전용 강의</h2>
             </div>
           </div>
 
@@ -216,7 +216,7 @@ export default function BeOneExclusive() {
         <section className="space-y-12">
           <div className="flex items-end justify-between border-b-4 border-gray-900 pb-6">
             <div className="space-y-2">
-              <h2 className="text-4xl font-black text-gray-900 tracking-tighter">오프라인 비원회원전용 강의</h2>
+              <h2 className="text-4xl font-black text-gray-900 tracking-tighter">오프라인 비원커뮤니티회원전용 강의</h2>
             </div>
           </div>
 
@@ -289,7 +289,7 @@ function CourseCard({ course, type }: { course: Course, type: 'online' | 'offlin
         )}
 
         <div className="flex items-center justify-between pt-1">
-          <p className="text-lg font-black text-purple-600">비원회원전용</p>
+          <p className="text-lg font-black text-purple-600">비원커뮤니티회원전용</p>
           <div className="p-1.5 bg-gray-50 rounded-full group-hover:bg-purple-600 group-hover:text-white transition-colors">
             <ChevronRight className="w-4 h-4" />
           </div>
@@ -305,7 +305,7 @@ function EmptyState({ icon }: { icon: React.ReactNode }) {
       <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto">
         {icon}
       </div>
-      <p className="text-gray-500 font-bold">현재 진행 예정인 비원회원전용 강의가 없습니다.</p>
+      <p className="text-gray-500 font-bold">현재 진행 예정인 비원커뮤니티회원전용 강의가 없습니다.</p>
     </div>
   );
 }

@@ -526,7 +526,7 @@ export default function AdminCMS() {
                           <SelectContent>
                             <SelectItem value="main">메인 롤링 (Home)</SelectItem>
                             <SelectItem value="special">특강 롤링 (Special)</SelectItem>
-                            <SelectItem value="beone_exclusive">비원회원전용 롤링 (BeOne)</SelectItem>
+                            <SelectItem value="beone_exclusive">비원커뮤니티회원전용 롤링 (BeOne)</SelectItem>
                             <SelectItem value="course">정규강의 헤더</SelectItem>
                           </SelectContent>
                         </Select>

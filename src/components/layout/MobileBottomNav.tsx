@@ -149,7 +149,7 @@ export default function MobileBottomNav() {
                   <Award className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-black text-[14px]">비원회원전용</h4>
+                  <h4 className="font-black text-[14px]">비원커뮤니티회원전용</h4>
                   <p className="text-[10px] text-slate-400 font-bold mt-0.5">멤버 전용 프리미엄</p>
                 </div>
               </Link>

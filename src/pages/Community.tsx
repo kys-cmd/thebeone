@@ -104,8 +104,8 @@ const SECTION_TITLES: Record<string, string> = {
   course: '정규강의 커뮤니티',
   special_online: '특강 커뮤니티 (온라인)',
   special_offline: '특강 커뮤니티 (오프라인)',
-  beone_exclusive_online: '비원회원전용 커뮤니티 (온라인)',
-  beone_exclusive_offline: '비원회원전용 커뮤니티 (오프라인)',
+  beone_exclusive_online: '비원커뮤니티회원전용 커뮤니티 (온라인)',
+  beone_exclusive_offline: '비원커뮤니티회원전용 커뮤니티 (오프라인)',
   board: '일반 커뮤니티',
   other: '기타 커뮤니티'
 };

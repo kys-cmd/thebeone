@@ -281,9 +281,9 @@ export default function MyPage() {
                                       course.category === 'special_online' ? '온라인 특강' :
                                       course.category === 'special_offline' ? '오프라인 특강' :
                                       course.category === 'special' ? '특강' : 
-                                      course.category === 'beone_exclusive_online' ? '온라인 비원회원전용' :
-                                      course.category === 'beone_exclusive_offline' ? '오프라인 비원회원전용' :
-                                      course.category === 'beone_exclusive' ? '비원회원전용' : '비원아카데미 Live'}
+                                      course.category === 'beone_exclusive_online' ? '온라인 비원커뮤니티회원전용' :
+                                      course.category === 'beone_exclusive_offline' ? '오프라인 비원커뮤니티회원전용' :
+                                      course.category === 'beone_exclusive' ? '비원커뮤니티회원전용' : '비원아카데미 Live'}
                                   </Badge>
                                 </div>
                              </div>
@@ -361,9 +361,9 @@ export default function MyPage() {
                                 course.category === 'special_online' ? '온라인 특강' :
                                 course.category === 'special_offline' ? '오프라인 특강' :
                                 course.category === 'special' ? '특강' : 
-                                course.category === 'beone_exclusive_online' ? '온라인 비원회원전용' :
-                                course.category === 'beone_exclusive_offline' ? '오프라인 비원회원전용' :
-                                course.category === 'beone_exclusive' ? '비원회원전용' : '비원아카데미 Live'}
+                                course.category === 'beone_exclusive_online' ? '온라인 비원커뮤니티회원전용' :
+                                course.category === 'beone_exclusive_offline' ? '오프라인 비원커뮤니티회원전용' :
+                                course.category === 'beone_exclusive' ? '비원커뮤니티회원전용' : '비원아카데미 Live'}
                              </Badge>
                            </div>
                         </div>

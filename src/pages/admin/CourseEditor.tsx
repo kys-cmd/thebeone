@@ -775,8 +775,8 @@ export default function AdminCourseEditor() {
                             <SelectItem value="regular">정규강의</SelectItem>
                             <SelectItem value="special_online">온라인 특강</SelectItem>
                             <SelectItem value="special_offline">오프라인 특강</SelectItem>
-                            <SelectItem value="beone_exclusive_online">온라인 비원회원전용</SelectItem>
-                            <SelectItem value="beone_exclusive_offline">오프라인 비원회원전용</SelectItem>
+                            <SelectItem value="beone_exclusive_online">온라인 비원커뮤니티회원전용</SelectItem>
+                            <SelectItem value="beone_exclusive_offline">오프라인 비원커뮤니티회원전용</SelectItem>
                             <SelectItem value="live">비원아카데미 라이브</SelectItem>
                           </SelectContent>
                         </Select>
@@ -844,7 +844,7 @@ export default function AdminCourseEditor() {
                           </SelectContent>
                         </Select>
                         {(courseInfo.category === 'beone_exclusive_online' || courseInfo.category === 'beone_exclusive_offline') && (
-                          <p className="text-xs text-amber-600 font-bold">비원회원전용 강의는 수동승인(관리자) 방식만 적용 가능합니다.</p>
+                          <p className="text-xs text-amber-600 font-bold">비원커뮤니티회원전용 강의는 수동승인(관리자) 방식만 적용 가능합니다.</p>
                         )}
                       </div>
 
