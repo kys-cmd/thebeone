@@ -420,7 +420,7 @@ export default function CommunityPage() {
   const [allCommunitiesReady, setAllCommunitiesReady] = useState<any[]>([]);
   const [accessibleCommunityIds, setAccessibleCommunityIds] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'feed' | 'chat'>('feed');
-  const [communityDetailTab, setCommunityDetailTab] = useState<'posts' | 'missions' | 'schedule' | 'members'>('posts');
+  const [communityDetailTab, setCommunityDetailTab] = useState<'posts' | 'missions' | 'members'>('posts');
   const [editorInitialData, setEditorInitialData] = useState<{ title: string, content: string } | null>(null);
   const [showMemberTagList, setShowMemberTagList] = useState<{ postId?: string, type: 'post' | 'comment' | 'chat', active: boolean, query: string }>({ type: 'post', active: false, query: '' });
   const [communityMembers, setCommunityMembers] = useState<any[]>([]);
@@ -1858,7 +1858,15 @@ export default function CommunityPage() {
               <button
                 onClick={() => {
                   if (user) {
-                    window.open('/chat', '_blank');
+                    const width = 480;
+                    const height = 750;
+                    const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2);
+                    const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2);
+                    window.open(
+                      '/chat',
+                      'BOneChatWindow',
+                      `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,status=no,location=no,scrollbars=yes,resizable=yes`
+                    );
                   } else {
                     toast.error('로그인이 필요한 서비스입니다.');
                     navigate('/auth/login');
@@ -2138,10 +2146,10 @@ export default function CommunityPage() {
                   </div>
                 </div>
 
-                {/* 🗺️ 탭 메뉴 (게시글 | 미션 | 일정 | 멤버) */}
+                {/* 🗺️ 탭 메뉴 (게시글 | 미션 | 멤버) */}
                 <div className="flex border-b border-slate-150 select-none font-sans">
-                  {(['posts', 'missions', 'schedule', 'members'] as const).map((tab) => {
-                    const tabLabels = { posts: '게시글', missions: '미션', schedule: '일정', members: '멤버' };
+                  {(['posts', 'missions', 'members'] as const).map((tab) => {
+                    const tabLabels = { posts: '게시글', missions: '미션', members: '멤버' };
                     return (
                       <button
                         key={tab}
@@ -2960,128 +2968,7 @@ export default function CommunityPage() {
                       </div>
                     )}
 
-                    {/* C. SCHEDULE TAB CONTENT */}
-                    {communityDetailTab === 'schedule' && (
-                      <div className="bg-white border border-slate-100 rounded-[30px] p-4 sm:p-6 text-left space-y-6 animate-fade-in shadow-xs font-sans">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-                          <div className="space-y-1">
-                            <h2 className="text-lg font-black text-slate-900 tracking-tight">
-                              📅 [{selectedCommunity.name}] 주요 클래스 로드맵 일정
-                            </h2>
-                            <p className="text-xs text-slate-500 font-bold">
-                              이 기수 회원들의 실시간 모임, Q&A 라이브 세션, 정기 오프라인 번개 일정을 파악해 참가하세요.
-                            </p>
-                          </div>
-                          <Button
-                            onClick={handleToday}
-                            variant="outline"
-                            className="border-slate-205 hover:bg-slate-50 text-slate-700 font-bold h-9 text-xs shrink-0"
-                          >
-                            달력 오늘 복귀
-                          </Button>
-                        </div>
 
-                        {/* Month navigation controller */}
-                        <div className="flex items-center justify-between gap-2 p-1.5 bg-slate-50 rounded-2xl border">
-                          <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-9 w-9 hover:bg-white rounded-xl">
-                            <ChevronLeft className="w-5 h-5" />
-                          </Button>
-                          <div className="text-xs sm:text-sm font-black text-slate-800">
-                            {calYear}년 {calMonth + 1}월 일정표
-                          </div>
-                          <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-9 w-9 hover:bg-white rounded-xl">
-                            <ChevronRight className="w-5 h-5" />
-                          </Button>
-                        </div>
-
-                        {/* Calendar Grid weekdays headings */}
-                        <div className="grid grid-cols-7 gap-1 text-center font-bold text-[10px] text-slate-500 py-1 border-b">
-                          <div className="text-rose-500">일</div>
-                          <div>월</div>
-                          <div>화</div>
-                          <div>수</div>
-                          <div>목</div>
-                          <div>금</div>
-                          <div className="text-blue-500">토</div>
-                        </div>
-
-                        {/* Compact Calendar block mapping */}
-                        <div className="grid grid-cols-7 gap-1">
-                          {(() => {
-                            const firstDayIndex = new Date(calYear, calMonth, 1).getDay();
-                            const totalDays = new Date(calYear, calMonth + 1, 0).getDate();
-                            const prevTotalDays = new Date(calYear, calMonth, 0).getDate();
-
-                            const calendarCells = [];
-
-                            // Preceeding
-                            for (let i = firstDayIndex - 1; i >= 0; i--) {
-                              const dayNum = prevTotalDays - i;
-                              const dateString = `${calMonth === 0 ? calYear - 1 : calYear}-${String(calMonth === 0 ? 12 : calMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-                              calendarCells.push({ day: dayNum, isCurrentMonth: false, dateString });
-                            }
-
-                            // Current
-                            for (let i = 1; i <= totalDays; i++) {
-                              const dateString = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-                              calendarCells.push({ day: i, isCurrentMonth: true, dateString });
-                            }
-
-                            // Succeeding
-                            const extraCells = calendarCells.length % 7 === 0 ? 0 : 7 - (calendarCells.length % 7);
-                            for (let i = 1; i <= extraCells; i++) {
-                              const dateString = `${calMonth === 11 ? calYear + 1 : calYear}-${String(calMonth === 11 ? 1 : calMonth + 2).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-                              calendarCells.push({ day: i, isCurrentMonth: false, dateString });
-                            }
-
-                            const parsedSchedules = schedules.map(item => {
-                              let details = { date: '', time: '', category: '가입 클래스일정', description: '' };
-                              try { if (item.content?.startsWith('{')) { details = JSON.parse(item.content); } else { details.description = item.content; } } catch (e) {}
-                              return { id: item.id, title: item.title, ...details };
-                            });
-
-                            const todayStr = (() => {
-                              const todayObj = new Date();
-                              return `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
-                            })();
-
-                            return calendarCells.map((cell, idx) => {
-                              const cellSchedules = parsedSchedules.filter(s => s.date === cell.dateString);
-                              const isToday = todayStr === cell.dateString;
-                              const isSelected = selectedDateStr === cell.dateString;
-
-                              return (
-                                <div
-                                  key={idx}
-                                  onClick={() => setSelectedDateStr(isSelected ? null : cell.dateString)}
-                                  className={cn(
-                                    "min-h-[50px] sm:min-h-[66px] p-1 border border-slate-50 rounded-lg cursor-pointer flex flex-col justify-between transition-all",
-                                    cell.isCurrentMonth ? "bg-white" : "bg-slate-50/50 opacity-40",
-                                    isSelected ? "ring-2 ring-purple-600 ring-offset-1 bg-purple-50/20" : "hover:bg-slate-50"
-                                  )}
-                                >
-                                  <span className={cn("text-[10px] w-4.5 h-4.5 font-bold flex items-center justify-center rounded-full", isToday ? "bg-purple-600 text-white" : "text-slate-700")}>
-                                    {cell.day}
-                                  </span>
-                                  <div className="overflow-hidden flex flex-col gap-0.5 mt-0.5">
-                                    {cellSchedules.slice(0, 1).map((s) => (
-                                      <div key={s.id} className="text-[7.5px] bg-purple-50 border border-purple-200/50 text-purple-700 font-extrabold truncate px-0.5 rounded leading-none">
-                                        {s.title}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              );
-                            });
-                          })()}
-                        </div>
-
-                        <div className="p-3.5 bg-slate-50 rounded-2xl text-[11px] text-slate-505 font-bold space-y-1.5 leading-normal">
-                          <p>📑 [정규수강] 전 주차 영상은 강의실 탭에서 비제한적으로 복습할 수 있습니다.</p>
-                          <p>🔗 [튜터줌] 라이브 Q&A 상담은 공지된 링크를 통해 예약 후 안전하게 접속하셔요.</p>
-                        </div>
-                      </div>
-                    )}
 
                     {/* D. MEMBERS TAB CONTENT */}
                     {communityDetailTab === 'members' && (

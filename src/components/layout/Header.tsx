@@ -367,7 +367,15 @@ export default function Header() {
               size="icon"
               onClick={() => {
                 if (user) {
-                  window.open('/chat', '_blank');
+                  const width = 480;
+                  const height = 750;
+                  const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2);
+                  const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2);
+                  window.open(
+                    '/chat',
+                    'BOneChatWindow',
+                    `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,status=no,location=no,scrollbars=yes,resizable=yes`
+                  );
                 } else {
                   toast.error('로그인이 필요한 서비스입니다.');
                   navigate('/auth/login');
