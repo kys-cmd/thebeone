@@ -123,6 +123,18 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [isRoomDropdownOpen, setIsRoomDropdownOpen] = useState(false);
 
+  // 팝업 모드일 시 body 스크롤 방지 및 꽉 채우기
+  useEffect(() => {
+    if (isPopup) {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    };
+  }, [isPopup]);
+
   // 실시간 메시지 상태
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
@@ -184,7 +196,10 @@ export default function ChatPage() {
     if (room.room_type === 'dm' || room.room_type === 'one_to_one' || (room.room_name && room.room_name.includes('1:1'))) {
       const otherMembers = room.chat_room_members?.filter((m: any) => m.user_id !== user?.id) || [];
       if (otherMembers.length > 0) {
-        const otherProfiles = otherMembers.map((m: any) => m.profiles).filter(Boolean);
+        let otherProfiles = otherMembers.map((m: any) => m.profiles).filter(Boolean);
+        if (otherProfiles.length === 0 && Object.keys(profilesMap).length > 0) {
+          otherProfiles = otherMembers.map((m: any) => profilesMap[m.user_id]).filter(Boolean);
+        }
         if (otherProfiles.length > 0) {
           const names = otherProfiles.map((p: any) => p.nickname || p.name).join(', ');
           return `👤 ${names} 님과의 1:1 대화`;

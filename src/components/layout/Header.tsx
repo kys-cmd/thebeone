@@ -367,8 +367,8 @@ export default function Header() {
               size="icon"
               onClick={() => {
                 if (user) {
-                  const width = 480;
-                  const height = 750;
+                  const width = 1300;
+                  const height = 800;
                   const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2);
                   const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2);
                   window.open(
