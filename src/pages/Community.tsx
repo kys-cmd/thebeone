@@ -1863,7 +1863,7 @@ export default function CommunityPage() {
                     const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2);
                     const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2);
                     window.open(
-                      '/chat',
+                      '/chat?popup=true',
                       'BOneChatWindow',
                       `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,status=no,location=no,scrollbars=yes,resizable=yes`
                     );

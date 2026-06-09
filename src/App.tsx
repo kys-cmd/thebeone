@@ -100,8 +100,18 @@ function PublicLayout() {
   const isGoogleUser = provider === 'google';
   const isIncomplete = user && isGoogleUser && (!user.name || !user.nickname || !(user.mobile_phone || user.phone) || !user.gender || !user.birthdate);
 
+  const isPopup = new URLSearchParams(location.search).get('popup') === 'true';
+
   if (!isLoading && isIncomplete && !isAuthRoute && location.pathname !== '/mypage') {
     return <Navigate to="/mypage" replace />;
+  }
+
+  if (isPopup) {
+    return (
+      <main className="flex-grow min-h-screen">
+        <Outlet />
+      </main>
+    );
   }
 
   return (
