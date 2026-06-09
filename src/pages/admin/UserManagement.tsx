@@ -133,109 +133,7 @@ export default function AdminUserManagement() {
   const [resetRequests, setResetRequests] = useState<any[]>([]);
   const [isRequestsLoading, setIsRequestsLoading] = useState(false);
 
-  // Orphaned Auth clean up tool States
-  const [orphanedAuthUsers, setOrphanedAuthUsers] = useState<any[]>([]);
-  const [isOrphanedLoading, setIsOrphanedLoading] = useState(false);
-  const [selectedOrphanIds, setSelectedOrphanIds] = useState<string[]>([]);
-
-  // Safe Confirmation Modal States (Avoid browser blocks in iframe)
-  const [orphanToDelete, setOrphanToDelete] = useState<{ id: string; email: string } | null>(null);
-  const [isBulkOrphanDeleteOpen, setIsBulkOrphanDeleteOpen] = useState(false);
   const [defaultResetConfirmUser, setDefaultResetConfirmUser] = useState<User | null>(null);
-
-  const loadOrphanedAuthUsers = async () => {
-    try {
-      setIsOrphanedLoading(true);
-      const session = (await supabase.auth.getSession()).data.session;
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (session) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
-      const response = await fetch('/api/core-api', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ action: 'admin-list-orphaned-auth-users' })
-      });
-      const result = await response.json();
-      if (result.status === 'success') {
-        setOrphanedAuthUsers(result.data || []);
-      } else {
-        throw new Error(result.message || '인증 계정 목록을 조회하지 못했습니다.');
-      }
-    } catch (err: any) {
-      console.error('Failed to load orphaned auth users:', err);
-      toast.error(`고아 인증 계정 리스트 조회 실패: ${err.message || ''}`);
-    } finally {
-      setIsOrphanedLoading(false);
-    }
-  };
-
-  const handleDeleteOrphanUser = async (userId: string, email: string) => {
-    setOrphanToDelete({ id: userId, email });
-  };
-
-  const confirmDeleteOrphanUser = async () => {
-    if (!orphanToDelete) return;
-    const { id: userId } = orphanToDelete;
-    try {
-      const session = (await supabase.auth.getSession()).data.session;
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (session) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
-      const response = await fetch('/api/core-api', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ action: 'admin-delete-auth-user', userId })
-      });
-      const result = await response.json();
-      if (result.status === 'success') {
-        toast.success(`로그인 계정이 완전히 제거되어 더 이상 로그인을 할 수 없게 되었습니다.`);
-        setOrphanToDelete(null);
-        loadOrphanedAuthUsers();
-      } else {
-        toast.error(result.message || '인증 계정 파기에 실패했습니다.');
-      }
-    } catch (err: any) {
-      console.error(err);
-      toast.error(`요청 도중 장애가 일어났습니다: ${err.message || ''}`);
-    }
-  };
-
-  const handleBulkDeleteOrphanUsers = async () => {
-    if (selectedOrphanIds.length === 0) {
-      toast.warning('선택된 항목이 없습니다.');
-      return;
-    }
-    setIsBulkOrphanDeleteOpen(true);
-  };
-
-  const confirmBulkDeleteOrphanUsers = async () => {
-    try {
-      const session = (await supabase.auth.getSession()).data.session;
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (session) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
-      const response = await fetch('/api/core-api', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ action: 'admin-bulk-delete-auth-users', userIds: selectedOrphanIds })
-      });
-      const result = await response.json();
-      if (result.status === 'success') {
-        toast.success(`총 ${selectedOrphanIds.length}개의 잔여 로그인 인증 계정을 정비 및 정화 완료했습니다!`);
-        setSelectedOrphanIds([]);
-        setIsBulkOrphanDeleteOpen(false);
-        loadOrphanedAuthUsers();
-      } else {
-        toast.error(result.message || '일괄 계정 정리에 실패했습니다.');
-      }
-    } catch (err: any) {
-      console.error(err);
-      toast.error(`일괄 계정 정화 작업 도중 오류: ${err.message}`);
-    }
-  };
 
   const loadResetRequests = async () => {
     try {
@@ -302,7 +200,6 @@ export default function AdminUserManagement() {
       
       // Load password reset requests
       loadResetRequests();
-      loadOrphanedAuthUsers();
       
       // Load Dynamic Data individually to prevent one failure from blocking everything
       const profiles = await profileService.getAllProfiles().catch(err => {
@@ -1260,17 +1157,6 @@ export default function AdminUserManagement() {
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger 
-              value="orphaned" 
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-purple-600 data-[state=active]:text-purple-600 font-bold px-1 h-full shadow-none bg-transparent relative"
-            >
-              탈퇴회원 로그인 잔재 대청소
-              {orphanedAuthUsers.length > 0 && (
-                <span className="ml-1.5 bg-amber-500 text-white font-black text-[9px] px-1.5 h-4.5 rounded-full flex items-center justify-center">
-                  {orphanedAuthUsers.length}
-                </span>
-              )}
-            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -1638,122 +1524,6 @@ export default function AdminUserManagement() {
             </CardContent>
           </Card>
         </TabsContent>
-
-        <TabsContent value="orphaned" className="space-y-6">
-          <Card className="border-none shadow-sm">
-            <CardHeader className="border-b">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                  <CardTitle className="text-xl font-black text-amber-700 flex items-center gap-2">
-                    <ShieldAlert className="w-5 h-5 text-amber-600 animate-pulse" />
-                    탈퇴회원 로그인 인증 잔재 대청소 (고아 인증 계정)
-                  </CardTitle>
-                  <CardDescription className="mt-1 font-semibold text-gray-500 leading-relaxed max-w-4xl">
-                    ⚠️ <b>보안 취약점 조치 필독:</b> 과거 프로필 데이터만 지워지고 인증 시스템(Supabase Auth)에는 계정 레코드가 그대로 남았던 유저들의 정보입니다. 
-                    프로필이 없어 사이트 내 활동은 불가하나, 해당 아이디/비밀번호로 <b>로그인 시도는 허용</b>되는 상태이므로 반드시 이 페이지에서 '인증 완전 파기'를 통해 완전히 삭제해야 정상 조치 완료됩니다.
-                  </CardDescription>
-                </div>
-                
-                {selectedOrphanIds.length > 0 && (
-                  <Button
-                    variant="destructive"
-                    className="bg-red-600 hover:bg-red-700 font-black animate-pulse"
-                    onClick={handleBulkDeleteOrphanUsers}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    선택한 {selectedOrphanIds.length}개 계정 일괄 정리
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="px-6 py-4 text-left w-12">
-                        <Checkbox
-                          checked={orphanedAuthUsers.length > 0 && selectedOrphanIds.length === orphanedAuthUsers.length}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedOrphanIds(orphanedAuthUsers.map(u => u.id));
-                            } else {
-                              setSelectedOrphanIds([]);
-                            }
-                          }}
-                        />
-                      </th>
-                      <th className="px-6 py-4 text-left font-bold text-gray-600">이메일 계정</th>
-                      <th className="px-6 py-4 text-left font-bold text-gray-600">고유 UID (ID)</th>
-                      <th className="px-6 py-4 text-left font-bold text-gray-600">계정 발급일</th>
-                      <th className="px-6 py-4 text-left font-bold text-gray-600">최근 로그인 시각</th>
-                      <th className="px-6 py-4 text-right font-bold text-gray-600">조작 작용</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y relative min-h-[150px]">
-                    {isOrphanedLoading ? (
-                      <tr>
-                        <td colSpan={6} className="py-20 text-center">
-                          <div className="flex flex-col items-center gap-2">
-                            <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
-                            <p className="text-gray-500 font-bold">인증 DB 잔존 유저들을 감지 및 스캔 중...</p>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : orphanedAuthUsers.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="py-20 text-center font-bold text-emerald-600">
-                          <div className="flex flex-col items-center justify-center gap-2 py-10">
-                            <CheckCircle2 className="w-12 h-12 text-emerald-500" />
-                            <span>정화 완료! 로그인만 은밀히 허용되는 고아 인증 계정이 단 하나도 없습니다.</span>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      orphanedAuthUsers.map((u) => (
-                        <tr key={u.id} className="hover:bg-amber-50/20 transition-colors">
-                          <td className="px-6 py-4">
-                            <Checkbox
-                              checked={selectedOrphanIds.includes(u.id)}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  setSelectedOrphanIds(prev => [...prev, u.id]);
-                                } else {
-                                  setSelectedOrphanIds(prev => prev.filter(id => id !== u.id));
-                                }
-                              }}
-                            />
-                          </td>
-                          <td className="px-6 py-4 font-black text-rose-950">
-                            {u.email}
-                          </td>
-                          <td className="px-6 py-4 font-mono text-xs text-gray-400 select-all">
-                            {u.id}
-                          </td>
-                          <td className="px-6 py-4 text-gray-500 font-medium">
-                            {u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-gray-500 font-medium">
-                            {u.lastSignIn && u.lastSignIn !== '-' ? new Date(u.lastSignIn).toLocaleString() : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <Button
-                              variant="outline"
-                              onClick={() => handleDeleteOrphanUser(u.id, u.email)}
-                              className="border-red-100 hover:border-red-300 text-red-600 hover:bg-red-50 font-black rounded-lg shadow-sm gap-1.5 h-9 text-xs"
-                            >
-                              <ShieldAlert className="w-3.5 h-3.5" /> 인증 완전 파기 (영구 삭제)
-                            </Button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
 
       {/* Delete Confirmation Modal */}
@@ -1925,75 +1695,7 @@ export default function AdminUserManagement() {
         </div>
       )}
 
-      {/* Orphan Delete Confirmation Modal */}
-      {orphanToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-[24px] p-8 max-w-md w-full space-y-6 shadow-2xl border border-amber-100">
-            <div className="space-y-3">
-              <h3 className="text-xl font-black text-amber-700 flex items-center gap-2">
-                <ShieldAlert className="w-6 h-6 text-amber-600 shrink-0" />
-                로그인 인증 완전 파기
-              </h3>
-              <p className="text-sm text-gray-500 font-bold leading-relaxed bg-amber-50/50 p-4 rounded-2xl border border-amber-100">
-                ⚠️ 경고: 정말 해당 로그인 인증계정(<strong>{orphanToDelete.email}</strong>)을 Supabase Auth에서 완전히 제거하시겠습니까?
-              </p>
-              <p className="text-xs text-amber-600 font-bold">
-                프로필 정보가 없는 유저의 로그인 자격 증명만을 완전히 계정 테이블에서 파기 삭제합니다. 이 작업은 즉각적이며 되돌릴 수 없습니다.
-              </p>
-            </div>
-            <div className="flex gap-4 justify-end pt-2">
-              <Button 
-                variant="outline" 
-                className="rounded-xl border-gray-200 font-bold px-5 h-11"
-                onClick={() => setOrphanToDelete(null)}
-              >
-                취소
-              </Button>
-              <Button 
-                className="rounded-xl bg-amber-600 hover:bg-amber-700 font-black px-5 h-11 text-white"
-                onClick={confirmDeleteOrphanUser}
-              >
-                인증 영구 삭제 (완전 파기)
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Bulk Orphaned Delete Confirmation Modal */}
-      {isBulkOrphanDeleteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-[24px] p-8 max-w-md w-full space-y-6 shadow-2xl border border-rose-200 animate-in fade-in zoom-in duration-200">
-            <div className="space-y-3">
-              <h3 className="text-xl font-black text-rose-700 flex items-center gap-2">
-                <ShieldAlert className="w-6 h-6 text-rose-600 shrink-0 animate-bounce" />
-                보안 클린업: 일괄 인증 파기
-              </h3>
-              <p className="text-sm text-gray-500 font-bold leading-relaxed bg-red-50 p-4 rounded-2xl border border-red-100">
-                ⚠️ <b>초강력 잔재 대청소 경고:</b> 선택된 <strong>{selectedOrphanIds.length}개</strong>의 탈퇴 회원 인증 계정을 일괄적으로 완전히 파기하시겠습니까?
-              </p>
-              <p className="text-xs text-rose-600 font-bold">
-                이전에 프로필 영역만 불완전하게 삭제된 채 남아있는 잔여 계정들의 로그인이 이로써 완벽하게 즉시 차단되고 영구 완전 삭제됩니다.
-              </p>
-            </div>
-            <div className="flex gap-4 justify-end pt-2">
-              <Button 
-                variant="outline" 
-                className="rounded-xl border-gray-200 font-bold px-5 h-11"
-                onClick={() => setIsBulkOrphanDeleteOpen(false)}
-              >
-                취소
-              </Button>
-              <Button 
-                className="rounded-xl bg-red-650 hover:bg-red-750 font-black px-5 h-11 text-white"
-                onClick={confirmBulkDeleteOrphanUsers}
-              >
-                일괄 대청소 시작
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Bulk Role Confirmation Modal */}
       {showBulkRoleModal && selectedBulkRole && (

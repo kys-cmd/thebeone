@@ -3,6 +3,7 @@ import { Post, Comment as CommunityComment } from '@/types';
 import { PostCard } from './PostCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { motion } from 'framer-motion';
+import { PostEditor } from './PostEditor';
 
 interface PostListProps {
   posts: Post[];
@@ -22,6 +23,9 @@ interface PostListProps {
   isFeedMode?: boolean;
   allCommunities?: any[];
   onCardClick?: (post: Post) => void;
+  editingPostId?: string | null;
+  onEditCancel?: () => void;
+  onEditSuccess?: (updatedPost: Post) => void;
 }
 
 export function PostList({ 
@@ -41,7 +45,10 @@ export function PostList({
   accessibleCommunityIds,
   isFeedMode = false,
   allCommunities = [],
-  onCardClick
+  onCardClick,
+  editingPostId,
+  onEditCancel,
+  onEditSuccess
 }: PostListProps) {
   if (isLoading) {
     return (
@@ -73,33 +80,51 @@ export function PostList({
 
   return (
     <div className="space-y-0">
-      {posts.map((post, idx) => (
-        <motion.div
-           key={post.id}
-           initial={{ opacity: 0, y: 20 }}
-           animate={{ opacity: 1, y: 0 }}
-           transition={{ delay: idx * 0.05 }}
-        >
-          <PostCard 
-            post={post}
-            currentUserId={currentUserId}
-            isAdmin={isAdmin}
-            comments={postComments[post.id]}
-            onLike={onLike}
-            onCommentToggle={onCommentToggle}
-            onCommentSubmit={onCommentSubmit}
-            onJoinAttendance={onJoinAttendance}
-            onToggleTodo={onToggleTodo}
-            onVotePoll={onVotePoll}
-            onDelete={onDelete}
-            onEdit={onEdit}
-            isRestricted={accessibleCommunityIds ? !accessibleCommunityIds.has(post.community_id) : false}
-            isFeedMode={isFeedMode}
-            communityName={allCommunities?.find((c: any) => c.id === post.community_id)?.name}
-            onCardClick={onCardClick}
-          />
-        </motion.div>
-      ))}
+      {posts.map((post, idx) => {
+        const isEditing = editingPostId === post.id;
+        return (
+          <motion.div
+             key={post.id}
+             initial={{ opacity: 0, y: 20 }}
+             animate={{ opacity: 1, y: 0 }}
+             transition={{ delay: idx * 0.05 }}
+          >
+            {isEditing ? (
+              <div className="my-4 p-5 bg-white rounded-3xl border border-slate-200 shadow-lg">
+                <PostEditor
+                  communityId={post.community_id}
+                  initialPost={post}
+                  onSuccess={(updatedPost) => {
+                    onEditSuccess?.(updatedPost);
+                  }}
+                  onCancel={() => {
+                    onEditCancel?.();
+                  }}
+                />
+              </div>
+            ) : (
+              <PostCard 
+                post={post}
+                currentUserId={currentUserId}
+                isAdmin={isAdmin}
+                comments={postComments[post.id]}
+                onLike={onLike}
+                onCommentToggle={onCommentToggle}
+                onCommentSubmit={onCommentSubmit}
+                onJoinAttendance={onJoinAttendance}
+                onToggleTodo={onToggleTodo}
+                onVotePoll={onVotePoll}
+                onDelete={onDelete}
+                onEdit={onEdit}
+                isRestricted={accessibleCommunityIds ? !accessibleCommunityIds.has(post.community_id) : false}
+                isFeedMode={isFeedMode}
+                communityName={allCommunities?.find((c: any) => c.id === post.community_id)?.name}
+                onCardClick={onCardClick}
+              />
+            )}
+          </motion.div>
+        );
+      })}
     </div>
   );
 }

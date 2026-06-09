@@ -386,6 +386,11 @@ export default function CommunityPage() {
   const [postFiles, setPostFiles] = useState<{name: string, url: string}[]>([]);
   const [postLinks, setPostLinks] = useState<{title: string, url: string}[]>([]);
   const [isPosting, setIsPosting] = useState(false);
+  const [isPostEditorExpanded, setIsPostEditorExpanded] = useState(false);
+
+  useEffect(() => {
+    setIsPostEditorExpanded(false);
+  }, [selectedCommunity?.id]);
   
   // Post edit state
   const [editingPost, setEditingPost] = useState<Post | null>(null);
@@ -503,6 +508,7 @@ export default function CommunityPage() {
   };
 
   const [searchQuery, setSearchQuery] = useState('');
+
   const [activeChatRoom, setActiveChatRoom] = useState<string>('all');
   const [activeChatRoomData, setActiveChatRoomData] = useState<ChatRoom | null>(null);
   const [rooms, setRooms] = useState<any[]>([]);
@@ -1620,7 +1626,6 @@ export default function CommunityPage() {
 
   const handleEditPost = (post: Post) => {
     setEditingPost(post);
-    setShowEditDialog(true);
   };
 
   const handleToggleLike = async (postId: string) => {
@@ -1851,16 +1856,22 @@ export default function CommunityPage() {
               </div>
 
               <button
-                onClick={() => navigate('/chat')}
+                onClick={() => {
+                  if (user) {
+                    window.open('/chat', '_blank');
+                  } else {
+                    toast.error('로그인이 필요한 서비스입니다.');
+                    navigate('/auth/login');
+                  }
+                }}
                 className="w-full h-11 bg-purple-600 hover:bg-purple-700 text-white font-black text-sm rounded-xl shadow transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <MessageSquareIcon className="w-4 h-4 shrink-0" /> 채팅
               </button>
             </div>
 
-            {/* Main Navigation List */}
-            <div className="bg-white rounded-2xl border border-slate-100 p-4 space-y-6 shadow-sm">
-              {/* Category: 1depth Common Menu */}
+            {/* Main Navigation List: Major Menu Bundle */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-4 space-y-1 shadow-sm">
               <div className="space-y-1">
                 <button 
                   onClick={() => handleMenuClick('home-latest')}
@@ -1870,15 +1881,6 @@ export default function CommunityPage() {
                   )}
                 >
                   <span>커뮤니티 홈</span>
-                </button>
-                <button 
-                  onClick={() => handleMenuClick('home-popular')}
-                  className={cn(
-                    "w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center",
-                    activeMenu === 'home-popular' ? "bg-purple-50 text-purple-700 font-black shadow-sm" : "text-slate-700 hover:bg-slate-50 hover:text-slate-900 bg-transparent"
-                  )}
-                >
-                  <span>인기글</span>
                 </button>
                 <button 
                   onClick={() => handleMenuClick('notice')}
@@ -1899,9 +1901,10 @@ export default function CommunityPage() {
                   <span>강의 일정</span>
                 </button>
               </div>
+            </div>
 
-              <hr className="border-slate-100 my-1" />
-
+            {/* Channels Navigation List: Categories Bundle */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-6 shadow-sm">
               {/* Category: 정규강의 */}
               <div>
                 <h4 className="px-3 mb-2.5 text-[13px] font-black text-slate-800 leading-none">
@@ -1939,6 +1942,8 @@ export default function CommunityPage() {
                 </div>
               </div>
 
+              <hr className="border-slate-100/60 my-1" />
+
               {/* Category: 비원 시즌 */}
               <div>
                 <h4 className="px-3 mb-2.5 text-[13px] font-black text-slate-800 leading-none">
@@ -1964,6 +1969,8 @@ export default function CommunityPage() {
                 </div>
               </div>
 
+              <hr className="border-slate-100/60 my-1" />
+
               {/* Category: 일반 커뮤니티 */}
               <div>
                 <h4 className="px-3 mb-2.5 text-[13px] font-black text-slate-800 leading-none">
@@ -1988,6 +1995,8 @@ export default function CommunityPage() {
                   )}
                 </div>
               </div>
+
+              <hr className="border-slate-100/60 my-1" />
 
               {/* Category: 기타 커뮤니티 */}
               <div>
@@ -2303,7 +2312,12 @@ export default function CommunityPage() {
                                         {notice.content && (notice.content.includes('<p>') || notice.content.includes('<h') || notice.content.includes('<div') || notice.content.includes('<ul') || notice.content.includes('<ol')) ? (
                                           <div 
                                             className="editor-content select-text text-slate-700 text-xs sm:text-sm leading-relaxed"
-                                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(notice.content) }}
+                                            dangerouslySetInnerHTML={{ 
+                                              __html: DOMPurify.sanitize(notice.content, {
+                                                ADD_TAGS: ['iframe', 'span', 'img', 'video', 'blockquote', 'pre', 'code', 'mark'],
+                                                ADD_ATTR: ['src', 'alt', 'style', 'class', 'href', 'target', 'rel', 'data-type', 'controls', 'height', 'width']
+                                              }) 
+                                            }}
                                           />
                                         ) : (
                                           <p className="whitespace-pre-wrap select-text text-xs sm:text-sm text-slate-705 leading-relaxed font-semibold">
@@ -2654,18 +2668,45 @@ export default function CommunityPage() {
 
                           {/* ✍️ 입력창: 게시글 입력창 */}
                           {(!selectedCommunity.post_permission || selectedCommunity.post_permission === 'all' || isAdmin) ? (
-                            <div id="post-editor-section" className="bg-white rounded-[26px] overflow-hidden border border-slate-100 shadow-xs">
-                              <PostEditor 
-                                communityId={selectedCommunity.id} 
-                                key={editorInitialData ? 'with-data' : 'empty'}
-                                initialPost={editorInitialData}
-                                onSuccess={(newPost) => {
-                                  setPosts(prev => [newPost, ...prev]);
-                                  setEditorInitialData(null);
-                                  toast.success('새 글이 성공적으로 피드에 등록되었습니다! 🚀');
-                                }} 
-                              />
-                            </div>
+                            isPostEditorExpanded ? (
+                              <div id="post-editor-section" className="bg-white rounded-[26px] overflow-hidden border border-slate-150 shadow-md transition-all animate-fade-in">
+                                <PostEditor 
+                                  communityId={selectedCommunity.id} 
+                                  key={editorInitialData ? 'with-data' : 'empty'}
+                                  initialPost={editorInitialData}
+                                  onCancel={() => setIsPostEditorExpanded(false)}
+                                  onSuccess={(newPost) => {
+                                    setPosts(prev => [newPost, ...prev]);
+                                    setEditorInitialData(null);
+                                    setIsPostEditorExpanded(false);
+                                    toast.success('새 글이 성공적으로 피드에 등록되었습니다! 🚀');
+                                  }} 
+                                />
+                              </div>
+                            ) : (
+                              <div 
+                                onClick={() => setIsPostEditorExpanded(true)}
+                                className="bg-white rounded-2xl border border-slate-100 p-4.5 shadow-xs hover:border-purple-300 hover:shadow-sm transition-all cursor-pointer flex items-center justify-between gap-4 select-none animate-fade-in"
+                              >
+                                <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                                  <Avatar className="w-8.5 h-8.5 border border-slate-100 shrink-0">
+                                    <AvatarImage src={user?.avatar_url || ''} />
+                                    <AvatarFallback className="bg-purple-600 text-white font-black text-xs">
+                                      {(user?.nickname || user?.name || 'ME').charAt(0).toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="bg-slate-50/70 border border-slate-100/80 rounded-2xl p-2.5 px-4.5 flex-1 text-left">
+                                    <span className="text-slate-405 font-extrabold text-[12px] sm:text-[13px] tracking-tight block truncate">
+                                      새로운 소식을 회원들과 나눠보세요... ✍️
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3 text-slate-400 shrink-0 pr-1.5">
+                                  <span className="text-base" title="사진 추가">🖼️</span>
+                                  <span className="text-base" title="파일 첨부">📎</span>
+                                </div>
+                              </div>
+                            )
                           ) : (
                             <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xs text-slate-400 font-extrabold">
                               🔒 본 채널은 오직 강사와 튜터만 게시글 작성이 가능한 공간입니다.
@@ -2678,7 +2719,7 @@ export default function CommunityPage() {
                               <p className="text-xs text-slate-400 font-extrabold leading-normal">아직 등록된 게시글이 없습니다. 첫 이야기를 남겨보세요!</p>
                             </div>
                           ) : (
-                            <div className="space-y-4">
+                            <div className="space-y-0">
                               <PostList 
                                 posts={feedPosts}
                                 isLoading={loading}
@@ -2697,6 +2738,12 @@ export default function CommunityPage() {
                                 isFeedMode={false}
                                 allCommunities={allCommunitiesReady}
                                 onCardClick={(post) => handlePostClick(post)}
+                                editingPostId={editingPost?.id}
+                                onEditCancel={() => setEditingPost(null)}
+                                onEditSuccess={(updatedPost) => {
+                                  setPosts(prev => prev.map(p => p.id === updatedPost.id ? { ...p, ...updatedPost } : p));
+                                  setEditingPost(null);
+                                }}
                               />
                             </div>
                           )}
@@ -3113,9 +3160,9 @@ export default function CommunityPage() {
                   </div>
                 ) : (
                   
-                  /* B. REVERT FALLBACK GENERAL TIME ACCUMULATOR FEED OR VIEW */
+                  /* TenReels-style Consolidated Central Community Home Section */
                   <div className="space-y-5">
-                    {/* Search Bar */}
+                    {/* 🔍 Search Bar */}
                     <div className="p-3.5 bg-white border border-slate-100 rounded-2xl shadow-xs">
                       <div className="relative text-left w-full">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -3128,135 +3175,42 @@ export default function CommunityPage() {
                       </div>
                     </div>
 
-                    {/* Communities Grid with Latest 3 Posts */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-                      {allCommunitiesReady.map((community) => {
-                        // Filter posts belonging to this community, excluding templates and deleted ones
-                        const communityPosts = posts
-                          .filter(
-                            (p) =>
-                              p.community_id === community.id &&
-                              p.type !== 'mission_template' &&
-                              !p.is_deleted
-                          )
-                          // Sort by created_at descending (newest first)
-                          .sort(
-                            (a, b) =>
-                              new Date(b.created_at).getTime() -
-                              new Date(a.created_at).getTime()
-                          );
-
-                        // If there is a search query, filter the posts matching the query
-                        const filteredCommPosts = searchQuery
-                          ? communityPosts.filter(
-                              (p) =>
-                                p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                p.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                p.profiles?.nickname?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                p.profiles?.name?.toLowerCase().includes(searchQuery.toLowerCase())
-                            )
-                          : communityPosts;
-
-                        // If searching, and neither community name nor any post matches, skip
-                        const matchesSearch =
-                          !searchQuery ||
-                          community.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          filteredCommPosts.length > 0;
-
-                        if (!matchesSearch) return null;
-
-                        // Slice the latest 3 posts
-                        const latest3Posts = filteredCommPosts.slice(0, 3);
-
-                        return (
-                          <div
-                            key={community.id}
-                            className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs hover:border-purple-200 hover:shadow-sm transition-all text-left flex flex-col justify-between space-y-4"
-                          >
-                            <div className="space-y-3.5">
-                              {/* Community Header */}
-                              <div className="flex items-center justify-between border-b border-slate-50 pb-3 gap-2">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className="text-lg text-purple-600 font-extrabold shrink-0">#</span>
-                                  <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight truncate">
-                                    {community.name}
-                                  </h3>
-                                  {communityPosts.length > 0 && (
-                                    <Badge className="bg-purple-50 text-purple-600 hover:bg-purple-100 border-none font-bold text-[9.5px] px-1.5 py-0.5 rounded-full shrink-0">
-                                      {communityPosts.length}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <button
-                                  onClick={() => handleMenuClick(community.id)}
-                                  className="text-[11px] font-black text-purple-600 hover:text-purple-700 bg-transparent border-none outline-none cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap transition-colors"
-                                >
-                                  채널 입장하기
-                                  <ChevronRight className="w-3 h-3" />
-                                </button>
-                              </div>
-
-                              {/* Description, if exists */}
-                              {community.description && (
-                                <p className="text-[11.5px] text-slate-450 font-medium leading-normal line-clamp-1 pb-1">
-                                  {community.description}
-                                </p>
-                              )}
-
-                              {/* Latest 3 Posts List */}
-                              <div className="space-y-2 pt-1 font-sans">
-                                {latest3Posts.length === 0 ? (
-                                  <div className="py-8 text-center bg-slate-50/20 rounded-2xl border border-dashed border-slate-105">
-                                    <p className="text-[11px] text-slate-400 font-bold leading-normal">
-                                      ⏳ 아직 등록된 소식이 없습니다. 첫 글을 등록해 보셔요!
-                                    </p>
-                                  </div>
-                                ) : (
-                                  latest3Posts.map((post) => {
-                                    // Strip html tags for plain preview comparison
-                                    const plainContent = (post.content || '').replace(/<[^>]*>/g, '');
-                                    const titleStr = post.title || plainContent.substring(0, 25);
-                                    
-                                    return (
-                                      <div
-                                        key={post.id}
-                                        onClick={() => handlePostClick(post)}
-                                        className="p-3 bg-slate-50 hover:bg-purple-50/40 rounded-2xl transition-all cursor-pointer flex items-center justify-between gap-3 text-left group"
-                                      >
-                                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                                          {post.image_urls && post.image_urls.length > 0 && (
-                                            <Badge className="bg-purple-100 text-purple-700 border-none font-extrabold text-[8px] px-1 py-0 scale-95 shrink-0 select-none">
-                                              사진
-                                            </Badge>
-                                          )}
-                                          <span className="text-xs sm:text-sm font-semibold text-slate-755 group-hover:text-purple-700 transition-colors truncate max-w-full">
-                                            {titleStr}
-                                          </span>
-                                          {post.comments_count && post.comments_count > 0 ? (
-                                            <span className="text-purple-650 text-[11px] font-black shrink-0">
-                                              [{post.comments_count}]
-                                            </span>
-                                          ) : null}
-                                        </div>
-
-                                        <div className="flex items-center gap-2 shrink-0">
-                                          <span className="text-[10px] font-bold text-slate-400 truncate max-w-[65px]">
-                                            {post.profiles?.nickname || post.profiles?.name || '익명'}
-                                          </span>
-                                          <span className="text-[10px] text-slate-400 font-bold font-mono">
-                                            {getKoreanRelativeTime(post.created_at)}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    );
-                                  })
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    {/* A. TenReels High Density Consolidated Post Feed */}
+                    {feedPosts.length === 0 ? (
+                      <div className="py-20 text-center bg-white rounded-3xl border border-slate-100 shadow-xs">
+                        <p className="text-xs text-slate-400 font-extrabold leading-normal">
+                          아직 등록된 게시글이 없네요. 첫번째 게시글을 기록해보세요!
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-0">
+                        <PostList 
+                          posts={feedPosts}
+                          isLoading={loading}
+                          currentUserId={user?.id}
+                          isAdmin={isAdmin}
+                          postComments={postComments}
+                          onLike={handleToggleLike}
+                          onCommentToggle={handleToggleComments}
+                          onCommentSubmit={handleAddComment}
+                          onJoinAttendance={handleJoinAttendance}
+                          onToggleTodo={handleToggleTodo}
+                          onVotePoll={handleVotePoll}
+                          onDelete={handleDeletePost}
+                          onEdit={handleEditPost}
+                          accessibleCommunityIds={accessibleCommunityIds}
+                          isFeedMode={true}
+                          allCommunities={allCommunitiesReady}
+                          onCardClick={(post) => handlePostClick(post)}
+                          editingPostId={editingPost?.id}
+                          onEditCancel={() => setEditingPost(null)}
+                          onEditSuccess={(updatedPost) => {
+                            setPosts(prev => prev.map(p => p.id === updatedPost.id ? { ...p, ...updatedPost } : p));
+                            setEditingPost(null);
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -3671,26 +3625,7 @@ export default function CommunityPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Edit Post Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-3xl p-0 overflow-hidden bg-transparent border-none">
-          {editingPost && (
-            <PostEditor
-              communityId={editingPost.community_id}
-              initialPost={editingPost}
-              onSuccess={(updatedPost) => {
-                setPosts(prev => prev.map(p => p.id === updatedPost.id ? { ...p, ...updatedPost } : p));
-                setShowEditDialog(false);
-                setEditingPost(null);
-              }}
-              onCancel={() => {
-                setShowEditDialog(false);
-                setEditingPost(null);
-              }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+  
 
       {/* Edit Comment Dialog */}
       <Dialog open={!!editingComment} onOpenChange={(open) => !open && setEditingComment(null)}>

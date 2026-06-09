@@ -146,3 +146,20 @@
     text-wrap: balance;
   }
 }
+
+/* Ensure strong tags inside prose class inherit text color */
+.prose strong {
+  color: inherit !important;
+}
+
+/* Styling for Mentions in post content and editor */
+[data-type="mention"] {
+  background-color: #f3e8ff !important; /* light purple */
+  color: #6d28d9 !important; /* deep purple */
+  font-weight: 700 !important;
+  border-radius: 6px;
+  padding: 1px 5px;
+  border: 1px solid #e9d5ff;
+  display: inline-block;
+  margin: 0 2px;
+}

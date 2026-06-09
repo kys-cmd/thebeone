@@ -367,7 +367,7 @@ export default function Header() {
               size="icon"
               onClick={() => {
                 if (user) {
-                  navigate('/chat');
+                  window.open('/chat', '_blank');
                 } else {
                   toast.error('로그인이 필요한 서비스입니다.');
                   navigate('/auth/login');

@@ -56,6 +56,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from 'framer-motion';
 import { communityService } from '@/services/communityService';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Post } from '@/types';
@@ -76,6 +77,10 @@ interface LinkPreview {
   description?: string;
   image?: string;
 }
+
+const POPULAR_EMOJIS = [
+  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🍕', '🍔', '🍟', 'ホットドッグ', '🥞', '🍩', '🍪', '🎂', '🧁', '🍦', '🍨', '🍧', '🍺', '🍻', '🥂', '🍾', '🍷', '🥃', '☕', '🥤', '🧉', '🧃', '🍗', '🥩', '🥓', '🍳', '🥞', '🍜', '🍝', '🍣', '🍤', '🍚', '🍙', '🍎', '🍓', '🍋', '🍒', '🍉', '🍇', '🥑', '🥦', '🥕', '🌽', '🌶️', '🧀', '🖐️', '✋', '👌', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '👇', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🙏', '✍️', '💅', '🤳', '💪', '⚙️', '🔥', '✨', '🎈', '🎉', '💡', '⏰', '📌', '📍', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💖', '🌟', '⚠️', '✅', '❌', '💯'
+];
 
 // --- Tiptap Extensions Configuration ---
 const extensions = [
@@ -139,6 +144,291 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
   const linkInputRef = useRef<HTMLInputElement>(null);
   const dialogLinkInputRef = useRef<HTMLInputElement>(null);
 
+  // --- Autocomplete & Mention State ---
+  const [searchState, setSearchState] = useState<{
+    isOpen: boolean;
+    trigger: string;
+    query: string;
+    range: { from: number; to: number } | null;
+  }>({
+    isOpen: false,
+    trigger: '',
+    query: '',
+    range: null,
+  });
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [members, setMembers] = useState<any[]>([]);
+
+  // Refs for safe access inside editor closures
+  const searchStateRef = useRef(searchState);
+  searchStateRef.current = searchState;
+  
+  const selectedIndexRef = useRef(selectedIndex);
+  selectedIndexRef.current = selectedIndex;
+
+  useEffect(() => {
+    const loadMembers = async () => {
+      try {
+        const list = await communityService.getAdminCommunityMembers(communityId || 'notices');
+        if (list && list.length > 0) {
+          setMembers(list);
+        } else {
+          // Fallback profiles from Supabase if no active course members
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, name, nickname, email, avatar_url')
+            .limit(30);
+          if (profiles) {
+            setMembers(profiles.map((p: any) => ({
+              id: p.id,
+              name: p.nickname || p.name || '회원',
+              email: p.email,
+              avatarUrl: p.avatar_url,
+              role: 'member'
+            })));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load mention candidates:', err);
+      }
+    };
+    loadMembers();
+  }, [communityId]);
+
+  // Autocomplete Candidates filters
+  const filteredMembers = members.filter(m => {
+    const name = m.name || '';
+    const email = m.email || '';
+    const nickname = m.nickname || '';
+    return name.toLowerCase().includes(searchState.query.toLowerCase()) || 
+           email.toLowerCase().includes(searchState.query.toLowerCase()) ||
+           nickname.toLowerCase().includes(searchState.query.toLowerCase());
+  }).slice(0, 8);
+
+  const POPULAR_HASHTAGS = ['공지사항', '질문', '자료공유', '출석체크', '도움요청', '잡담', '일일챌린지', '꿀팁', '업데이트', '건의사항'];
+  const filteredHashtagsRaw = POPULAR_HASHTAGS.filter(tag => 
+    tag.toLowerCase().includes(searchState.query.toLowerCase())
+  );
+  if (searchState.trigger === '#' && searchState.query && !filteredHashtagsRaw.includes(searchState.query)) {
+    filteredHashtagsRaw.unshift(searchState.query);
+  }
+  const filteredHashtags = filteredHashtagsRaw.slice(0, 8);
+
+  const filteredMembersRef = useRef(filteredMembers);
+  filteredMembersRef.current = filteredMembers;
+
+  const filteredHashtagsRef = useRef(filteredHashtags);
+  filteredHashtagsRef.current = filteredHashtags;
+
+  // Insert candidate callback
+  const selectSuggestion = (index: number) => {
+    const currentSearchState = searchStateRef.current;
+    if (!editor || !currentSearchState.range) return;
+    
+    const { trigger, range } = currentSearchState;
+    const { from, to } = range;
+    
+    if (trigger === '@') {
+      const member = filteredMembersRef.current[index];
+      if (!member) return;
+      
+      const label = member.name || member.nickname || '회원';
+      
+      editor.chain().focus()
+        .deleteRange({ from, to })
+        .insertContent({
+          type: 'mention',
+          attrs: { id: member.id, label }
+        })
+        .insertContent(' ')
+        .run();
+        
+      toast.success(`${label}님을 소환했습니다.`);
+    } else if (trigger === '#') {
+      const tag = filteredHashtagsRef.current[index];
+      if (!tag) return;
+      
+      // Selectively delete original hashtag search trigger text
+      editor.chain().focus()
+        .deleteRange({ from, to })
+        .run();
+
+      // Styled Hashtag element returning inline style & class configurations
+      editor.chain().focus()
+        .insertContent(`<span style="background-color: #6d28d9; color: #ffffff; font-weight: 800; padding: 2px 8px; border-radius: 6px; display: inline-block; margin: 0 4px;" class="bg-purple-700 text-white font-extrabold px-1.5 py-0.5 rounded-md text-xs select-all mx-0.5 inline-block">#${tag}</span> `)
+        .run();
+        
+      toast.success(`#${tag} 해시태그를 추가했습니다.`);
+    }
+    
+    setSearchState({ isOpen: false, trigger: '', query: '', range: null });
+  };
+
+  const selectSuggestionRef = useRef(selectSuggestion);
+  selectSuggestionRef.current = selectSuggestion;
+
+  const handleEditorSelectionOrContentChange = ({ editor }: { editor: any }) => {
+    const { state } = editor;
+    const { selection } = state;
+    const { $from } = selection;
+    const textBefore = $from.parent.textBetween(Math.max(0, $from.parentOffset - 20), $from.parentOffset, null, '\n');
+    
+    const lastWordMatch = textBefore.match(/([@#])([^\s]*)$/);
+    if (lastWordMatch) {
+      const trigger = lastWordMatch[1];
+      const query = lastWordMatch[2];
+      const from = $from.pos - lastWordMatch[0].length;
+      const to = $from.pos;
+      setSearchState({
+        isOpen: true,
+        trigger,
+        query,
+        range: { from, to }
+      });
+    } else {
+      setSearchState({
+        isOpen: false,
+        trigger: '',
+        query: '',
+        range: null
+      });
+    }
+  };
+
+  const getCaretCoordinates = () => {
+    if (!editor) return null;
+    try {
+      const { selection } = editor.state;
+      const { $from } = selection;
+      const coords = editor.view.coordsAtPos($from.pos);
+      const editorEl = editor.view.dom.getBoundingClientRect();
+      
+      return {
+        top: coords.bottom - editorEl.top + 24,
+        left: Math.min(editorEl.width - 240, Math.max(16, coords.left - editorEl.left)),
+      };
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const generateMetadata = (inputUrl: string): LinkPreview => {
+    let domain = '알 수 없는 웹사이트';
+    let title = '인터넷 외부 연결 링크';
+    let description = '신뢰할 수 있고 안전한 외부 인터넷 연결 주소입니다.';
+    let image = 'https://images.unsplash.com/photo-1481487196290-c152efe083f5?w=400&q=80';
+    let siteName = '';
+
+    try {
+      const parsed = new URL(inputUrl);
+      domain = parsed.hostname.replace('www.', '');
+      siteName = domain.toUpperCase();
+    } catch (e) {
+      if (inputUrl) {
+        domain = inputUrl.replace(/https?:\/\/(www\.)?/, '').split('/')[0];
+        siteName = domain.toUpperCase();
+      }
+    }
+
+    const hostname = domain.toLowerCase();
+
+    if (hostname.includes('github.com')) {
+      title = 'GitHub - 전세계 개발자들의 협업 코드 정점 저장소';
+      description = '소스코드의 공유, 버전 제어 및 협업을 위한 동급 최강의 SaaS 플랫폼. 전세계 개발 생태계의 중심 공간입니다.';
+      image = 'https://images.unsplash.com/photo-1618401471353-b98aedd07871?w=400&q=80';
+    } else if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
+      title = 'YouTube - 크리에이터 비디오 콘텐츠의 글로벌 허브';
+      description = '일상 소통 영상 및 온라인 라이브 실시간 스트리밍 콘텐츠를 전세계 시청자들과 교감합니다.';
+      image = 'https://images.unsplash.com/photo-1626379616459-b2ece1d936c5?w=400&q=80';
+    } else if (hostname.includes('google.com') || hostname.includes('google.co.kr')) {
+      title = 'Google 검색 - 전세계 지식 네트워크의 나침반';
+      description = '웹 문서, 뉴스 정보 및 최신 자산을 정밀하게 질의하고 해석할 수 있는 세계 최고의 검색 라이브러리.';
+      image = 'https://images.unsplash.com/photo-1579202673506-ca3ce28943ef?w=400&q=80';
+    } else if (hostname.includes('naver.com')) {
+      title = 'NAVER 네이버 - 일상의 연결이자 대표 검색 포털';
+      description = '지식iN, 카페, 블로그, 최신 주요 뉴스, 기상 정보와 실시간 스포츠 등 생활 편의를 원스톱 서비스합니다.';
+      image = 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=400&q=80';
+    } else if (hostname.includes('notion.so') || hostname.includes('notion.site')) {
+      title = 'Notion - 올인원 디지털 위키 포털이자 워크스페이스';
+      description = '단일 작업창에서 계획 수집, 노트 작성, 프로젝트 로드맵 관리와 간이 데이터베이스 구축까지 한 번에 완료 가능합니다.';
+      image = 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=400&q=80';
+    } else if (hostname.includes('stackoverflow.com')) {
+      title = 'Stack Overflow - 세계에서 가장 넓은 엔지니어 질답 지식인';
+      description = '언어별 컴파일 오작동 교정, 프레임워크 인프라 설계 등을 동료 기술자들과 실시간 질답 해결합니다.';
+      image = 'https://images.unsplash.com/photo-1542831371-29b0f74f9713?w=400&q=80';
+    } else {
+      const displayDomain = siteName ? siteName : domain;
+      title = `${displayDomain} - 도메인 공유 연결 링크`;
+      description = `'${displayDomain}' 관련 유용한 온라인 학습 참고 공유 링크입니다. 안전하게 외부 연결 사이트로 이동하실 수 있습니다.`;
+    }
+
+    return {
+      url: inputUrl,
+      title,
+      description,
+      image
+    };
+  };
+
+  const handleLinkPaste = (url: string) => {
+    if (!url) return;
+    let formattedUrl = url;
+    if (!/^https?:\/\//i.test(url)) {
+      formattedUrl = `https://${url}`;
+    }
+    
+    setLinkPreview({
+      url: formattedUrl,
+      title: '링크 메타 분석 중...',
+      description: '웹페이지 도메인 정보를 바탕으로 가독성이 뛰어난 메타 정보를 수집 중입니다.'
+    });
+
+    try {
+      setTimeout(() => {
+        const meta = generateMetadata(formattedUrl);
+        setLinkPreview(meta);
+        toast.success('링크의 메타 정보가 수집되어 카드 블록으로 등록되었습니다.');
+      }, 550);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleLinkPasteRef = useRef(handleLinkPaste);
+  handleLinkPasteRef.current = handleLinkPaste;
+
+  const handlePastedFile = async (file: File) => {
+    setIsUploading(true);
+    try {
+      let url = '';
+      try {
+        url = await communityService.uploadFile(file, `posts/${communityId || 'notices'}`);
+      } catch (error) {
+        console.error('File paste upload failed, falling back to base64', error);
+        url = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      const mediaItem = { type: 'image' as const, url, name: file.name || 'clipboard-screenshot.png' };
+      setMediaUrls(prev => [...prev, mediaItem]);
+      
+      if (editor) {
+        editor.chain().focus().setImage({ src: url, alt: mediaItem.name }).run();
+        toast.success('클립보드 스크린샷 이미지가 본문에 삽입되었습니다.');
+      }
+    } catch (e) {
+      toast.error('클립보드 이미지 삽입 중 오류가 발생했습니다.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handlePastedFileRef = useRef(handlePastedFile);
+  handlePastedFileRef.current = handlePastedFile;
+
   const editor = useEditor({
     extensions,
     content: '',
@@ -150,7 +440,7 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
           'prose-h1:text-xl prose-h1:font-extrabold',
           'prose-h2:text-lg prose-h2:font-bold',
           'prose-h3:text-base prose-h3:font-semibold',
-          'prose-p:text-[13px] prose-p:leading-normal prose-p:text-slate-700 prose-p:my-1.5 prose-p:break-all',
+          'prose-p:text-[13px] prose-p:leading-normal prose-p:text-slate-750 prose-p:my-1.5 prose-p:break-all',
           'prose-blockquote:border-l-4 prose-blockquote:border-slate-300 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:my-1.5 prose-blockquote:text-slate-500',
           'prose-code:text-red-500 prose-code:bg-slate-50 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:text-xs',
           'prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:p-3 prose-pre:my-1.5 prose-pre:font-mono prose-pre:text-xs',
@@ -160,7 +450,65 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
           'prose-img:rounded-md prose-img:my-2 prose-img:max-w-full prose-img:h-auto prose-img:inline-block border border-slate-200 shadow-sm'
         ),
       },
+      handleKeyDown: (view, event) => {
+        const currentSearchState = searchStateRef.current;
+        if (currentSearchState.isOpen) {
+          const mCount = currentSearchState.trigger === '@' ? filteredMembersRef.current.length : filteredHashtagsRef.current.length;
+          if (mCount > 0) {
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              setSelectedIndex(prev => (prev + 1) % mCount);
+              return true;
+            }
+            if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              setSelectedIndex(prev => (prev - 1 + mCount) % mCount);
+              return true;
+            }
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              selectSuggestionRef.current(selectedIndexRef.current);
+              return true;
+            }
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            setSearchState({ isOpen: false, trigger: '', query: '', range: null });
+            return true;
+          }
+        }
+        return false;
+      },
+      handlePaste: (view, event) => {
+        const items = event.clipboardData?.items;
+        if (items) {
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.type.indexOf('image/') !== -1) {
+              const file = item.getAsFile();
+              if (file) {
+                event.preventDefault();
+                handlePastedFileRef.current(file);
+                return true;
+              }
+            }
+          }
+        }
+        
+        const text = event.clipboardData?.getData('text/plain') || '';
+        const urlRegex = /^(https?:\/\/[^\s]+)$/i;
+        if (urlRegex.test(text.trim())) {
+          handleLinkPasteRef.current(text.trim());
+        }
+        return false;
+      }
     },
+    onUpdate({ editor }) {
+      handleEditorSelectionOrContentChange({ editor });
+    },
+    onSelectionUpdate({ editor }) {
+      handleEditorSelectionOrContentChange({ editor });
+    }
   });
 
   useEffect(() => {
@@ -291,88 +639,6 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
     }
   };
 
-  const generateMetadata = (inputUrl: string): LinkPreview => {
-    let domain = '알 수 없는 웹사이트';
-    let title = '인터넷 외부 연결 링크';
-    let description = '신뢰할 수 있고 안전한 외부 인터넷 연결 주소입니다.';
-    let image = 'https://images.unsplash.com/photo-1481487196290-c152efe083f5?w=400&q=80';
-    let siteName = '';
-
-    try {
-      const parsed = new URL(inputUrl);
-      domain = parsed.hostname.replace('www.', '');
-      siteName = domain.toUpperCase();
-    } catch (e) {
-      if (inputUrl) {
-        domain = inputUrl.replace(/https?:\/\/(www\.)?/, '').split('/')[0];
-        siteName = domain.toUpperCase();
-      }
-    }
-
-    const hostname = domain.toLowerCase();
-
-    if (hostname.includes('github.com')) {
-      title = 'GitHub - 전세계 개발자들의 협업 코드 정점 저장소';
-      description = '소스코드의 공유, 버전 제어 및 협업을 위한 동급 최강의 SaaS 플랫폼. 전세계 개발 생태계의 중심 공간입니다.';
-      image = 'https://images.unsplash.com/photo-1618401471353-b98aedd07871?w=400&q=80';
-    } else if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
-      title = 'YouTube - 크리에이터 비디오 콘텐츠의 글로벌 허브';
-      description = '일상 소통 영상 및 온라인 라이브 실시간 스트리밍 콘텐츠를 전세계 시청자들과 교감합니다.';
-      image = 'https://images.unsplash.com/photo-1626379616459-b2ece1d936c5?w=400&q=80';
-    } else if (hostname.includes('google.com') || hostname.includes('google.co.kr')) {
-      title = 'Google 검색 - 전세계 지식 네트워크의 나침반';
-      description = '웹 문서, 뉴스 정보 및 최신 자산을 정밀하게 질의하고 해석할 수 있는 세계 최고의 검색 라이브러리.';
-      image = 'https://images.unsplash.com/photo-1579202673506-ca3ce28943ef?w=400&q=80';
-    } else if (hostname.includes('naver.com')) {
-      title = 'NAVER 네이버 - 일상의 연결이자 대표 검색 포털';
-      description = '지식iN, 카페, 블로그, 최신 주요 뉴스, 기상 정보와 실시간 스포츠 등 생활 편의를 원스톱 서비스합니다.';
-      image = 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=400&q=80';
-    } else if (hostname.includes('notion.so') || hostname.includes('notion.site')) {
-      title = 'Notion - 올인원 디지털 위키 포털이자 워크스페이스';
-      description = '단일 작업창에서 계획 수집, 노트 작성, 프로젝트 로드맵 관리와 간이 데이터베이스 구축까지 한 번에 완료 가능합니다.';
-      image = 'https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=400&q=80';
-    } else if (hostname.includes('stackoverflow.com')) {
-      title = 'Stack Overflow - 세계에서 가장 넓은 엔지니어 질답 지식인';
-      description = '언어별 컴파일 오작동 교정, 프레임워크 인프라 설계 등을 동료 기술자들과 실시간 질답 해결합니다.';
-      image = 'https://images.unsplash.com/photo-1542831371-29b0f74f9713?w=400&q=80';
-    } else {
-      const displayDomain = siteName ? siteName : domain;
-      title = `${displayDomain} - 도메인 공유 연결 링크`;
-      description = `'${displayDomain}' 관련 유용한 온라인 학습 참고 공유 링크입니다. 안전하게 외부 연결 사이트로 이동하실 수 있습니다.`;
-    }
-
-    return {
-      url: inputUrl,
-      title,
-      description,
-      image
-    };
-  };
-
-  const handleLinkPaste = (url: string) => {
-    if (!url) return;
-    let formattedUrl = url;
-    if (!/^https?:\/\//i.test(url)) {
-      formattedUrl = `https://${url}`;
-    }
-    
-    setLinkPreview({
-      url: formattedUrl,
-      title: '링크 메타 분석 중...',
-      description: '웹페이지 도메인 정보를 바탕으로 가독성이 뛰어난 메타 정보를 수집 중입니다.'
-    });
-
-    try {
-      setTimeout(() => {
-        const meta = generateMetadata(formattedUrl);
-        setLinkPreview(meta);
-        toast.success('링크의 메타 정보가 수집되어 카드 블록으로 등록되었습니다.');
-      }, 550);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   const handleInsertLinkFromDialog = (url: string) => {
     if (!url) return;
     let formattedUrl = url;
@@ -429,7 +695,7 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
       const postData = {
         community_id: communityId || 'notices',
         title: title || editor.getText().slice(0, 20) || '새 게시글',
-        content: editor.getText(),
+        content: editor.getHTML(),
         content_json,
         hashtags,
         type: (initialPost?.type || 'general') as any,
@@ -797,6 +1063,74 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
           {/* Actual RichText body Area */}
           <div className="relative flex-1 bg-white">
             <EditorContent editor={editor} />
+
+            {/* Caret-aligned Floating Autocomplete Suggestion Dropdown */}
+            {searchState.isOpen && (
+              <div 
+                className="absolute z-50 w-64 bg-white rounded-xl border border-slate-200 shadow-2xl p-1.5 flex flex-col gap-1 max-h-60 overflow-y-auto"
+                style={{
+                  top: getCaretCoordinates()?.top || 'auto',
+                  left: getCaretCoordinates()?.left || 'auto',
+                }}
+              >
+                {searchState.trigger === '@' ? (
+                  <>
+                    <div className="px-2.5 py-1 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1 select-none flex items-center justify-between">
+                      <span>멤버 소환하기</span>
+                      <AtSign className="w-3 h-3 text-purple-400" />
+                    </div>
+                    {filteredMembers.length === 0 ? (
+                      <div className="p-3 text-xs text-slate-450 font-bold text-center">맞는 멤버가 없습니다.</div>
+                    ) : (
+                      filteredMembers.map((member, idx) => (
+                        <button
+                          key={member.id}
+                          type="button"
+                          onClick={() => selectSuggestion(idx)}
+                          className={cn(
+                            "w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border-none",
+                            selectedIndex === idx ? "bg-purple-50 text-purple-700 font-extrabold ring-1 ring-purple-200/50" : "text-slate-705 hover:bg-slate-50"
+                          )}
+                        >
+                          <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center text-[10px] text-purple-700 font-black shrink-0">
+                            {member.name.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0 leading-tight">
+                            <p className="truncate">{member.name}</p>
+                            <span className="text-[9px] text-slate-400 font-medium truncate block">{member.email || '이메일 없음'}</span>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="px-2.5 py-1 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1 select-none flex items-center justify-between">
+                      <span>해시태그 입력</span>
+                      <Hash className="w-3 h-3 text-purple-400" />
+                    </div>
+                    {filteredHashtags.length === 0 ? (
+                      <div className="p-3 text-xs text-slate-450 font-bold text-center">태그 이름을 입력하세요...</div>
+                    ) : (
+                      filteredHashtags.map((tag, idx) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => selectSuggestion(idx)}
+                          className={cn(
+                            "w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border-none",
+                            selectedIndex === idx ? "bg-purple-700 text-white font-extrabold" : "text-slate-705 hover:bg-slate-50"
+                          )}
+                        >
+                          <span className="text-purple-500 font-black font-mono">#</span>
+                          <span className="truncate flex-1">{tag}</span>
+                        </button>
+                      ))
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Live Post Attachments/Previews inside white document envelope */}
@@ -1033,9 +1367,33 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
             </PopoverContent>
           </Popover>
 
-          <Button variant="ghost" size="icon" className="text-slate-500 hover:text-yellow-500 hover:bg-white rounded-md h-9 w-9" title="이모지">
-             <Smile className="w-5 h-5" />
-          </Button>
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button variant="ghost" size="icon" className="text-slate-500 hover:text-yellow-500 hover:bg-white rounded-md h-9 w-9" title="이모지">
+                  <Smile className="w-5 h-5" />
+                </Button>
+              }
+            />
+            <PopoverContent className="w-72 p-3 rounded-2xl border border-slate-200 bg-white shadow-xl max-h-72 overflow-y-auto" align="start">
+              <div className="grid grid-cols-7 gap-1">
+                {POPULAR_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => {
+                      if (editor) {
+                        editor.chain().focus().insertContent(emoji).run();
+                      }
+                    }}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-lg hover:bg-slate-100 transition-colors cursor-pointer border-none"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
 
         </div>
 

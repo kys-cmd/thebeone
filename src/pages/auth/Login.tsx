@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { LogIn, UserPlus, ArrowRight, Mail, Key, ShieldCheck, ArrowLeft } from 'lucide-react';
+import { LogIn, UserPlus, ArrowRight, Mail, Key, ShieldCheck, ArrowLeft, User, Phone } from 'lucide-react';
 import { authService } from '@/services/authService';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -14,12 +14,46 @@ import { toast } from 'sonner';
 export default function Login() {
   const navigate = useNavigate();
   const { setUser } = useAuthStore();
-  const [mode, setMode] = useState<'login' | 'forgot'>('login');
+  const [mode, setMode] = useState<'login' | 'forgot' | 'findId'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [forgotEmail, setForgotEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [oauthErrorDetail, setOauthErrorDetail] = useState<string | null>(null);
+
+  // Find ID (Email) States
+  const [findIdName, setFindIdName] = useState('');
+  const [findIdPhone, setFindIdPhone] = useState('');
+  const [foundEmails, setFoundEmails] = useState<string[]>([]);
+  const [findIdStep, setFindIdStep] = useState<'form' | 'result'>('form');
+
+  const handleFindId = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!findIdName.trim()) return toast.error('이름(실명)을 입력해 주세요.');
+    if (!findIdPhone.trim()) return toast.error('가입 시 등록한 휴대전화번호를 입력해 주세요.');
+    setLoading(true);
+    setFoundEmails([]);
+    try {
+      const response = await fetch('/api/auth/find-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: findIdName.trim(), mobile: findIdPhone.trim() })
+      });
+      const result = await response.json();
+      if (response.ok && result.status === 'success') {
+        setFoundEmails(result.emails || []);
+        setFindIdStep('result');
+        toast.success('등록된 회원의 이메일 주소를 찾았습니다!');
+      } else {
+        toast.error(result.message || '일치하는 정보의 회원을 찾을 수 없습니다.');
+      }
+    } catch (error: any) {
+      console.error('[Find ID] Request failed:', error);
+      toast.error(`조회 시도 중 네트워크 오류가 발생했습니다: ${error.message || error}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Verification Code (OTP) States for password find recovery
   const [forgotStep, setForgotStep] = useState<'email' | 'code' | 'password'>('email');
@@ -285,18 +319,39 @@ export default function Login() {
                 />
               </div>
               
-              <div className="flex items-center justify-between px-1">
-                 <button 
-                   type="button" 
-                   onClick={() => {
-                     setForgotEmail(email);
-                     setMode('forgot');
-                   }}
-                   className="text-xs font-bold text-gray-400 hover:text-purple-600"
+              <div className="flex items-center justify-between px-1 py-1.5 border-t border-b border-gray-50 mt-1">
+                 <div className="flex items-center gap-3">
+                   <button 
+                     type="button" 
+                     onClick={() => {
+                       setFindIdStep('form');
+                       setFindIdName('');
+                       setFindIdPhone('');
+                       setFoundEmails([]);
+                       setMode('findId');
+                     }}
+                     className="text-[14px] font-extrabold text-gray-500 hover:text-purple-600 transition-colors cursor-pointer"
+                   >
+                     아이디 찾기
+                   </button>
+                   <span className="text-gray-200 select-none">|</span>
+                   <button 
+                     type="button" 
+                     onClick={() => {
+                       setForgotEmail(email);
+                       setMode('forgot');
+                     }}
+                     className="text-[14px] font-extrabold text-gray-500 hover:text-purple-600 transition-colors cursor-pointer"
+                   >
+                     비밀번호 찾기
+                   </button>
+                 </div>
+                 <Link 
+                   to={inviteParam ? `/auth/register?invite=${inviteParam}` : "/auth/register"} 
+                   className="text-[14px] font-black text-purple-600 hover:text-purple-700 underline underline-offset-4 decoration-2 decoration-purple-200 hover:decoration-purple-600 transition-all cursor-pointer"
                  >
-                   비밀번호 찾기
-                 </button>
-                 <Link to={inviteParam ? `/auth/register?invite=${inviteParam}` : "/auth/register"} className="text-xs font-black text-purple-600">회원가입 하기</Link>
+                   회원가입 하기
+                 </Link>
               </div>
 
               <Button type="submit" disabled={loading} className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200 mt-4">
@@ -373,7 +428,7 @@ export default function Login() {
               )}
             </form>
           </>
-        ) : (
+        ) : mode === 'forgot' ? (
           <>
             {/* Multi-step forgot password wizard */}
             {forgotStep === 'email' && (
@@ -536,6 +591,116 @@ export default function Login() {
                     {loading ? '비밀번호 재설정 중...' : '새 비밀번호 설정 완료'}
                   </Button>
                 </form>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Find ID / Email Block */}
+            {findIdStep === 'form' ? (
+              <>
+                <div className="text-center space-y-6">
+                  <div className="inline-flex flex-col items-center gap-4">
+                     <div className="w-16 h-16 bg-purple-100 rounded-[22px] flex items-center justify-center text-purple-600 shadow-xl border border-purple-200">
+                       <User className="w-8 h-8" />
+                     </div>
+                     <h1 className="text-3xl font-black tracking-tighter text-gray-900">아이디 찾기</h1>
+                  </div>
+                  <p className="text-gray-400 font-medium whitespace-pre-line leading-relaxed">
+                    가입한 실명(이름)과 등록하신{'\n'}휴대전화번호를 입력해 주세요.
+                  </p>
+                </div>
+
+                <form onSubmit={handleFindId} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">가입자 이름 (실명)</Label>
+                    <Input 
+                      type="text" 
+                      value={findIdName}
+                      onChange={(e) => setFindIdName(e.target.value)}
+                      placeholder="이름을 입력하세요" 
+                      className="h-14 bg-gray-50 border-gray-100 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">휴대전화번호</Label>
+                    <Input 
+                      type="text" 
+                      value={findIdPhone}
+                      onChange={(e) => setFindIdPhone(e.target.value)}
+                      placeholder="휴대전화번호를 입력하세요 (- 없이 입력)" 
+                      className="h-14 bg-gray-50 border-gray-100 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                    />
+                  </div>
+
+                  <Button type="submit" disabled={loading} className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200 mt-4 cursor-pointer transition-all">
+                    {loading ? '아이디 조회 중...' : '이메일 아이디 찾기'}
+                  </Button>
+
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setMode('login');
+                    }}
+                    className="w-full text-center text-xs font-black text-gray-400 hover:text-purple-600 hover:underline pt-2 block transition-all"
+                  >
+                    로그인화면으로 돌아가기
+                  </button>
+                </form>
+              </>
+            ) : (
+              <>
+                <div className="text-center space-y-6">
+                  <div className="inline-flex flex-col items-center gap-4">
+                     <div className="w-16 h-16 bg-green-100 rounded-[22px] flex items-center justify-center text-green-600 shadow-xl border border-green-200">
+                       <ShieldCheck className="w-8 h-8" />
+                     </div>
+                     <h1 className="text-3xl font-black tracking-tighter text-gray-900">아이디 조회 결과</h1>
+                  </div>
+                  <p className="text-gray-400 font-medium whitespace-pre-line leading-relaxed">
+                    입력하신 정보와 일치하는 계정 목록입니다.
+                  </p>
+                </div>
+
+                <div className="space-y-4 pt-4">
+                  <div className="space-y-2.5">
+                    {foundEmails.map((emailAddr, idx) => (
+                      <div 
+                        key={idx}
+                        className="py-4 px-5 bg-purple-50/50 border border-purple-100 rounded-2xl flex items-center gap-3"
+                      >
+                        <Mail className="w-5 h-5 text-purple-600 shrink-0" />
+                        <span className="font-extrabold text-gray-900 text-lg tracking-wide">{emailAddr}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <Button 
+                      type="button" 
+                      onClick={() => {
+                        setFindIdStep('form');
+                        setFindIdName('');
+                        setFindIdPhone('');
+                        setFoundEmails([]);
+                      }} 
+                      variant="outline" 
+                      className="flex-1 h-14 border-gray-200 rounded-2xl font-bold cursor-pointer"
+                    >
+                      다시 찾기
+                    </Button>
+                    <Button 
+                      type="button" 
+                      onClick={() => {
+                        setMode('login');
+                      }} 
+                      className="flex-1 h-14 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-2xl cursor-pointer"
+                    >
+                      로그인 하러가기
+                    </Button>
+                  </div>
+                </div>
               </>
             )}
           </>

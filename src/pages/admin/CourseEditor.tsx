@@ -209,6 +209,14 @@ export default function AdminCourseEditor() {
   const [studentToUnenroll, setStudentToUnenroll] = useState<{ userId: string; studentName: string } | null>(null);
   const [isUnenrollingProgress, setIsUnenrollingProgress] = useState(false);
 
+  // --- Schema Mismatch Error States ---
+  const [missingSchemaError, setMissingSchemaError] = useState<{
+    id: string | null;
+    payload: any;
+    isEdit: boolean;
+    message: string;
+  } | null>(null);
+
   const loadEnrolledStudents = async () => {
     if (!id || id === 'new') return;
     setIsLoadingStudents(true);
@@ -577,19 +585,53 @@ export default function AdminCourseEditor() {
       console.log("Saving course with payload:", payload);
 
       if (isEdit) {
-        await courseService.updateCourse(id!, payload);
-        toast.success("강의가 성공적으로 수정되었습니다.");
+        try {
+          await courseService.updateCourse(id!, payload);
+          toast.success("강의가 성공적으로 수정되었습니다.");
+          navigate("/admin/courses");
+        } catch (error: any) {
+          const errMsg = error?.message || '';
+          if (errMsg.includes('min_member_grade') || errMsg.includes('schema cache') || errMsg.includes('column') || error?.code === 'PGRST204') {
+            setMissingSchemaError({
+              id: id || null,
+              payload,
+              isEdit: true,
+              message: erroMsgToString(error)
+            });
+          } else {
+            throw error;
+          }
+        }
       } else {
-        await courseService.createCourse(payload);
-        toast.success("새 강의가 성공적으로 등록되었습니다.");
+        try {
+          await courseService.createCourse(payload);
+          toast.success("새 강의가 성공적으로 등록되었습니다.");
+          navigate("/admin/courses");
+        } catch (error: any) {
+          const errMsg = error?.message || '';
+          if (errMsg.includes('min_member_grade') || errMsg.includes('schema cache') || errMsg.includes('column') || error?.code === 'PGRST204') {
+            setMissingSchemaError({
+              id: null,
+              payload,
+              isEdit: false,
+              message: erroMsgToString(error)
+            });
+          } else {
+            throw error;
+          }
+        }
       }
-      navigate("/admin/courses");
     } catch (error: any) {
       console.error("Save error details:", error);
       toast.error(`저장에 실패했습니다: ${error.message || "알 수 없는 오류"}`);
     } finally {
       setSaving(false);
     }
+  };
+
+  const erroMsgToString = (err: any): string => {
+    if (typeof err === 'string') return err;
+    return err?.message || JSON.stringify(err) || 'Unknown DB Schema cache error';
   };
 
   if (loading) return <div className="p-20 text-center">로딩 중...</div>;
@@ -2024,6 +2066,89 @@ export default function AdminCourseEditor() {
           </div>
         </div>
       </Tabs>
+
+      {/* Database Schema Migration Guidance Dialog */}
+      {missingSchemaError && (
+        <Dialog open={!!missingSchemaError} onOpenChange={(open) => { if (!open) setMissingSchemaError(null); }}>
+          <DialogContent className="max-w-xl rounded-3xl p-6 bg-white gap-6">
+            <DialogHeader className="gap-2">
+              <DialogTitle className="text-xl font-black text-red-650 flex items-center gap-2">
+                <AlertCircle className="w-6 h-6 text-red-650 shrink-0" />
+                데이터베이스 스키마 오류 감지됨
+              </DialogTitle>
+              <DialogDescription className="text-sm font-medium text-gray-400">
+                Supabase 데이터베이스에 <code className="bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-mono font-bold">min_member_grade</code> 컬럼이 존재하지 않거나, 아직 스키마 캐시가 갱신되지 않았습니다.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <p className="text-sm text-gray-700 font-bold leading-none">
+                해결 방법:
+              </p>
+              <p className="text-xs text-gray-500 leading-relaxed font-bold">
+                아래 SQL 문을 복사한 뒤, 귀하의 <span className="text-purple-600">Supabase 대시보드 -&gt; SQL Editor</span>에서 실행(Run)해 주세요:
+              </p>
+              <div className="bg-slate-900 text-slate-100 rounded-2xl p-4 font-mono text-xs overflow-x-auto relative">
+                <pre className="whitespace-pre-wrap">{`ALTER TABLE public.courses ADD COLUMN IF NOT EXISTS min_member_grade TEXT DEFAULT NULL;
+NOTIFY pgrst, 'reload schema';`}</pre>
+                <Button
+                  size="sm"
+                  className="absolute top-2 right-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-lg border border-slate-700"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`ALTER TABLE public.courses ADD COLUMN IF NOT EXISTS min_member_grade TEXT DEFAULT NULL;\nNOTIFY pgrst, 'reload schema';`);
+                    toast.success("SQL 쿼리가 클립보드에 복사되었습니다!");
+                  }}
+                >
+                  복사하기
+                </Button>
+              </div>
+
+              <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 text-xs text-amber-850 font-bold flex flex-col gap-1.5">
+                <span className="text-amber-800 text-sm font-black flex items-center gap-1">⚠️ 등급 입력 무시하고 임시 저장할 수 있습니다</span>
+                <span>지금 당장 SQL을 실행하기 어려우시다면, 수강 제한 등급 컬럼을 임시로 제외한 상태로 강의를 즉시 저장할 수 있습니다. (이 경우 모든 등급의 회원이 제한 없이 수강할 수 있습니다.)</span>
+              </div>
+            </div>
+
+            <DialogFooter className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
+              <Button
+                variant="outline"
+                className="rounded-xl border-gray-200 font-bold px-4 h-11 text-gray-600"
+                onClick={() => setMissingSchemaError(null)}
+              >
+                닫기
+              </Button>
+              <Button
+                className="rounded-xl bg-purple-600 hover:bg-purple-700 font-bold px-5 h-11 text-white flex items-center gap-2"
+                onClick={async () => {
+                  try {
+                    setSaving(true);
+                    const { payload, id, isEdit } = missingSchemaError;
+                    const sanitizedPayload = { ...payload };
+                    delete sanitizedPayload.min_member_grade; // Remove missing column key
+
+                    if (isEdit) {
+                      await courseService.updateCourse(id!, sanitizedPayload);
+                      toast.success("등급 제한 필드를 제외하고 강의가 성공적으로 수정되었습니다.");
+                    } else {
+                      await courseService.createCourse(sanitizedPayload);
+                      toast.success("등급 제한 필드를 제외하고 새 강의가 성공적으로 등록되었습니다.");
+                    }
+                    setMissingSchemaError(null);
+                    navigate("/admin/courses");
+                  } catch (fallbackError: any) {
+                    console.error("Fallback save failed:", fallbackError);
+                    toast.error(`임시 저장에 실패하였습니다: ${fallbackError.message}`);
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                등급 설정 없이 임시 저장
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   </div>
 );

@@ -59,6 +59,30 @@ interface PostCardProps {
   onCardClick?: (post: Post) => void;
 }
 
+const getCategoryStyle = (name: string) => {
+  const norm = (name || '').trim();
+  if (norm.includes('자유')) {
+    return 'bg-purple-50 text-purple-650 border-purple-150';
+  }
+  if (norm.includes('공지') || norm.includes('알림') || norm.includes('pinned')) {
+    return 'bg-red-50 text-red-650 border-red-150';
+  }
+  if (norm.includes('질문') || norm.includes('Q&A') || norm.includes('큐앤에이') || norm.includes('도움')) {
+    return 'bg-sky-50 text-sky-650 border-sky-150';
+  }
+  if (norm.includes('정보') || norm.includes('팁') || norm.includes('자료')) {
+    return 'bg-amber-50 text-amber-700 border-amber-150';
+  }
+  if (norm.includes('보컬') || norm.includes('작곡') || norm.includes('음악') || norm.includes('피드백')) {
+    return 'bg-indigo-50 text-indigo-650 border-indigo-150';
+  }
+  if (norm.includes('인증') || norm.includes('챌린지') || norm.includes('미션') || norm.includes('기록') || norm.includes('출석')) {
+    return 'bg-emerald-50 text-emerald-650 border-emerald-150';
+  }
+  // beautiful default violet
+  return 'bg-violet-50 text-violet-650 border-violet-150';
+};
+
 export function PostCard({ 
   post, 
   currentUserId, 
@@ -80,7 +104,7 @@ export function PostCard({
 }: PostCardProps) {
   const navigate = useNavigate();
   const [isExpanded, setIsExpanded] = useState(true);
-  const [showComments, setShowComments] = useState(true);
+  const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
@@ -137,10 +161,8 @@ export function PostCard({
 
   // Safe cleaner of HTML tags for producing text summary preview in a row
   const getTextPreview = (htmlStr: string, rawText: string) => {
-    const fallback = rawText || '';
-    if (!htmlStr) return fallback.substring(0, 120);
-    
-    const clean = htmlStr
+    const combinedStr = htmlStr || rawText || '';
+    const clean = combinedStr
       .replace(/<[^>]*>/g, ' ') // erase tags
       .replace(/\s+/g, ' ')     // replace multiple spaces
       .trim();
@@ -206,178 +228,110 @@ export function PostCard({
       relativeTime = '방금 전';
     }
 
+    // Prepare plain-text clean representation for safer line clamping
+    const plainContent = content?.text || post.content || '';
+    const cleanBodyText = typeof plainContent === 'string'
+      ? plainContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      : '';
+
     return (
-      <div 
-        onClick={() => onCardClick?.(post)}
+      <Card 
+        id={`feed-post-${post.id}`}
         className={cn(
-          "w-full bg-white rounded-2xl border border-slate-150 shadow-xs hover:border-slate-350 transition-all flex flex-col p-4 md:p-5 mb-3.5 space-y-3 cursor-pointer hover:shadow-xs active:scale-[0.995]",
-          post.is_pinned && "border-blue-200 bg-blue-50/5"
+          "w-full bg-white rounded-xl border border-slate-150 transition-all flex flex-col p-5 sm:p-6 mb-4 text-left relative overflow-hidden select-none shadow-none",
+          post.is_pinned && "border-purple-250 bg-purple-50/5"
         )}
       >
-        {/* 1. Compact Header block */}
+        {/* 1. Header: User profile & Category title & popover controls */}
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0" onClick={(e) => e.stopPropagation()}>
-            <Avatar className="w-8.5 h-8.5 border border-slate-205 shrink-0">
+          <div className="flex items-center gap-3 min-w-0" onClick={(e) => e.stopPropagation()}>
+            <Avatar className="w-10 h-10 border border-slate-105 shrink-0 ring-2 ring-slate-50">
               <AvatarImage src={post.profiles?.avatar_url || ''} />
-              <AvatarFallback className="bg-slate-105 text-slate-700 font-extrabold text-[11px]">
+              <AvatarFallback className="bg-purple-600 text-white font-extrabold text-xs flex items-center justify-center">
                 {(post.profiles?.nickname || post.profiles?.name || '?').charAt(0)}
               </AvatarFallback>
             </Avatar>
-            <div className="min-w-0 flex items-center flex-wrap gap-x-2">
-              <span className="font-extrabold text-sm text-slate-800 truncate">
-                {post.profiles?.nickname || post.profiles?.name || '알 수 없음'}
-              </span>
-              <span className="text-[11px] text-slate-400 font-medium whitespace-nowrap">
+            <div className="min-w-0 flex flex-col leading-tight">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-extrabold text-[14px] sm:text-[14.5px] text-slate-900 truncate">
+                  {post.profiles?.nickname || post.profiles?.name || '익명'}
+                </span>
+                {post.is_pinned && (
+                  <Badge variant="secondary" className="bg-blue-55 text-blue-600 inline-flex items-center gap-0.5 text-[9px] font-black border border-blue-100 py-0 px-1.5 rounded-md shrink-0 scale-90 select-none">
+                    공지
+                  </Badge>
+                )}
+              </div>
+              <span className="text-[10px] text-slate-400 font-semibold mt-1 font-mono">
                 {relativeTime}
               </span>
-              {post.is_pinned && (
-                <Badge variant="secondary" className="bg-blue-50 text-blue-600 gap-0.5 text-[9px] font-black border border-blue-100 py-0 px-1.5 rounded-md flex items-center shrink-0">
-                  <Pin className="w-2.5 h-2.5 fill-blue-500 mr-0.5" /> 고정
-                </Badge>
-              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-            {(currentUserId === post.user_id || isAdmin) && (
-              <Popover>
-                <PopoverTrigger className="h-7 w-7 rounded-lg text-slate-400 hover:text-slate-850 hover:bg-slate-50 flex items-center justify-center">
-                  <MoreVertical className="w-3.5 h-3.5" />
-                </PopoverTrigger>
-                <PopoverContent className="w-24 p-1 rounded-xl shadow-lg border border-slate-200 bg-white" align="end">
-                  <div className="grid grid-cols-1 gap-0.5">
-                    <Button 
-                      type="button"
-                      variant="ghost" 
-                      className="justify-start gap-1.5 rounded-lg hover:bg-slate-50 text-slate-700 h-7.5 px-2 text-[10.5px] font-bold w-full"
-                      onClick={() => onEdit?.(post)}
-                    >
-                      <Pencil className="w-3 h-3 text-slate-400" />
-                      수정
-                    </Button>
-                    <Button 
-                      type="button"
-                      variant="ghost" 
-                      className="justify-start gap-1.5 rounded-lg hover:bg-red-50 text-red-600 h-7.5 px-2 text-[10.5px] font-bold w-full"
-                      onClick={() => {
-                        if (onDelete) onDelete(post.id);
-                      }}
-                    >
-                      <Trash2 className="w-3 h-3 text-red-400" />
-                      삭제
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            )}
+          <div className="flex items-center gap-1.5 shrink-0 select-none" onClick={(e) => e.stopPropagation()}>
+            <span className="bg-purple-600 text-white font-extrabold text-[11px] px-3 py-1 rounded-full tracking-tight">
+              {communityName || '자유'}
+            </span>
           </div>
         </div>
 
-        {/* 2. Green Badge / Check status for Community Context */}
-        <div className="flex items-center gap-1.5 text-emerald-600 text-xs sm:text-[13px] font-bold select-none leading-tight">
-          <span className="text-emerald-500 shrink-0">✔️</span>
-          <span className="truncate">{communityName || '커뮤니티'} : {post.title || '새로운 소식'}</span>
-        </div>
+        {/* 2. Title & Partially truncated body text */}
+        <div 
+          className="cursor-pointer group select-text mt-3 text-left" 
+          onClick={() => onCardClick?.(post)}
+        >
+          {/* Post Title */}
+          <h3 className="text-base sm:text-md font-black text-slate-900 tracking-tight leading-snug group-hover:text-purple-705 transition-colors">
+            {post.title || (cleanBodyText ? cleanBodyText.substring(0, 35) + '...' : '새로운 이야기')}
+          </h3>
 
-        {/* 3. Body excerpt and Thumbnail Image */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm sm:text-[14px] text-slate-750 font-medium leading-relaxed break-words line-clamp-3 sm:line-clamp-4 select-text">
-              {renderExcerptWithHashtags(content?.html, post.content)}
+          {/* clamped content description */}
+          {cleanBodyText && (
+            <p className="text-[12px] sm:text-[13px] text-slate-600 font-medium leading-relaxed mt-2 line-clamp-3 select-text">
+              {cleanBodyText}
             </p>
-          </div>
-
-          {post.image_urls && post.image_urls.length > 0 && (
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border border-slate-150 shrink-0 shadow-xs bg-slate-50">
-              <img 
-                src={post.image_urls[0]} 
-                alt="thumbnail" 
-                className="w-full h-full object-cover" 
-                referrerPolicy="no-referrer" 
-              />
-            </div>
           )}
         </div>
 
-        {/* 4. Compact metrics footer */}
-        <div className="flex items-center justify-between pt-2 border-t border-slate-105 select-none">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isRestricted) {
-                  toast.info('비원아카데미 회원가입 후 공감하실 수 있습니다.');
-                  return;
-                }
-                onLike(post.id);
-              }}
-              className={cn(
-                "flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border text-[11px] font-bold transition-colors h-7.5",
-                post.is_liked 
-                  ? "bg-pink-50 border-pink-250 text-pink-600" 
-                  : "bg-white border-slate-150 text-slate-500 hover:bg-slate-50"
-              )}
-            >
-              <span className="text-xs">😊</span>
-              <span>{post.likes_count || 0}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onCardClick?.(post);
-              }}
-              className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg border border-slate-150 bg-white text-slate-500 text-[11px] font-bold hover:bg-slate-50 transition-colors h-7.5"
-            >
-              <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
-              <span>{post.comments_count || 0}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onCardClick?.(post);
-              }}
-              className="flex items-center justify-center p-1.5 rounded-lg border border-slate-150 bg-white text-slate-400 hover:bg-slate-50 transition-colors h-7.5 w-7.5"
-            >
-              <ChevronUp className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-1 text-[11px] text-slate-405 font-bold font-mono">
-            <span className="text-slate-300">👁️</span>
-            <span>{post.views || 0}</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-full bg-white rounded-xl border border-slate-200 shadow-xs hover:border-slate-350 md:hover:shadow-sm transition-all flex flex-col p-4 md:p-6 mb-4 space-y-4">
-      
-      {/* 1. Header block */}
-      <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
-        <div className="flex items-start gap-3">
-          {/* Important star (Gmail Star tied to Like) */}
-          <button 
+        {/* 4. Action badges: Pill like count & comment count */}
+        <div className="flex items-center gap-2 mt-4 select-none" onClick={(e) => e.stopPropagation()}>
+          <button
             type="button"
             onClick={() => {
               if (isRestricted) {
-                toast.info('비원아카데미 회원가입 후 이 기능을 이용할 수 있습니다.');
+                toast.info('비원아카데미 회원가입 후 공감하실 수 있습니다.');
                 return;
               }
               onLike(post.id);
             }}
-            className="text-slate-300 hover:text-yellow-500 hover:scale-115 transition-all p-1 rounded hover:bg-slate-50 mt-1 shrink-0"
-            title="중요 표시"
+            className={cn(
+              "flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-[11px] font-black tracking-tight transition-all hover:bg-slate-50/50 cursor-pointer",
+              post.is_liked 
+                ? "bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100/30" 
+                : "bg-white border-slate-150 text-slate-500"
+            )}
           >
-            <Star className={cn("w-4.5 h-4.5", post.is_liked ? "fill-yellow-450 text-yellow-500" : "text-slate-300")} />
+            <span className="scale-105">❤️</span>
+            <span className="font-mono">{post.likes_count || 0}</span>
           </button>
 
+          <div
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-slate-150 bg-white text-slate-500 text-[11px] font-black tracking-tight"
+          >
+            <span className="scale-105">💬</span>
+            <span className="font-mono">{post.comments_count || 0}</span>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="w-full bg-white rounded-xl border border-slate-150 transition-all flex flex-col p-4 md:p-6 mb-4 space-y-4 shadow-none">
+      
+      {/* 1. Header block */}
+      <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3">
+        <div className="flex items-start gap-3">
           <Avatar className="w-10 h-10 border border-slate-200 mt-0.5 shrink-0 ring-2 ring-slate-50">
             <AvatarImage src={post.profiles?.avatar_url || ''} />
             <AvatarFallback className="bg-slate-100 text-slate-700 font-extrabold text-xs">
@@ -399,7 +353,6 @@ export function PostCard({
 
             <div className="text-xs sm:text-[13px] text-slate-600 font-semibold space-x-2 flex flex-wrap items-center mt-2 leading-none">
               <span className="font-black text-slate-800">{post.profiles?.nickname || post.profiles?.name || '알 수 없음'}</span>
-              <span className="text-slate-400 select-none">&lt;{(post.profiles?.nickname || 'user').toLowerCase()}@academy.internal&gt;</span>
               <span className="text-slate-300 select-none">•</span>
               <span className="text-xs font-mono select-none text-slate-500">{new Date(post.created_at).toLocaleString('ko-KR')}</span>
               <span className="text-slate-300 select-none">•</span>
@@ -476,7 +429,10 @@ export function PostCard({
             <div 
               className="prose prose-slate max-w-none text-sm text-slate-800 leading-relaxed font-sans"
               dangerouslySetInnerHTML={{ 
-                __html: DOMPurify.sanitize(content?.html || (post.content ? post.content.replace(/\n/g, '<br />') : '')) 
+                __html: DOMPurify.sanitize(content?.html || post.content || '', {
+                  ADD_TAGS: ['iframe', 'span', 'img', 'video', 'blockquote', 'pre', 'code', 'mark'],
+                  ADD_ATTR: ['src', 'alt', 'style', 'class', 'href', 'target', 'rel', 'data-type', 'controls', 'height', 'width']
+                }) 
               }}
             />
             {post.image_urls && post.image_urls.length > 0 && (
@@ -518,30 +474,33 @@ export function PostCard({
         </div>
       ) : (
         <>
-          <div className="bg-slate-50/20 rounded-xl p-1 md:p-2 leading-normal select-text break-words">
+          <div className="py-1.5 leading-normal select-text break-words">
             <div 
               className={cn(
-                "prose prose-slate max-w-none focus:outline-none text-sm sm:text-base text-slate-800 leading-relaxed font-sans select-text break-words",
+                "prose prose-slate max-w-none focus:outline-none text-[12px] sm:text-[14px] text-slate-800 leading-relaxed font-sans select-text break-words",
                 "prose-headings:font-bold prose-headings:tracking-tight prose-headings:text-slate-900 prose-headings:mt-3 prose-headings:mb-1.5",
-                "prose-h1:text-2xl prose-h1:font-black",
-                "prose-h2:text-xl prose-h2:font-extrabold",
-                "prose-h3:text-lg prose-h3:font-bold",
-                "prose-p:text-sm sm:prose-p:text-[15px] prose-p:leading-relaxed prose-p:text-slate-700 prose-p:my-2 prose-p:break-all",
+                "prose-h1:text-[20px] prose-h1:font-black",
+                "prose-h2:text-[18px] prose-h2:font-extrabold",
+                "prose-h3:text-[16px] prose-h3:font-bold",
+                "prose-p:text-[12px] sm:prose-p:text-[13px] prose-p:leading-relaxed prose-p:text-slate-705 prose-p:my-2 prose-p:break-all",
                 "prose-blockquote:border-l-4 prose-blockquote:border-slate-300 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:my-2.5 prose-blockquote:text-slate-500",
                 "prose-code:text-red-500 prose-code:bg-slate-50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:text-xs",
-                "prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-xl prose-pre:p-4 prose-pre:my-2.5 prose-pre:font-mono prose-pre:text-sm",
+                "prose-pre:bg-slate-950 prose-pre:text-slate-100 prose-pre:rounded-xl prose-pre:p-4 prose-pre:my-2.5 prose-pre:font-mono prose-pre:text-sm",
                 "prose-ul:list-disc prose-ul:pl-5 prose-ul:my-2",
                 "prose-ol:list-decimal prose-ol:pl-5 prose-ol:my-2",
                 "prose-li:my-1 prose-li:text-slate-705",
-                "prose-img:rounded-xl prose-img:my-3 prose-img:max-w-full prose-img:h-auto prose-img:inline-block border border-slate-200 shadow-md"
+                "prose-img:rounded-xl prose-img:my-3 prose-img:max-w-full prose-img:h-auto prose-img:inline-block prose-img:border-none shadow-none"
               )}
               dangerouslySetInnerHTML={{ 
-                __html: DOMPurify.sanitize(content?.html || (post.content ? post.content.replace(/\n/g, '<br />') : '')) 
+                __html: DOMPurify.sanitize(content?.html || post.content || '', {
+                  ADD_TAGS: ['iframe', 'span', 'img', 'video', 'blockquote', 'pre', 'code', 'mark'],
+                  ADD_ATTR: ['src', 'alt', 'style', 'class', 'href', 'target', 'rel', 'data-type', 'controls', 'height', 'width']
+                }) 
               }}
             />
 
             {post.hashtags && post.hashtags.length > 0 && (
-               <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-105">
+               <div className="flex flex-wrap gap-1.5 mt-3 pt-2">
                   {post.hashtags.map(tag => (
                      <span key={tag} className="text-xs font-bold text-blue-600 hover:underline cursor-pointer">#{tag}</span>
                   ))}
@@ -550,6 +509,9 @@ export function PostCard({
           </div>
 
           {/* 3. Media & Inline Attachments display */}
+          {((post.image_urls && post.image_urls.length > 0) || (post.file_urls && post.file_urls.length > 0) || content?.link) && (
+            <hr className="border-t border-slate-100 my-4" />
+          )}
           <div className="space-y-4">
             {/* Attachments inside paper cards */}
             {(post.image_urls && post.image_urls.length > 0) && (
@@ -557,7 +519,7 @@ export function PostCard({
                  <h5 className="text-[10.5px] font-black text-slate-400 tracking-wider block select-none uppercase">📷 첨부 이미지</h5>
                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                    {post.image_urls.map((url, idx) => (
-                      <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-slate-200 bg-white group shadow-xs">
+                      <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-slate-200 bg-white group shadow-none">
                          <img src={url} alt="raw media" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                          <a 
                            href={url} 
@@ -597,7 +559,7 @@ export function PostCard({
                         href={url} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2.5 p-2 bg-white rounded-xl border border-slate-200 hover:bg-slate-50 transition-all shadow-xs group"
+                        className="flex items-center gap-2.5 p-2 bg-white rounded-xl border border-slate-200 hover:bg-slate-50 transition-all shadow-none group"
                       >
                         <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center shrink-0">
                           <FileText className="w-3.5 h-3.5 text-slate-500" />
@@ -623,7 +585,7 @@ export function PostCard({
                    href={content.link.url} 
                    target="_blank" 
                    rel="noopener noreferrer" 
-                   className="bg-slate-50/50 rounded-xl p-3 border border-slate-200 flex gap-3.5 cursor-pointer hover:bg-slate-50 hover:border-slate-350 transition-all shadow-xs block"
+                   className="bg-slate-50/50 rounded-xl p-3 border border-slate-200 flex gap-3.5 cursor-pointer hover:bg-slate-50 hover:border-slate-350 transition-all shadow-none block"
                  >
                     {content.link.image && (
                        <img src={content.link.image} alt="preview" className="w-13 h-13 rounded-lg object-cover shrink-0 border border-slate-100 bg-white" referrerPolicy="no-referrer" />
@@ -644,7 +606,7 @@ export function PostCard({
             {widget && (
               <div className="pt-2 border-t border-slate-100">
                 {widget.type === 'attendance' && (
-                  <div className="bg-orange-50/30 rounded-xl p-4 border border-orange-200/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="bg-orange-50/30 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
                      <div className="flex items-center gap-2.5">
                        <div className="w-8.5 h-8.5 bg-white border border-orange-200 rounded-lg flex items-center justify-center shrink-0 shadow-xs">
                           <CalendarCheck className="w-4.5 h-4.5 text-orange-500" />
@@ -675,7 +637,7 @@ export function PostCard({
                 )}
 
                 {widget.type === 'todo' && (
-                  <div className="bg-blue-50/20 rounded-xl p-4 border border-blue-200/50">
+                  <div className="bg-blue-50/20 rounded-xl p-4">
                      <div className="flex items-center gap-2.5 mb-3">
                         <div className="w-7.5 h-7.5 bg-white border border-blue-200 rounded-lg flex items-center justify-center shadow-xs">
                            <ListTodo className="w-3.5 h-3.5 text-blue-500" />
@@ -718,7 +680,7 @@ export function PostCard({
                 )}
 
                 {widget.type === 'poll' && (
-                  <div className="bg-purple-50/20 rounded-xl p-4 border border-purple-200/50">
+                  <div className="bg-purple-50/20 rounded-xl p-4">
                      <div className="flex items-center gap-2.5 mb-3">
                         <div className="w-7.5 h-7.5 bg-white border border-purple-200 rounded-lg flex items-center justify-center shadow-xs">
                            <Vote className="w-3.5 h-3.5 text-purple-500" />
@@ -810,16 +772,13 @@ export function PostCard({
             댓글 {post.comments_count || 0}
           </Button>
         </div>
-        
-        <span className="text-[9.5px] text-slate-400 font-mono select-none">ID: {post.id.slice(0, 8).toUpperCase()}</span>
       </div>
 
       {/* 5. Reply / Comments block rendering */}
       {showComments && !isRestricted && (
         <div className="bg-slate-50/60 rounded-xl p-3.5 border border-slate-150 mt-1.5 space-y-3">
           <div className="flex items-center gap-1.5 text-slate-500 font-bold text-xs select-none pl-1">
-            <CornerDownRight className="w-3.5 h-3.5 text-slate-400" />
-            <span>댓글 릴레이 (Reply Thread)</span>
+            <span>댓글</span>
           </div>
 
           {/* Comment list rendering */}
@@ -845,7 +804,7 @@ export function PostCard({
             </div>
           ) : (
             <div className="text-center py-3 bg-white/45 rounded-lg border border-dashed border-slate-200">
-              <p className="text-[10px] text-slate-400 font-medium">작성된 답변이 없습니다. 첫 답변을 적어보세요.</p>
+              <p className="text-[10px] text-slate-400 font-medium">작성된 댓글이 없습니다.</p>
             </div>
           )}
 
@@ -856,7 +815,7 @@ export function PostCard({
             </Avatar>
             <div className="flex-1 flex gap-1.5">
               <Input 
-                placeholder="존중을 담은 유익한 덧글을 남겨주세요..." 
+                placeholder="댓글을 입력해주세요." 
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 onKeyDown={(e) => {
