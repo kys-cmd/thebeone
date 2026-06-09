@@ -115,6 +115,8 @@ export default function AdminUserManagement() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editFormData, setEditFormData] = useState<User | null>(null);
+  const [showBulkRoleModal, setShowBulkRoleModal] = useState(false);
+  const [selectedBulkRole, setSelectedBulkRole] = useState<UserRole | ''>('');
 
   // Edit Mode States
   const [isBasicInfoEditing, setIsBasicInfoEditing] = useState(false);
@@ -465,6 +467,31 @@ export default function AdminUserManagement() {
     }
   };
 
+  const confirmBulkRoleChange = async () => {
+    if (selectedIds.length === 0 || !selectedBulkRole) return;
+    try {
+      setIsLoading(true);
+      await Promise.all(selectedIds.map(id => profileService.updateProfile(id, { role: selectedBulkRole as any })));
+      
+      const updatedUsers = users.map(u => {
+        if (selectedIds.includes(u.id)) {
+          return { ...u, role: selectedBulkRole };
+        }
+        return u;
+      });
+      setUsers(updatedUsers);
+      setSelectedIds([]);
+      setShowBulkRoleModal(false);
+      setSelectedBulkRole('');
+      toast.success(`총 ${selectedIds.length}명 회원의 등급을 [${selectedBulkRole.toUpperCase()}] 등급으로 일괄 변경 완료하였습니다!`);
+    } catch (error: any) {
+      console.error('Bulk role change failed:', error);
+      toast.error(`등급 일괄 변경 중 오류가 발생했습니다: ${error.message || ''}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleBulkSoftDelete = () => {
     if (selectedIds.length === 0) return;
     setBulkActionType('soft');
@@ -760,9 +787,28 @@ export default function AdminUserManagement() {
     }
   };
 
-  const filteredUsers = users.filter(u => 
-    u.name.includes(searchQuery) || u.email.includes(searchQuery) || u.nickname.includes(searchQuery)
-  );
+  const filteredUsers = users.filter(u => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    
+    const nameMatch = (u.name || '').toLowerCase().includes(q);
+    const emailMatch = (u.email || '').toLowerCase().includes(q);
+    const nicknameMatch = (u.nickname || '').toLowerCase().includes(q);
+    
+    // Support phone number search even if user inserts or removes hyphens
+    const digitOnlyQuery = q.replace(/[^0-9]/g, '');
+    const mobileMatch = digitOnlyQuery 
+      ? (u.mobile || '').replace(/[^0-9]/g, '').includes(digitOnlyQuery)
+      : false;
+    const phoneMatch = digitOnlyQuery 
+      ? (u.phone || '').replace(/[^0-9]/g, '').includes(digitOnlyQuery)
+      : false;
+      
+    const mobileRawMatch = (u.mobile || '').includes(q);
+    const phoneRawMatch = (u.phone || '').includes(q);
+
+    return nameMatch || emailMatch || nicknameMatch || mobileMatch || phoneMatch || mobileRawMatch || phoneRawMatch;
+  });
 
   if (selectedUser && editFormData) {
     return (
@@ -1235,7 +1281,7 @@ export default function AdminUserManagement() {
                 <div className="relative w-full md:w-96">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input 
-                    placeholder="이름, 이메일로 검색..." 
+                    placeholder="이름, 전화번호, 닉네임, 이메일로 검색..." 
                     className="pl-10 h-11 rounded-xl"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -1243,7 +1289,26 @@ export default function AdminUserManagement() {
                 </div>
                 <div className="flex items-center gap-2">
                   {selectedIds.length > 0 && (
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <Select 
+                        value={selectedBulkRole} 
+                        onValueChange={(val: UserRole) => {
+                          setSelectedBulkRole(val);
+                          setShowBulkRoleModal(true);
+                        }}
+                      >
+                        <SelectTrigger className="h-9 w-44 rounded-xl border-purple-200 text-purple-700 font-black bg-purple-50 hover:bg-purple-100 shrink-0">
+                          <SelectValue placeholder="일괄 등급 변경" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border rounded-xl shadow-lg">
+                          <SelectItem value="user">일반 회원 (USER)</SelectItem>
+                          <SelectItem value="regular_member">정규 회원</SelectItem>
+                          <SelectItem value="paid_member">결제 유료 회원</SelectItem>
+                          <SelectItem value="bione_member">비원아카데미 회원</SelectItem>
+                          <SelectItem value="admin">일반 관리자 (ADMIN)</SelectItem>
+                        </SelectContent>
+                      </Select>
+
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -1924,6 +1989,51 @@ export default function AdminUserManagement() {
                 onClick={confirmBulkDeleteOrphanUsers}
               >
                 일괄 대청소 시작
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Role Confirmation Modal */}
+      {showBulkRoleModal && selectedBulkRole && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-[24px] p-8 max-w-md w-full space-y-6 shadow-2xl border border-purple-100 animate-in fade-in zoom-in duration-200">
+            <div className="space-y-3">
+              <h3 className="text-xl font-black text-purple-750 flex items-center gap-2">
+                <Shield className="w-6 h-6 text-purple-600 shrink-0" />
+                회원 등급 일괄 변경 확인
+              </h3>
+              <p className="text-sm text-gray-500 font-bold leading-relaxed bg-purple-50 p-4 rounded-2xl border border-purple-100">
+                선택하신 <span className="text-purple-750 font-black">{selectedIds.length}명</span>의 회원 등급을{' '}
+                <span className="text-purple-800 font-black underline underline-offset-2">
+                  {selectedBulkRole === 'user' ? '일반 회원 (USER)' :
+                   selectedBulkRole === 'regular_member' ? '정규 회원' :
+                   selectedBulkRole === 'paid_member' ? '결제 유료 회원' :
+                   selectedBulkRole === 'bione_member' ? '비원아카데미 회원' : '일반 관리자 (ADMIN)'}
+                </span>
+                (으)로 일괄 변경하시겠습니까?
+              </p>
+              <p className="text-xs text-slate-400 font-medium">
+                * 이 작업은 해당 회원들의 수강 권한 및 비원 전용 컨텐츠 수강 가능 여부에 즉각적인 영향을 미칩니다.
+              </p>
+            </div>
+            <div className="flex gap-4 justify-end pt-2">
+              <Button 
+                variant="outline" 
+                className="rounded-xl border-gray-200 font-bold px-5 h-11"
+                onClick={() => {
+                  setShowBulkRoleModal(false);
+                  setSelectedBulkRole('');
+                }}
+              >
+                취소
+              </Button>
+              <Button 
+                className="rounded-xl bg-purple-600 hover:bg-purple-700 font-black px-5 h-11 text-white"
+                onClick={confirmBulkRoleChange}
+              >
+                등급 일괄 변경 실행
               </Button>
             </div>
           </div>
