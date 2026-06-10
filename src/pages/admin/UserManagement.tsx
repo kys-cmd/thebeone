@@ -86,6 +86,7 @@ interface User {
   mobile: string;
   phone: string;
   address: string;
+  mileage: number;
   courses: string[];
   communities: string[];
 }
@@ -265,6 +266,7 @@ export default function AdminUserManagement() {
           mobile: p.mobile_phone || '',
           phone: p.phone || '',
           address: p.address || '',
+          mileage: (p as any).mileage || 0,
           courses: [],
           communities: []
         };
@@ -438,8 +440,9 @@ export default function AdminUserManagement() {
         mobile_phone: editFormData.mobile || null,
         phone: editFormData.phone || null,
         address: editFormData.address || null,
-        role: editFormData.role as any
-      });
+        role: editFormData.role as any,
+        mileage: Number(editFormData.mileage) || 0
+      } as any);
       
       const updatedUser = { ...editFormData };
       setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
@@ -620,6 +623,7 @@ export default function AdminUserManagement() {
       mobile: '010-0000-0000',
       phone: '',
       address: '',
+      mileage: 0,
       courses: [],
       communities: []
     };
@@ -851,6 +855,22 @@ export default function AdminUserManagement() {
                       <p className="p-3 bg-gray-50 rounded-xl min-h-[48px] flex items-center text-lg">{editFormData.address || '-'}</p>
                     ) : (
                       <Input className="h-12 text-lg" placeholder="주소를 입력하세요" value={editFormData.address || ''} onChange={e => setEditFormData({ ...editFormData, address: e.target.value })} />
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm text-muted-foreground font-bold text-purple-600">마일리지 포인트 (P)</Label>
+                    {!isBasicInfoEditing ? (
+                      <p className="p-3 bg-purple-50 text-purple-700 font-extrabold rounded-xl min-h-[48px] flex items-center text-lg">
+                        {(editFormData.mileage || 0).toLocaleString()} P
+                      </p>
+                    ) : (
+                      <Input 
+                        className="h-12 text-lg font-bold text-purple-700" 
+                        type="number" 
+                        placeholder="0" 
+                        value={editFormData.mileage !== undefined ? editFormData.mileage : ''} 
+                        onChange={e => setEditFormData({ ...editFormData, mileage: Number(e.target.value) || 0 })} 
+                      />
                     )}
                   </div>
                 </div>

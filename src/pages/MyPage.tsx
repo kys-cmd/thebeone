@@ -43,6 +43,7 @@ import {
   CartesianGrid
 } from 'recharts';
 import { useAuthStore } from '@/store/useAuthStore';
+import { supabase } from '@/lib/supabase';
 import { courseService } from '@/services/courseService';
 import { reviewService } from '@/services/reviewService';
 import { profileService } from '@/services/profileService';
@@ -50,6 +51,7 @@ import { authService } from '@/services/authService';
 import { Course } from '@/types';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 
 const MOCK_STATS = [
   { name: 'Mon', hours: 0 },
@@ -130,6 +132,43 @@ export default function MyPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
 
+  // Mileage and Points States
+  const [myMileage, setMyMileage] = useState(0);
+  const [myPayments, setMyPayments] = useState<any[]>([]);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+
+  const fetchMileageAndPayments = async () => {
+    if (!user) return;
+    try {
+      setPaymentLoading(true);
+      // Fetch latest user profile to get fresh mileage from profiles table
+      const { data: profile, error: pErr } = await supabase
+        .from('profiles')
+        .select('mileage')
+        .eq('id', user.id)
+        .single();
+      if (!pErr && profile) {
+        setMyMileage((profile as any).mileage || 0);
+      }
+
+      // Fetch payments history from orders table where status is PAID (or not PENDING)
+      const { data: payData, error: payErr } = await supabase
+        .from('orders')
+        .select('*, courses(*)')
+        .eq('user_id', user.id)
+        .neq('status', 'PENDING')
+        .order('created_at', { ascending: false });
+
+      if (!payErr && payData) {
+        setMyPayments(payData);
+      }
+    } catch (err) {
+      console.error('[Points Fetch Error]:', err);
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   const handleOpenReview = (course: Course) => {
     setSelectedCourse(course);
     setReviewModalOpen(true);
@@ -171,6 +210,7 @@ export default function MyPage() {
   React.useEffect(() => {
     if (user) {
       fetchMyCourses();
+      fetchMileageAndPayments();
     }
   }, [user]);
 
@@ -666,6 +706,133 @@ export default function MyPage() {
                     <p className="text-sm font-bold text-red-400 mt-1">계정을 삭제하시면 모든 학습 데이터가 삭제되며 복구할 수 없습니다.</p>
                   </div>
                   <Button variant="ghost" className="text-red-600 font-bold hover:bg-red-100 rounded-xl">탈퇴 신청</Button>
+                </div>
+              </div>
+            )}
+
+            {activeMenu === 'payments' && (
+              <div className="flex-1 space-y-10 animate-in fade-in slide-in-from-bottom-3 duration-500">
+                {/* 1. Mileage Points Balance Card */}
+                <div className="bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-800 rounded-[48px] p-10 text-white shadow-2xl relative overflow-hidden">
+                  <div className="absolute right-0 bottom-0 opacity-10 translate-x-12 translate-y-12">
+                     <CreditCard className="w-96 h-96" />
+                  </div>
+                  
+                  <div className="relative z-10 space-y-6">
+                    <div className="flex items-center gap-3">
+                      <Badge className="bg-white/20 hover:bg-white/20 text-white border-none font-black px-4 py-1 rounded-full text-xs uppercase tracking-wider backdrop-blur-sm">
+                        My Mileage Points
+                      </Badge>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <p className="text-white/70 text-sm font-bold">사용 가능한 마일리지</p>
+                      <h2 className="text-5xl md:text-6xl font-black tracking-tight flex items-baseline gap-2">
+                        {myMileage.toLocaleString()} <span className="text-2xl font-bold opacity-80">P</span>
+                      </h2>
+                    </div>
+
+                    <div className="pt-6 border-t border-white/10 flex flex-wrap gap-8 text-sm">
+                      <div>
+                        <span className="opacity-60 block font-medium">적립 방식</span>
+                        <span className="font-extrabold text-white">CMS 관리자 지정 포인트</span>
+                      </div>
+                      <div>
+                        <span className="opacity-60 block font-medium">사용처</span>
+                        <span className="font-extrabold text-white">수강 바구니 결제 할인</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Mileage Policy Guidelines Card */}
+                <div className="bg-white rounded-[40px] p-8 border border-gray-100 shadow-sm space-y-6">
+                  <h3 className="text-xl font-black text-gray-900">마일리지 사용 안내</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="p-6 bg-purple-50/50 rounded-3xl space-y-3">
+                      <h4 className="font-extrabold text-purple-800 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-xs">1</span>
+                        결제 시 현금처럼 사용
+                      </h4>
+                      <p className="text-sm font-bold text-gray-500 leading-relaxed md:pl-8">
+                        장바구니(수강 바구니) 페이지에서 결제 시 보유한 마일리지를 자유롭게 입력하여 수강료에서 할인받을 수 있습니다.
+                      </p>
+                    </div>
+                    <div className="p-6 bg-purple-50/50 rounded-3xl space-y-3">
+                      <h4 className="font-extrabold text-purple-800 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-xs">2</span>
+                        포인트 적립 정책
+                      </h4>
+                      <p className="text-sm font-bold text-gray-500 leading-relaxed md:pl-8">
+                        마일리지는 사이트 관리자가 회원의 활동 내역이나 구매 보상에 따라 CMS를 통해 직접 일대일 맞춤 지급해 드립니다.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Payment history board */}
+                <div className="bg-white rounded-[40px] shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="p-10 border-b border-gray-50 bg-gray-50/50 flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-2xl font-black text-gray-900 tracking-tight">결제 내역</h3>
+                      <p className="text-gray-400 font-bold mt-2">고객님이 구매하신 온라인 강의 결제 내역서입니다.</p>
+                    </div>
+                    <Badge variant="outline" className="px-4 py-1.5 border-gray-200 text-gray-600 font-bold bg-white text-xs">
+                      총 {myPayments.length}건
+                    </Badge>
+                  </div>
+
+                  {paymentLoading ? (
+                    <div className="p-20 text-center text-gray-400 font-black">
+                      결제 내역을 조회하는 중입니다...
+                    </div>
+                  ) : myPayments.length === 0 ? (
+                    <div className="p-20 text-center text-gray-400 font-bold space-y-2">
+                      <CreditCard className="w-12 h-12 text-gray-200 mx-auto" />
+                      <p>아직 구매하신 이력이 없습니다.</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-50">
+                      {myPayments.map((pay) => (
+                        <div key={pay.id} className="p-8 hover:bg-gray-50/30 transition-all flex flex-col md:flex-row md:items-center justify-between gap-6">
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-3">
+                              <Badge className={cn(
+                                "font-black px-3 py-1 text-xs border-none",
+                                (pay.status === 'completed' || pay.status === 'PAID') ? "bg-emerald-100 text-emerald-700" :
+                                (pay.status === 'pending' || pay.status === 'PENDING') ? "bg-yellow-100 text-yellow-700" :
+                                "bg-gray-100 text-gray-600"
+                              )}>
+                                {(pay.status === 'completed' || pay.status === 'PAID') ? '결제완료' : (pay.status === 'pending' || pay.status === 'PENDING') ? '대기중' : '결제취소'}
+                              </Badge>
+                              <span className="text-xs font-mono text-gray-400">
+                                {pay.created_at ? new Date(pay.created_at).toLocaleString('ko-KR') : '-'}
+                              </span>
+                            </div>
+
+                            <h4 className="text-lg font-black text-gray-900">
+                              {pay.courses?.title || '강좌 수강권'}
+                            </h4>
+                            <p className="text-xs text-gray-400 font-bold">
+                              주문 고유번호: <span className="font-mono">{pay.id}</span>
+                            </p>
+                          </div>
+
+                          <div className="text-left md:text-right space-y-1">
+                            <span className="text-xs text-gray-400 font-bold block">결제 금액</span>
+                            <span className="text-xl font-black text-purple-600">
+                              {(pay.amount || 0).toLocaleString()}원
+                            </span>
+                            {pay.mileage_used > 0 && (
+                              <p className="text-xs font-bold text-red-500">
+                                (마일리지 -{pay.mileage_used.toLocaleString()} P 사용)
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

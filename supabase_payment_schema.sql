@@ -17,6 +17,11 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='updated_at') THEN
         ALTER TABLE public.orders ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
     END IF;
+
+    -- Add mileage_used if missing
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='mileage_used') THEN
+        ALTER TABLE public.orders ADD COLUMN mileage_used INTEGER DEFAULT 0;
+    END IF;
 END $$;
 
 -- 2. Clean up existing policies to avoid conflicts

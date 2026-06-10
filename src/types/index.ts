@@ -12,6 +12,7 @@ export interface Profile {
   mobile_phone: string | null;
   phone: string | null;
   address: string | null;
+  mileage?: number;
   is_deleted: boolean;
   created_at: string;
 }

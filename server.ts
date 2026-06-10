@@ -537,12 +537,14 @@ async function startServer() {
 
       // 2. Process payment securely (복식부기 트랜잭션 기록 포함)
       if (action === "process-payment") {
-        const { merchant_uid, amount, courseId, userId, payment_tid, payment_method } = req.body;
+        const { merchant_uid, amount, courseId, userId, payment_tid, payment_method, mileage_used } = req.body;
         const targetUserId = userId || requestingUser?.id;
 
         if (!merchant_uid || !amount || !courseId || !targetUserId) {
           return res.status(400).json({ status: "error", message: "Missing required fields for payment processing." });
         }
+
+        const actualPaidAmount = Math.max(0, Number(amount) - (Number(mileage_used) || 0));
 
         const { data: order, error: orderErr } = await supabaseAdmin
           .from("orders")
@@ -550,6 +552,8 @@ async function startServer() {
             status: "PAID",
             payment_tid: payment_tid || `TID-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
             payment_method: payment_method || "direct",
+            mileage_used: Number(mileage_used) || 0,
+            amount: actualPaidAmount,
             updated_at: new Date().toISOString()
           })
           .eq("merchant_uid", merchant_uid)
@@ -565,7 +569,7 @@ async function startServer() {
         const { data: tx } = await supabaseAdmin
           .from("transactions")
           .insert([{
-            description: `Vite-Netlify 결제 완료 (주문번호: ${merchant_uid})`,
+            description: `Vite-Netlify 결제 완료 (주문번호: ${merchant_uid}, 마일리지 사용: ${Number(mileage_used) || 0} P)`,
             created_by: targetUserId
           }])
           .select()
@@ -577,7 +581,7 @@ async function startServer() {
               transaction_id: tx.id,
               user_id: targetUserId,
               description: `강의 구매 입금 완료 (보통예금 자산 증가)`,
-              debit_amount: amount,
+              debit_amount: actualPaidAmount,
               credit_amount: 0
             },
             {
@@ -585,7 +589,7 @@ async function startServer() {
               user_id: targetUserId,
               description: `강의 전용 매출액 발생`,
               debit_amount: 0,
-              credit_amount: amount
+              credit_amount: actualPaidAmount
             }
           ]);
         }

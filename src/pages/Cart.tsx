@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingCart, Trash2, ChevronRight, CreditCard, ShieldCheck, ArrowLeft, Ticket, Loader2, Sparkles } from 'lucide-react';
+import { ShoppingCart, Trash2, ChevronRight, CreditCard, ShieldCheck, ArrowLeft, Ticket, Loader2, Sparkles, Check, Square, CheckSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -14,9 +14,14 @@ export default function Cart() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [items, setItems] = useState<any[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPaying, setIsPaying] = useState(false);
   const [isSdkLoaded, setIsSdkLoaded] = useState(false);
+
+  // Mileage States
+  const [userMileage, setUserMileage] = useState(0);
+  const [useMileageInput, setUseMileageInput] = useState<number | ''>('');
 
   // 1. Load KG Inicis Standard Web Javascript SDK
   useEffect(() => {
@@ -46,31 +51,51 @@ export default function Cart() {
     };
   }, []);
 
-  // 2. Fetch User's Pending Orders from Supabase
-  useEffect(() => {
-    async function fetchCartItems() {
-      if (!user?.id) {
-        setIsLoading(false);
-        return;
+  // 2. Fetch User's Pending Orders and Mileage from Supabase
+  const fetchUserMileage = async () => {
+    if (!user?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('mileage')
+        .eq('id', user.id)
+        .single();
+      if (!error && data) {
+        setUserMileage((data as any).mileage || 0);
       }
-      setIsLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('orders')
-          .select('*, courses(*)')
-          .eq('user_id', user.id)
-          .eq('status', 'PENDING');
-
-        if (error) throw error;
-        setItems(data || []);
-      } catch (err) {
-        console.error('Error fetching cart items:', err);
-      } finally {
-        setIsLoading(false);
-      }
+    } catch (err) {
+      console.error('[Cart Fetch Mileage Error]:', err);
     }
+  };
 
+  const fetchCartItems = async () => {
+    if (!user?.id) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*, courses(*)')
+        .eq('user_id', user.id)
+        .eq('status', 'PENDING');
+
+      if (error) throw error;
+      const loadedItems = data || [];
+      setItems(loadedItems);
+      // Auto-select all items by default on load
+      setSelectedIds(loadedItems.map(item => item.id));
+    } catch (err) {
+      console.error('Error fetching cart items:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchCartItems();
+    fetchUserMileage();
   }, [user?.id]);
 
   // 3. Remove Item strictly from Supabase DB & update State
@@ -83,31 +108,57 @@ export default function Cart() {
 
       if (error) throw error;
       setItems((prev) => prev.filter((item) => item.id !== orderId));
+      setSelectedIds((prev) => prev.filter((id) => id !== orderId));
       window.dispatchEvent(new Event('cart-updated'));
+      toast.success('수강 항목이 바구니에서 제외되었습니다.');
     } catch (err: any) {
       alert(`항목 삭제에 실패했습니다: ${err.message || '인증/네트워크 오류'}`);
     }
   };
 
-  // 4. Pay Handler: POST /api/init-pay & Dynamic Form trigger
+  // 4. Batch Delete Selected Items
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) {
+      toast.error('선택된 항목이 없습니다.');
+      return;
+    }
+    if (!confirm(`선택한 ${selectedIds.length}개의 강의를 장바구니에서 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .in('id', selectedIds);
+
+      if (error) throw error;
+      setItems((prev) => prev.filter((item) => !selectedIds.includes(item.id)));
+      setSelectedIds([]);
+      window.dispatchEvent(new Event('cart-updated'));
+      toast.success('선택한 항목들이 삭제되었습니다.');
+    } catch (err: any) {
+      toast.error(`선택 삭제 실패: ${err.message || '인증 오류'}`);
+    }
+  };
+
+  // 5. Individual Item Regular Payment Trigger (Inicis)
   const handlePayment = async (item: any) => {
     if (!user) {
       alert('로그인이 필요한 서비스입니다.');
       return;
     }
     if (!isSdkLoaded) {
-      alert('결제 연동 스크립트가 아직 로딩 중입니다. 잠시 후 편하게 다시 시도해 주세요.');
+      alert('결제 연동 스크립트가 로딩 중입니다. 잠시 후 편하게 다시 시도해 주세요.');
       return;
     }
 
     setIsPaying(true);
 
     try {
-      // Create high-precision Unique OID
       const timestamp = Date.now().toString();
       const oid = `OID_${item.course_id.substring(0, 8).toUpperCase()}_${timestamp.substring(5)}`;
 
-      // Post payload to Backend dynamic init-pay
       const response = await fetch('/api/init-pay', {
         method: 'POST',
         headers: {
@@ -136,7 +187,6 @@ export default function Cart() {
       const clientOrigin = window.location.origin;
       const appUrl = import.meta.env.VITE_APP_URL || clientOrigin;
 
-      // Ensure fresh template form container to prevent collision
       const oldContainer = document.getElementById('inicis-temp-form-container');
       if (oldContainer) oldContainer.remove();
 
@@ -150,9 +200,7 @@ export default function Cart() {
       form.method = 'POST';
       form.acceptCharset = 'UTF-8';
 
-      // 5. Consolidate specified fields and PC Overlay fields for complete compatibility
       const fields: Record<string, string> = {
-        // Specified client fields
         P_INI_PAYMENT: 'Card',
         P_MID: mid,
         P_OID: oid,
@@ -166,7 +214,6 @@ export default function Cart() {
         P_CHARSET: 'UTF-8',
         P_RESERVED: 'twoseq=Y&block_isp=Y',
 
-        // PC StdPay structural requirements
         version: '1.0',
         gopaymethod: 'Card',
         mid: mid,
@@ -199,15 +246,9 @@ export default function Cart() {
       formContainer.appendChild(form);
       document.body.appendChild(formContainer);
 
-      // [REMOVED DETRIMENTAL DELETE] We no longer delete the order beforehand. 
-      // The S2S return handler (/api/inicis-return) expects this pending row to update its status to COMPLETED.
-
-      // Fire Inicis standard overlay payment overlay box
       if ((window as any).INIStdPay && typeof (window as any).INIStdPay.pay === 'function') {
-        console.log('[Cart] Launching INIStdPay SDK overlay payment form instance ID:', formId);
         (window as any).INIStdPay.pay(formId);
       } else {
-        console.warn('[Cart] INIStdPay module is unavailable. Attempting standard form submission.');
         form.submit();
       }
     } catch (err: any) {
@@ -217,66 +258,124 @@ export default function Cart() {
     }
   };
 
-  // 5. 모의 / 테스트 간편 결제 (1초 만에 즉시 결제 처리 & 수강 자동 가입)
-  const handleTestPayment = async (item: any) => {
-    if (!user) {
-      toast.error('로그인이 필요한 서비스입니다.');
+  // 6. Bulk Test Payment - Loops through all selected items for an instant checkout experience
+  const handleBulkTestPayment = async () => {
+    const selectedItems = items.filter(item => selectedIds.includes(item.id));
+    if (selectedItems.length === 0) {
+      toast.error('결제할 수강 항목을 선택해주세요.');
       return;
     }
 
     setIsPaying(true);
-    const loadToast = toast.loading('모의 테스트 결제 승인 요청 중...');
+    const loadToast = toast.loading(`${selectedItems.length}개 강좌의 가상 라이선스 승인 프로세스를 수행 중...`);
 
     try {
       const sessionData = await supabase.auth.getSession();
       const token = sessionData.data.session?.access_token || '';
 
-      // Call action process-payment on server.ts endpoint securely
-      const response = await fetch('/api/core-api', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          action: 'process-payment',
-          merchant_uid: item.merchant_uid,
-          amount: Number(item.amount),
-          courseId: item.course_id,
-          userId: user.id,
-          payment_method: 'Test_Instant_Auth',
-          payment_tid: `TID_MOCK_${crypto.randomUUID().substring(0, 8).toUpperCase()}`
-        })
-      });
-
-      const result = await response.json();
-      toast.dismiss(loadToast);
-
-      if (!response.ok || result.status !== 'success') {
-        throw new Error(result.message || '가상 모의 결제 가공 중단');
+      // A. Deduct mileage from profile
+      if (appliedMileage > 0 && user?.id) {
+        const nextMileage = Math.max(0, userMileage - appliedMileage);
+        const { error: profileDiscountErr } = await supabase
+          .from('profiles')
+          .update({ mileage: nextMileage })
+          .eq('id', user.id);
+        
+        if (profileDiscountErr) {
+          console.error('[Profiles Mileage Update Error]:', profileDiscountErr);
+          throw new Error(`마일리지 차감 오류: ${profileDiscountErr.message}`);
+        } else {
+          setUserMileage(nextMileage);
+        }
       }
 
+      let successCount = 0;
+      let remainingMileageToDeduct = appliedMileage;
+
+      for (let i = 0; i < selectedItems.length; i++) {
+        const item = selectedItems[i];
+        let itemMileageUsed = 0;
+
+        if (appliedMileage > 0) {
+          if (i === selectedItems.length - 1) {
+            itemMileageUsed = remainingMileageToDeduct;
+          } else {
+            itemMileageUsed = Math.round((Number(item.amount || 0) / selectedSubtotal) * appliedMileage);
+            remainingMileageToDeduct -= itemMileageUsed;
+          }
+        }
+
+        try {
+          const response = await fetch('/api/core-api', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              action: 'process-payment',
+              merchant_uid: item.merchant_uid,
+              amount: Number(item.amount || item.price || 0),
+              courseId: item.course_id,
+              userId: user?.id,
+              payment_method: 'Test_Instant_Auth',
+              payment_tid: `TID_MOCK_${crypto.randomUUID().substring(0, 8).toUpperCase()}`,
+              mileage_used: itemMileageUsed
+            })
+          });
+
+          const result = await response.json();
+          if (response.ok && result.status === 'success') {
+            successCount++;
+          }
+        } catch (e) {
+          console.error('[Bulk item fail]:', item.id, e);
+        }
+      }
+
+      toast.dismiss(loadToast);
       window.dispatchEvent(new Event('cart-updated'));
 
-      toast.success('🎉 가상 테스트 결제 승인이 완료되었습니다! 12개월의 강의 수강권이 발급되었습니다.', {
-        duration: 5000
-      });
-
-      // Redirect cleanly to integrated callback page for premium greeting layout style
-      setTimeout(() => {
-        navigate(`/payment/callback?status=success&oid=${item.merchant_uid}&message=${encodeURIComponent('테스트 가상 결제가 완수되어 즉시 수강 자격이 자동 부여되었습니다!')}`);
-      }, 800);
-
+      if (successCount > 0) {
+        toast.success(`🎉 선택하신 ${successCount}개의 강의가 승인되어 즉시 수강 권한이 정식으로 부여되었습니다!`);
+        setTimeout(() => {
+          navigate(`/payment/callback?status=success&message=${encodeURIComponent(`선택된 ${successCount}개의 강의가 즉시 자동 일괄 활성화되었습니다!`)}`);
+        }, 800);
+      } else {
+        throw new Error('선택한 강의 승인에 실패하였습니다.');
+      }
     } catch (err: any) {
       toast.dismiss(loadToast);
-      console.error('[Instant-Test-Pay-Fail]:', err);
-      alert(`모의 테스트 결제 연동 에러: ${err.message || '네트워크 세션 유실'}`);
+      alert(`테스트 결제 승인 오류: ${err.message || '인증/네트워크 세션 세팅 유실'}`);
     } finally {
       setIsPaying(false);
     }
   };
 
-  const subtotal = items.reduce((acc, item) => acc + (item.amount || item.price || 0), 0);
+  // Selection Checkbox Toggle Handlers
+  const handleToggleSelectAll = () => {
+    if (selectedIds.length === items.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(items.map(item => item.id));
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(prev => prev.filter(x => x !== id));
+    } else {
+      setSelectedIds(prev => [...prev, id]);
+    }
+  };
+
+  // Pricing calculations
+  const selectedItems = items.filter(item => selectedIds.includes(item.id));
+  const selectedSubtotal = selectedItems.reduce((acc, item) => acc + (item.amount || item.price || 0), 0);
+  
+  // Calculate applicable mileage discount
+  const appliedMileage = typeof useMileageInput === 'number' ? Math.min(useMileageInput, userMileage, selectedSubtotal) : 0;
+  const finalTotal = Math.max(0, selectedSubtotal - appliedMileage);
 
   if (!user) {
     return (
@@ -300,203 +399,293 @@ export default function Cart() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-32 pb-20">
+    <div className="min-h-screen bg-gray-50 pt-32 pb-20 font-sans">
       <div className="container mx-auto px-4 max-w-6xl">
-        <div className="flex items-center justify-between mb-12">
-          <h1 className="text-4xl font-black tracking-tighter text-gray-900">수강 바구니</h1>
-          <Badge className="bg-purple-600 text-white font-black px-4 py-1 border-none text-sm">
-            {items.length}개의 강의
+        {/* Title */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-black tracking-tight text-gray-900 flex items-center gap-2">
+              수강 바구니 <ShoppingCart className="w-6 h-6 text-purple-600 inline" />
+            </h1>
+            <p className="text-xs text-slate-400 font-medium">원하는 최상의 프리미엄 교육 강좌들을 담아 일괄 또는 선택 결제할 수 있습니다.</p>
+          </div>
+          <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 font-black px-4 py-1.5 border-none text-xs rounded-full">
+            {items.length}개 담김
           </Badge>
         </div>
 
         {isLoading ? (
           <div className="py-40 flex flex-col items-center justify-center space-y-4">
             <Loader2 className="w-12 h-12 text-purple-600 animate-spin" />
-            <p className="text-gray-400 font-bold text-sm">수강 바구니 항목 정보를 조회 중입니다...</p>
+            <p className="text-gray-400 font-extrabold text-sm animate-pulse">수강 신청 바구니 내역을 동기화 중입니다...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
-            {/* Left: Items List */}
-            <div className="lg:col-span-2 space-y-6">
-              <AnimatePresence mode="popLayout">
-                {items.length > 0 ? (
-                  items.map((item) => (
-                    <motion.div
-                      key={item.id}
-                      layout
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className="bg-white rounded-[40px] p-8 shadow-sm border border-gray-100 flex flex-col md:flex-row gap-8 items-center relative overflow-hidden"
-                    >
-                      <div className="w-full md:w-48 aspect-[16/10] bg-gray-100 rounded-3xl overflow-hidden shrink-0 border border-gray-50">
-                        <img
-                          src={item.courses?.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=600&auto=format&fit=crop'}
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover"
-                          alt={item.courses?.title}
-                        />
-                      </div>
-
-                      <div className="flex-1 space-y-4">
-                        <div className="space-y-1">
-                          <p className="text-xs font-black text-purple-600">
-                            {item.courses?.instructor || '전문 강사진'}
-                          </p>
-                          <h3 className="text-xl font-black text-gray-900 leading-tight">
-                            {item.courses?.title || '수강 중인 미결제 교육 코스'}
-                          </h3>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-gray-400">
-                          <span className="flex items-center gap-1">
-                            <ShieldCheck className="w-3.5 h-3.5 text-purple-500" /> 평생 소장 수강권
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <ChevronRight className="w-3.5 h-3.5 text-purple-500" /> 즉시 수강 진행 가능
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="text-right space-y-4 w-full md:w-auto shrink-0 flex flex-col items-end">
-                        <p className="text-2xl font-black text-gray-900">
-                          {(item.amount || item.price || 0).toLocaleString()}원
-                        </p>
-                        <div className="flex items-center gap-3 w-full md:w-auto">
-                          <button
-                            onClick={() => handleDeleteItem(item.id)}
-                            className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all"
-                            title="바구니에서 제거"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                          <Button
-                            onClick={() => handleTestPayment(item)}
-                            disabled={isPaying}
-                            variant="outline"
-                            className="px-4 h-11 border-emerald-250 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 font-extrabold text-xs rounded-2xl flex items-center gap-1"
-                          >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            즉시 승인 (테스트)
-                          </Button>
-                          <Button
-                            onClick={() => handlePayment(item)}
-                            disabled={isPaying}
-                            className="px-6 h-11 bg-purple-600 hover:bg-purple-700 text-white font-black text-sm rounded-2xl shadow-sm"
-                          >
-                            일반 결제
-                          </Button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))
-                ) : (
-                  <div className="py-40 bg-white rounded-[48px] border border-dashed text-center space-y-6">
-                    <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto text-gray-200">
-                      <ShoppingCart className="w-10 h-10" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            
+            {/* Left Column: Board - list style with select option */}
+            <div className="lg:col-span-2 space-y-4">
+              
+              {items.length > 0 ? (
+                <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+                  
+                  {/* Board Controls */}
+                  <div className="p-4 px-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-500">
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={handleToggleSelectAll}
+                        className="flex items-center gap-2 text-slate-700 hover:text-purple-600 transition-colors"
+                      >
+                        {selectedIds.length === items.length ? (
+                          <CheckSquare className="w-4.5 h-4.5 text-purple-600 fill-purple-50" />
+                        ) : (
+                          <Square className="w-4.5 h-4.5 text-slate-300" />
+                        )}
+                        전체 선택 ({selectedIds.length}/{items.length})
+                      </button>
                     </div>
-                    <p className="text-gray-400 font-bold">바구니에 담긴 강의가 없습니다.</p>
-                    <Link to="/courses">
-                      <Button variant="outline" className="h-12 px-8 rounded-2xl font-black">
-                        강의 구경하러 가기
-                      </Button>
-                    </Link>
+
+                    {selectedIds.length > 0 && (
+                      <button
+                        onClick={handleDeleteSelected}
+                        className="flex items-center gap-1.5 text-rose-500 hover:text-rose-700 transition-colors py-1 px-3 bg-white border border-rose-100 rounded-full shadow-2sm"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        선택 삭제
+                      </button>
+                    )}
                   </div>
-                )}
-              </AnimatePresence>
+
+                  {/* Board List (Table / Row Board Layout) */}
+                  <div className="divide-y divide-slate-100">
+                    <AnimatePresence mode="popLayout">
+                      {items.map((item) => {
+                        const isItemSelected = selectedIds.includes(item.id);
+                        return (
+                          <motion.div
+                            key={item.id}
+                            layout
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, x: -10 }}
+                            className={`p-6 flex items-center gap-4 transition-colors ${
+                              isItemSelected ? 'bg-purple-50/20' : 'hover:bg-slate-50/50'
+                            }`}
+                          >
+                            {/* Checkbox */}
+                            <button
+                              onClick={() => handleToggleSelect(item.id)}
+                              className="shrink-0 transition-all p-1"
+                            >
+                              {isItemSelected ? (
+                                <CheckSquare className="w-5 h-5 text-purple-600 fill-purple-100/30" />
+                              ) : (
+                                <Square className="w-5 h-5 text-slate-300 hover:text-slate-400" />
+                              )}
+                            </button>
+
+                            {/* Minimal Board Visual Thumbnail */}
+                            <div className="w-20 aspect-video rounded-lg overflow-hidden border border-slate-100 shrink-0 hidden sm:block bg-slate-100">
+                              <img
+                                src={item.courses?.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=300'}
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover"
+                                alt=""
+                              />
+                            </div>
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md shrink-0">
+                                  {item.courses?.instructor || '아카데미 전문'}
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-400">
+                                  {item.courses?.category === 'beone_exclusive_online' ? '비원 프리미엄' : '정식 코스'}
+                                </span>
+                              </div>
+                              <h3 className="font-extrabold text-slate-800 text-sm sm:text-base leading-snug truncate">
+                                {item.courses?.title || '수강 예정 교육 과정'}
+                              </h3>
+                            </div>
+
+                            {/* Right: Price & Row Delete */}
+                            <div className="text-right shrink-0 flex items-center gap-4">
+                              <span className="font-black text-slate-900 text-sm sm:text-base">
+                                {(item.amount || item.price || 0).toLocaleString()}원
+                              </span>
+
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => handleDeleteItem(item.id)}
+                                  className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                                  title="강좌 삭제"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-24 bg-white rounded-[32px] border border-dashed border-slate-200 text-center space-y-5">
+                  <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-300">
+                    <ShoppingCart className="w-7 h-7" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-slate-500 font-extrabold text-sm">수강 바구니가 비어 있습니다.</p>
+                    <p className="text-xs text-slate-400">다양하고 심도 깊은 정규 학습 코스를 둘러보세요!</p>
+                  </div>
+                  <Link to="/courses" className="inline-block">
+                    <Button className="h-10 px-6 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs">
+                      교육 과정 구경하기
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </div>
 
-            {/* Right: Summary & Order */}
-            <aside className="space-y-6 sticky top-32">
-              <Card className="rounded-[48px] shadow-xl border-none overflow-hidden">
-                <div className="p-10 space-y-8">
-                  <h3 className="text-2xl font-black tracking-tighter text-gray-900">결제 정보</h3>
+            {/* Right Column: Checkout Summary Panel */}
+            <aside className="space-y-4 sticky top-32">
+              <Card className="rounded-[32px] border border-slate-100 shadow-md overflow-hidden bg-white">
+                <div className="p-8 space-y-6">
+                  <h3 className="text-lg font-black text-slate-800 tracking-tight border-b pb-4">수강료 결제 청약</h3>
 
-                  <div className="space-y-4">
-                    <div className="flex justify-between font-bold text-gray-500">
-                      <span>상품 금액</span>
-                      <span>{subtotal.toLocaleString()}원</span>
+                  <div className="space-y-4 text-xs font-bold text-slate-600">
+                    <div className="flex justify-between items-center">
+                      <span>선택한 항목 개수</span>
+                      <span className="text-slate-800 text-sm font-black">{selectedItems.length}개 / 전체 {items.length}개</span>
                     </div>
-                    <div className="flex justify-between font-bold text-red-500">
-                      <span>할인 금액</span>
-                      <span>-0원</span>
+
+                    <div className="flex justify-between items-center">
+                      <span>총 수강 강의 금액</span>
+                      <span className="text-slate-800 text-sm font-black">{selectedSubtotal.toLocaleString()}원</span>
                     </div>
-                    <div className="pt-4 border-t flex justify-between items-end">
-                      <span className="font-black text-gray-900">최종 결제 금액</span>
-                      <span className="text-3xl font-black text-purple-600 tracking-tighter">
-                        {subtotal.toLocaleString()}원
-                      </span>
+
+                    {/* Mileage point input field */}
+                    <div className="pt-4 border-t border-slate-100 space-y-3">
+                      <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                        <span className="flex items-center gap-1.5 text-purple-600">
+                          <Ticket className="w-4 h-4" /> 마일리지 할인 적용
+                        </span>
+                        <span className="text-slate-400 font-bold">보유: <b className="text-slate-700">{userMileage.toLocaleString()} P</b></span>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Input
+                            type="number"
+                            placeholder="사용할 마일리지 입력"
+                            value={useMileageInput === '' ? '' : useMileageInput}
+                            onChange={(e) => {
+                              const valStr = e.target.value;
+                              if (valStr === '') {
+                                setUseMileageInput('');
+                                return;
+                              }
+                              const val = Math.max(0, parseInt(valStr, 10) || 0);
+                              setUseMileageInput(Math.min(val, userMileage, selectedSubtotal));
+                            }}
+                            className="h-11 pr-12 font-bold text-xs rounded-xl text-purple-700 border-purple-200 focus:ring-purple-500 focus:border-purple-500"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">P</span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setUseMileageInput(Math.min(userMileage, selectedSubtotal));
+                          }}
+                          className="h-11 px-4 text-xs font-black border-purple-200 text-purple-600 hover:bg-purple-50 rounded-xl shrink-0"
+                        >
+                          전체 사용
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center text-rose-500 pt-2">
+                      <span>마일리지 할인 적용</span>
+                      <span>-{appliedMileage.toLocaleString()}원</span>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-100 flex justify-between items-end">
+                      <span className="font-extrabold text-slate-800 text-sm">최종 결제 금액</span>
+                      <span className="text-2xl font-black text-purple-600 tracking-tight">{finalTotal.toLocaleString()}원</span>
                     </div>
                   </div>
 
-                  <div className="space-y-4">
-                    <div className="relative">
-                      <Ticket className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <Input
-                        placeholder="쿠폰 번호를 입력하세요"
-                        className="h-12 pl-12 bg-gray-50 border-gray-100 rounded-2xl font-bold"
-                      />
-                    </div>
-                    
-                    {items.length > 0 ? (
-                      <div className="space-y-3">
+                  {/* Actions */}
+                  <div className="space-y-3 pt-2">
+                    {selectedItems.length > 0 ? (
+                      <div className="space-y-2.5">
+                        
+                        {/* Instant mock payment for instant enrollment */}
                         <Button
-                          onClick={() => handleTestPayment(items[0])}
+                          onClick={handleBulkTestPayment}
                           disabled={isPaying}
-                          className="w-full h-14 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-lg rounded-2xl shadow-lg shadow-emerald-100 flex items-center justify-center gap-2"
+                          className="w-full h-13 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-sm rounded-2xl shadow-md shadow-emerald-50 flex items-center justify-center gap-1.5"
                         >
                           {isPaying ? (
-                            <Loader2 className="w-6 h-6 animate-spin" />
+                            <Loader2 className="w-5 h-5 animate-spin" />
                           ) : (
                             <>
                               <Sparkles className="w-4 h-4 animate-pulse" />
-                              {items.length > 1 ? `첫 강좌 즉시 수강하기 (MOCK)` : '테스트 간편 결제 (자동 수강)'}
+                              선택 {selectedItems.length}건 간편 테스트 승인
                             </>
                           )}
                         </Button>
+
+                        {/* Standard PG payment for the first selected item to avoid layout or complex SDK payload mismatch */}
                         <Button
-                          onClick={() => handlePayment(items[0])}
+                          onClick={() => handlePayment(selectedItems[0])}
                           disabled={isPaying}
                           variant="outline"
-                          className="w-full h-12 border-purple-200 hover:bg-purple-50 hover:text-purple-700 text-purple-700 font-black text-sm rounded-2xl flex items-center justify-center gap-2"
+                          className="w-full h-11 border-purple-200 hover:bg-purple-50 hover:text-purple-700 text-purple-700 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-1.5"
                         >
                           {isPaying ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
                             <>
                               <CreditCard className="w-4 h-4" />
-                              {items.length > 1 ? `상점 PG 결제 (${items[0].courses?.title?.substring(0, 6)}...)` : 'PG 카드 결제'} 
+                              상점 신용카드 실결제 ({selectedItems[0].courses?.title?.substring(0, 6)}...)
                             </>
                           )}
                         </Button>
+
                       </div>
                     ) : (
                       <Button
                         disabled
-                        className="w-full h-16 bg-gray-200 text-gray-400 font-black text-xl rounded-2xl cursor-not-allowed"
+                        className="w-full h-12 bg-slate-100 text-slate-400 font-bold text-xs rounded-2xl cursor-not-allowed"
                       >
-                        강의를 담아주세요
+                        결제할 강의를 체크박스에 담아주세요
                       </Button>
                     )}
                   </div>
                 </div>
 
-                <div className="bg-gray-900 p-8 text-white space-y-4">
-                  <div className="flex items-center gap-3 text-sm font-black">
-                    <CreditCard className="w-5 h-5 text-purple-400" /> 간편 결제 지원
+                {/* Footer instructions */}
+                <div className="bg-slate-900 p-6 text-white space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-black text-purple-400">
+                    <ShieldCheck className="w-4.5 h-4.5 shrink-0" /> 수강 자격 자동 보장
                   </div>
-                  <p className="text-[10px] text-gray-400 font-medium leading-relaxed">
-                    카카오페이, 네이버페이, 토스페이 등으로 3초 만에 안전하고 스마트하게 결제하실 수 있습니다. PC 웹표준 PG 보안 결제 시스템이 작동 중입니다.
+                  <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                    선택하신 수강 신청 완료 시, 즉시 계정에 강좌에 대한 12개월 수강 권한이 자동 부여됩니다. PG 표준 암호화 결제가 적용 중입니다.
                   </p>
                 </div>
               </Card>
 
               <Link
                 to="/courses"
-                className="flex items-center justify-center gap-2 text-gray-400 font-bold hover:text-purple-600 transition-colors"
+                className="flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-purple-600 transition-colors pt-2"
               >
-                <ArrowLeft className="w-4 h-4" /> 쇼핑 계속하기
+                <ArrowLeft className="w-3.5 h-3.5" /> 계속 쇼핑하며 어카이브 구경
               </Link>
             </aside>
+
           </div>
         )}
       </div>
