@@ -66,7 +66,7 @@ import { Profile } from '@/types';
 import { supabase } from '@/lib/supabase';
 
 // --- Types ---
-type UserRole = 'super_admin' | 'admin' | 'user' | 'paid_member' | 'regular_member' | 'bione_member';
+type UserRole = 'super_admin' | 'admin' | 'user' | 'paid_member' | 'regular_member' | 'beone_member' | 'bione_member';
 type UserStatus = 'active' | 'suspended' | 'withdrawn';
 
 interface User {
@@ -822,7 +822,7 @@ export default function AdminUserManagement() {
                           editFormData.role === 'admin' ? "bg-purple-600 hover:bg-purple-600" :
                           editFormData.role === 'paid_member' ? "bg-blue-600 hover:bg-blue-600" :
                           editFormData.role === 'regular_member' ? "bg-green-600 hover:bg-green-600" :
-                          editFormData.role === 'bione_member' ? "bg-emerald-600 hover:bg-emerald-600" :
+                          (editFormData.role === 'beone_member' || editFormData.role === 'bione_member') ? "bg-emerald-600 hover:bg-emerald-600" :
                           "bg-gray-400 hover:bg-gray-400"
                         )}>
                           {editFormData.role.toUpperCase()}
@@ -832,13 +832,13 @@ export default function AdminUserManagement() {
                         </span>
                       </div>
                     ) : (
-                      <Select value={editFormData.role} onValueChange={(val: any) => setEditFormData({ ...editFormData, role: val })}>
+                      <Select value={editFormData.role === 'bione_member' ? 'beone_member' : editFormData.role} onValueChange={(val: any) => setEditFormData({ ...editFormData, role: val })}>
                         <SelectTrigger className="h-12 text-lg"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="user">일반 회원 (USER)</SelectItem>
                           <SelectItem value="regular_member">정규 회원</SelectItem>
                           <SelectItem value="paid_member">결제 유료 회원</SelectItem>
-                          <SelectItem value="bione_member">비원 전용 회원</SelectItem>
+                          <SelectItem value="beone_member">비원 전용 회원</SelectItem>
                           <SelectItem value="admin">일반 관리자 (ADMIN)</SelectItem>
                           <SelectItem value="super_admin">최고 관리자 (SUPER)</SelectItem>
                         </SelectContent>
@@ -1123,7 +1123,7 @@ export default function AdminUserManagement() {
                       <SelectItem value="admin">어드민</SelectItem>
                       <SelectItem value="paid_member">유료회원</SelectItem>
                       <SelectItem value="regular_member">일반회원</SelectItem>
-                      <SelectItem value="bione_member">비원아카데미 회원</SelectItem>
+                      <SelectItem value="beone_member">비원아카데미 회원</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1190,7 +1190,7 @@ export default function AdminUserManagement() {
                           <SelectItem value="user">일반 회원 (USER)</SelectItem>
                           <SelectItem value="regular_member">정규 회원</SelectItem>
                           <SelectItem value="paid_member">결제 유료 회원</SelectItem>
-                          <SelectItem value="bione_member">비원아카데미 회원</SelectItem>
+                          <SelectItem value="beone_member">비원아카데미 회원</SelectItem>
                           <SelectItem value="admin">일반 관리자 (ADMIN)</SelectItem>
                         </SelectContent>
                       </Select>
@@ -1307,13 +1307,13 @@ export default function AdminUserManagement() {
                                   user.role === 'super_admin' ? "bg-purple-600 text-white shadow-sm" :
                                   user.role === 'admin' ? "bg-red-500 text-white shadow-sm" :
                                   user.role === 'paid_member' ? "bg-blue-100 text-blue-700" :
-                                  user.role === 'bione_member' ? "bg-green-100 text-green-700" :
+                                  (user.role === 'beone_member' || user.role === 'bione_member') ? "bg-green-100 text-green-700" :
                                   "bg-gray-100 text-gray-500"
                                 )}>
                                   {user.role === 'super_admin' ? '슈퍼 어드민' :
                                    user.role === 'admin' ? '어드민' :
                                    user.role === 'paid_member' ? '유료회원' :
-                                   user.role === 'bione_member' ? '비원아카데미 회원' : '일반회원'}
+                                   (user.role === 'beone_member' || user.role === 'bione_member') ? '비원아카데미 회원' : '일반회원'}
                                 </Badge>
                               </td>
                               <td className="px-6 py-4">
@@ -1712,7 +1712,7 @@ export default function AdminUserManagement() {
                   {selectedBulkRole === 'user' ? '일반 회원 (USER)' :
                    selectedBulkRole === 'regular_member' ? '정규 회원' :
                    selectedBulkRole === 'paid_member' ? '결제 유료 회원' :
-                   selectedBulkRole === 'bione_member' ? '비원아카데미 회원' : '일반 관리자 (ADMIN)'}
+                   (selectedBulkRole === 'beone_member' || selectedBulkRole === 'bione_member') ? '비원아카데미 회원' : '일반 관리자 (ADMIN)'}
                 </span>
                 (으)로 일괄 변경하시겠습니까?
               </p>

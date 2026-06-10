@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingCart, Trash2, ChevronRight, CreditCard, ShieldCheck, ArrowLeft, Ticket, Loader2 } from 'lucide-react';
+import { ShoppingCart, Trash2, ChevronRight, CreditCard, ShieldCheck, ArrowLeft, Ticket, Loader2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/useAuthStore';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 
 export default function Cart() {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const [items, setItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -81,6 +83,7 @@ export default function Cart() {
 
       if (error) throw error;
       setItems((prev) => prev.filter((item) => item.id !== orderId));
+      window.dispatchEvent(new Event('cart-updated'));
     } catch (err: any) {
       alert(`항목 삭제에 실패했습니다: ${err.message || '인증/네트워크 오류'}`);
     }
@@ -196,9 +199,8 @@ export default function Cart() {
       formContainer.appendChild(form);
       document.body.appendChild(formContainer);
 
-      // Delete the current pending DB order row just before launching payment 
-      // (This prevents double draft database clutter upon success)
-      await supabase.from('orders').delete().eq('id', item.id);
+      // [REMOVED DETRIMENTAL DELETE] We no longer delete the order beforehand. 
+      // The S2S return handler (/api/inicis-return) expects this pending row to update its status to COMPLETED.
 
       // Fire Inicis standard overlay payment overlay box
       if ((window as any).INIStdPay && typeof (window as any).INIStdPay.pay === 'function') {
@@ -209,7 +211,66 @@ export default function Cart() {
         form.submit();
       }
     } catch (err: any) {
-      alert(`결제 초기화 실패: ${err.message || '인증 오류'}`);
+      toast.error(`결제 초기화 실패: ${err.message || '인증 오류'}`);
+    } finally {
+      setIsPaying(false);
+    }
+  };
+
+  // 5. 모의 / 테스트 간편 결제 (1초 만에 즉시 결제 처리 & 수강 자동 가입)
+  const handleTestPayment = async (item: any) => {
+    if (!user) {
+      toast.error('로그인이 필요한 서비스입니다.');
+      return;
+    }
+
+    setIsPaying(true);
+    const loadToast = toast.loading('모의 테스트 결제 승인 요청 중...');
+
+    try {
+      const sessionData = await supabase.auth.getSession();
+      const token = sessionData.data.session?.access_token || '';
+
+      // Call action process-payment on server.ts endpoint securely
+      const response = await fetch('/api/core-api', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'process-payment',
+          merchant_uid: item.merchant_uid,
+          amount: Number(item.amount),
+          courseId: item.course_id,
+          userId: user.id,
+          payment_method: 'Test_Instant_Auth',
+          payment_tid: `TID_MOCK_${crypto.randomUUID().substring(0, 8).toUpperCase()}`
+        })
+      });
+
+      const result = await response.json();
+      toast.dismiss(loadToast);
+
+      if (!response.ok || result.status !== 'success') {
+        throw new Error(result.message || '가상 모의 결제 가공 중단');
+      }
+
+      window.dispatchEvent(new Event('cart-updated'));
+
+      toast.success('🎉 가상 테스트 결제 승인이 완료되었습니다! 12개월의 강의 수강권이 발급되었습니다.', {
+        duration: 5000
+      });
+
+      // Redirect cleanly to integrated callback page for premium greeting layout style
+      setTimeout(() => {
+        navigate(`/payment/callback?status=success&oid=${item.merchant_uid}&message=${encodeURIComponent('테스트 가상 결제가 완수되어 즉시 수강 자격이 자동 부여되었습니다!')}`);
+      }, 800);
+
+    } catch (err: any) {
+      toast.dismiss(loadToast);
+      console.error('[Instant-Test-Pay-Fail]:', err);
+      alert(`모의 테스트 결제 연동 에러: ${err.message || '네트워크 세션 유실'}`);
     } finally {
       setIsPaying(false);
     }
@@ -309,11 +370,20 @@ export default function Cart() {
                             <Trash2 className="w-5 h-5" />
                           </button>
                           <Button
+                            onClick={() => handleTestPayment(item)}
+                            disabled={isPaying}
+                            variant="outline"
+                            className="px-4 h-11 border-emerald-250 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 font-extrabold text-xs rounded-2xl flex items-center gap-1"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            즉시 승인 (테스트)
+                          </Button>
+                          <Button
                             onClick={() => handlePayment(item)}
                             disabled={isPaying}
                             className="px-6 h-11 bg-purple-600 hover:bg-purple-700 text-white font-black text-sm rounded-2xl shadow-sm"
                           >
-                            개별 결제
+                            일반 결제
                           </Button>
                         </div>
                       </div>
@@ -368,20 +438,37 @@ export default function Cart() {
                     </div>
                     
                     {items.length > 0 ? (
-                      <Button
-                        onClick={() => handlePayment(items[0])}
-                        disabled={isPaying}
-                        className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200 flex items-center justify-center gap-2"
-                      >
-                        {isPaying ? (
-                          <Loader2 className="w-6 h-6 animate-spin" />
-                        ) : (
-                          <>
-                            <CreditCard className="w-5 h-5" />
-                            {items.length > 1 ? `${items[0].courses?.title?.substring(0, 8)}... 외 결제` : '결제하기'}
-                          </>
-                        )}
-                      </Button>
+                      <div className="space-y-3">
+                        <Button
+                          onClick={() => handleTestPayment(items[0])}
+                          disabled={isPaying}
+                          className="w-full h-14 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-lg rounded-2xl shadow-lg shadow-emerald-100 flex items-center justify-center gap-2"
+                        >
+                          {isPaying ? (
+                            <Loader2 className="w-6 h-6 animate-spin" />
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4 animate-pulse" />
+                              {items.length > 1 ? `첫 강좌 즉시 수강하기 (MOCK)` : '테스트 간편 결제 (자동 수강)'}
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          onClick={() => handlePayment(items[0])}
+                          disabled={isPaying}
+                          variant="outline"
+                          className="w-full h-12 border-purple-200 hover:bg-purple-50 hover:text-purple-700 text-purple-700 font-black text-sm rounded-2xl flex items-center justify-center gap-2"
+                        >
+                          {isPaying ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              <CreditCard className="w-4 h-4" />
+                              {items.length > 1 ? `상점 PG 결제 (${items[0].courses?.title?.substring(0, 6)}...)` : 'PG 카드 결제'} 
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     ) : (
                       <Button
                         disabled

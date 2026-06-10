@@ -392,12 +392,13 @@ export default function LearningPlayer() {
         const isAdmin = user.role === 'super_admin' || user.role === 'admin';
         if (!isAdmin) {
           // Check grade restriction
-          const requiredGrade = data.min_member_grade || ((data.category === 'beone_exclusive_online' || data.category === 'beone_exclusive_offline') ? 'bione_member' : null);
+          const requiredGrade = data.min_member_grade || ((data.category === 'beone_exclusive_online' || data.category === 'beone_exclusive_offline') ? 'beone_member' : null);
           if (requiredGrade) {
             const ROLE_RANK: Record<string, number> = {
               'user': 0,
               'regular_member': 1,
               'paid_member': 2,
+              'beone_member': 3,
               'bione_member': 3,
               'admin': 100,
               'super_admin': 100

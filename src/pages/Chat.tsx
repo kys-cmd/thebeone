@@ -114,6 +114,7 @@ export default function ChatPage() {
   const selectedRoomId = searchParams.get('room');
   const isPopup = searchParams.get('popup') === 'true' || (
     typeof window !== 'undefined' && (
+      window.location.pathname === '/chat' ||
       new URLSearchParams(window.location.search).get('popup') === 'true' ||
       sessionStorage.getItem('is_popup_chat') === 'true' ||
       window.name === 'BOneChatWindow'

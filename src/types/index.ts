@@ -1,4 +1,4 @@
-export type UserRole = 'super_admin' | 'admin' | 'user' | 'paid_member' | 'regular_member' | 'bione_member';
+export type UserRole = 'super_admin' | 'admin' | 'user' | 'paid_member' | 'regular_member' | 'beone_member' | 'bione_member';
 
 export interface Profile {
   id: string;
@@ -52,7 +52,7 @@ export interface Course {
   study_start_date?: string | null;
   study_end_date?: string | null;
   access_type: string; // 'automatic', 'manual'
-  min_member_grade?: string | null; // e.g. 'bione_member', 'paid_member', etc.
+  min_member_grade?: string | null; // e.g. 'beone_member', 'paid_member', etc.
   curriculum: CurriculumSection[];
   layout?: CourseLayout | null;
   created_at: string;

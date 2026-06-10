@@ -9,7 +9,8 @@ import { communityService } from '@/services/communityService';
 import { chatService } from '@/services/chatService';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Menu, LogIn, UserPlus, MessageSquare, BookOpen, Search, LogOut, Instagram, AtSign, ChevronRight, ChevronDown, Hash, Star, User, Bell, Inbox } from 'lucide-react';
+import { Menu, LogIn, UserPlus, MessageSquare, BookOpen, Search, LogOut, Instagram, AtSign, ChevronRight, ChevronDown, Hash, Star, User, Bell, Inbox, ShoppingCart } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { Input } from '@/components/ui/input';
 import { 
   Sheet, 
@@ -40,6 +41,38 @@ export default function Header() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [cartCount, setCartCount] = useState(0);
+
+  const fetchCartCount = async () => {
+    if (!user) {
+      setCartCount(0);
+      return;
+    }
+    try {
+      const { count, error } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('status', 'PENDING');
+      if (error) throw error;
+      setCartCount(count || 0);
+    } catch (err) {
+      console.error('[Header] Fetch cart count err:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchCartCount();
+
+    const handleCartUpdate = () => {
+      fetchCartCount();
+    };
+
+    window.addEventListener('cart-updated', handleCartUpdate);
+    return () => {
+      window.removeEventListener('cart-updated', handleCartUpdate);
+    };
+  }, [user]);
 
   const fetchNotifications = async () => {
     if (!user) return;
@@ -390,6 +423,24 @@ export default function Header() {
               )}
             </Button>
 
+            {/* 수강 바구니 퀵 버튼 */}
+            {user && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate('/cart')}
+                className="relative rounded-full h-10 w-10 text-gray-700 hover:bg-slate-50 transition-colors mr-1 shrink-0"
+                title="수강 바구니"
+              >
+                <ShoppingCart className="h-5.5 w-5.5 text-purple-600" />
+                {cartCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 bg-purple-600 text-white font-mono text-[9px] font-black h-4 min-w-4 px-1 rounded-full flex items-center justify-center animate-bounce shadow-sm">
+                    {cartCount}
+                  </span>
+                )}
+              </Button>
+            )}
+
             {user ? (
               <div className="flex items-center gap-3">
                 <DropdownMenu>
@@ -409,6 +460,17 @@ export default function Header() {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => navigate('/mypage')} className="p-3 rounded-lg cursor-pointer">마이페이지</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/mypage?tab=classroom')} className="p-3 rounded-lg cursor-pointer">내 강의실</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/cart')} className="p-3 rounded-lg cursor-pointer flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <ShoppingCart className="w-4 h-4 text-purple-600 animate-pulse" />
+                        <span className="font-semibold text-slate-700">수강 바구니 (장바구니)</span>
+                      </div>
+                      {cartCount > 0 && (
+                        <Badge className="bg-purple-600 text-white font-bold font-mono text-[10px] h-5 min-w-5 rounded-full flex items-center justify-center p-0.5">
+                          {cartCount}
+                        </Badge>
+                      )}
+                    </DropdownMenuItem>
                     {(user.role === 'admin' || user.role === 'super_admin') && (
                       <DropdownMenuItem 
                         onClick={() => navigate('/admin')}

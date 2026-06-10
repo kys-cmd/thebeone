@@ -805,7 +805,7 @@ export default function AdminCourseEditor() {
                                 is_free: true,
                                 price: 0,
                                 discount_price: 0,
-                                min_member_grade: courseInfo.min_member_grade || 'bione_member'
+                                min_member_grade: courseInfo.min_member_grade || 'beone_member'
                               } : {})
                             });
                           }}
@@ -828,7 +828,7 @@ export default function AdminCourseEditor() {
                         <div className="space-y-2">
                           <Label>수강 가능 회원 등급</Label>
                           <Select
-                            value={courseInfo.min_member_grade || 'bione_member'}
+                            value={(courseInfo.min_member_grade === 'bione_member' ? 'beone_member' : courseInfo.min_member_grade) || 'beone_member'}
                             onValueChange={(val) =>
                               setCourseInfo({ ...courseInfo, min_member_grade: val })
                             }
@@ -837,7 +837,7 @@ export default function AdminCourseEditor() {
                               <SelectValue placeholder="회원 등급 선택" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="bione_member">비원아카데미 회원</SelectItem>
+                              <SelectItem value="beone_member">비원아카데미 회원</SelectItem>
                               <SelectItem value="paid_member">유료 회원</SelectItem>
                               <SelectItem value="regular_member">일반 회원</SelectItem>
                               <SelectItem value="user">회원</SelectItem>

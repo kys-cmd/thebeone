@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { useInicis } from '../hooks/useInicis';
+import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button'; 
-import { CreditCard, Loader2, AlertCircle } from 'lucide-react';
+import { ShoppingCart, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
 
 interface PaymentButtonProps {
   lecture: {
@@ -20,7 +21,8 @@ interface PaymentButtonProps {
 }
 
 export const PaymentButton: React.FC<PaymentButtonProps> = ({ lecture, user }) => {
-  const { requestInicisPay, loading } = useInicis();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState<boolean>(false);
   const [isPaymentEnabled, setIsPaymentEnabled] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('beone_payment_enabled');
@@ -40,7 +42,6 @@ export const PaymentButton: React.FC<PaymentButtonProps> = ({ lecture, user }) =
     };
 
     window.addEventListener('beone-payment-settings-changed', handleSettingsChange);
-    // Listen to native storage events from other tabs/frames
     window.addEventListener('storage', handleSettingsChange);
 
     return () => {
@@ -49,64 +50,95 @@ export const PaymentButton: React.FC<PaymentButtonProps> = ({ lecture, user }) =
     };
   }, []);
 
-  const handlePayment = async () => {
-    if (!isPaymentEnabled) {
-      toast.error('현재 결제 기능 개발 중으로 관리자가 승인 후 강의를 청취하실 수 있습니다', {
-        duration: 8000,
-        position: 'top-center'
-      });
-      alert('현재 결제 기능 개발 중으로 관리자가 승인 후 강의를 청취하실 수 있습니다');
+  const handleAddToCart = async () => {
+    if (!user || !user.id) {
+      toast.error('로그인이 필요합니다. 로그인 페이지로 이동합니다.');
+      navigate('/auth/login');
       return;
     }
 
+    setLoading(true);
+
     try {
-      await requestInicisPay({
-        price: lecture.price,
-        orderName: lecture.title,
-        userName: user.name || 'GUEST',
-        userEmail: user.email || '',
-        userTel: user.phone || '010-0000-0000',
-        userId: user.id,
-        courseId: lecture.id
-      });
-      // Note: Inicis StdPay redirect happens via form submission in useInicis
+      // 1. Check if the course is already in the Cart (PENDING status)
+      const { data: existingOrder, error: fetchErr } = await supabase
+        .from('orders')
+        .select('id, merchant_uid')
+        .eq('user_id', user.id)
+        .eq('course_id', lecture.id)
+        .eq('status', 'PENDING')
+        .maybeSingle();
+
+      if (fetchErr) throw fetchErr;
+
+      let oid = '';
+      if (existingOrder) {
+        oid = existingOrder.merchant_uid;
+        toast.info('이미 수강 바구니에 담겨있는 강의입니다. 장바구니로 안전하게 안내합니다.', {
+          position: 'top-center'
+        });
+      } else {
+        // 2. Generate precision Merchant UID (OID)
+        const timestamp = Date.now().toString();
+        oid = `OID_${lecture.id.substring(0, 8).toUpperCase()}_${timestamp.substring(5)}`;
+
+        // 3. Insert PENDING order row representatively
+        const { error: insertErr } = await supabase
+          .from('orders')
+          .insert([{
+            user_id: user.id,
+            course_id: lecture.id,
+            amount: Number(lecture.price),
+            status: 'PENDING',
+            order_name: lecture.title,
+            merchant_uid: oid,
+            created_at: new Date().toISOString()
+          }]);
+
+        if (insertErr) throw insertErr;
+        
+        window.dispatchEvent(new Event('cart-updated'));
+        
+        toast.success('수강 바구니에 성공적으로 담겼습니다! 결제선택 단계로 안내합니다. 🎉', {
+          position: 'top-center'
+        });
+      }
+
+      // 4. Navigate smoothly to Cart
+      setTimeout(() => {
+        navigate('/cart');
+      }, 500);
+
     } catch (err: any) {
-      console.error('Payment Error:', err);
-      toast.error('결제 요청 중 오류가 발생했습니다.');
+      console.error('Cart Insertion Error:', err);
+      toast.error(`수강 바구니 이동 중 에러: ${err.message || '인증/데이터베이스 오류'}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="space-y-2 w-full">
       <Button 
-        onClick={handlePayment} 
+        onClick={handleAddToCart} 
         disabled={loading}
-        className={`w-full h-14 text-lg font-black rounded-2xl shadow-xl transition-all active:scale-95 ${
-          !isPaymentEnabled 
-            ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-100' 
-            : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100'
-        }`}
+        className="w-full h-14 text-lg font-black bg-purple-600 hover:bg-purple-700 text-white rounded-2xl shadow-xl shadow-purple-100 transition-all active:scale-95 flex items-center justify-center gap-2"
       >
         {loading ? (
           <>
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            결제 준비 중...
+            <Loader2 className="h-5 w-5 animate-spin" />
+            수강 정보 담는 중...
           </>
         ) : (
           <>
-            <CreditCard className="mr-2 h-5 w-5" />
-            {!isPaymentEnabled ? "수강 신청 문의하기" : `${lecture.price.toLocaleString()}원 결제하기`}
+            <ShoppingCart className="h-5 w-5" />
+            수강 신청하고 장바구니 가기
           </>
         )}
       </Button>
-      {!isPaymentEnabled && (
-        <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-center flex items-center justify-center gap-1.5">
-          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-          <p className="text-[11px] text-amber-800 font-bold leading-normal">
-            현재 사이트 결제 시스템 개발/점검 중입니다. 버튼 클릭 시 수강 승인 안내가 노출됩니다.
-          </p>
-        </div>
-      )}
+      <p className="text-[11px] text-gray-400 text-center font-bold">
+        버튼 클릭 시 수강 바구니에 담긴 후, 해당 페이지로 즉시 이동합니다.
+      </p>
     </div>
   );
 };

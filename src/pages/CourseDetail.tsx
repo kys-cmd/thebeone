@@ -323,13 +323,14 @@ export default function CourseDetail() {
 
                 <div className="flex gap-3">
                   {(() => {
-                    const requiredGrade = course.min_member_grade || ((course.category === 'beone_exclusive_online' || course.category === 'beone_exclusive_offline') ? 'bione_member' : null);
+                    const requiredGrade = course.min_member_grade || ((course.category === 'beone_exclusive_online' || course.category === 'beone_exclusive_offline') ? 'beone_member' : null);
                     
                     if (requiredGrade) {
                       const ROLE_RANK: Record<string, number> = {
                         'user': 0,
                         'regular_member': 1,
                         'paid_member': 2,
+                        'beone_member': 3,
                         'bione_member': 3,
                         'admin': 100,
                         'super_admin': 100

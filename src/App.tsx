@@ -101,6 +101,7 @@ function PublicLayout() {
   const isIncomplete = user && isGoogleUser && (!user.name || !user.nickname || !(user.mobile_phone || user.phone) || !user.gender || !user.birthdate);
 
   const isPopup = typeof window !== 'undefined' && (
+    location.pathname === '/chat' ||
     new URLSearchParams(location.search).get('popup') === 'true' ||
     new URLSearchParams(window.location.search).get('popup') === 'true' ||
     sessionStorage.getItem('is_popup_chat') === 'true' ||
@@ -195,6 +196,7 @@ export default function App() {
   }, [setUser, setLoading]);
 
   const isPopup = typeof window !== 'undefined' && (
+    window.location.pathname === '/chat' ||
     new URLSearchParams(window.location.search).get('popup') === 'true' ||
     sessionStorage.getItem('is_popup_chat') === 'true' ||
     window.name === 'BOneChatWindow'
