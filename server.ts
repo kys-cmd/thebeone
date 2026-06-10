@@ -1365,7 +1365,7 @@ async function startServer() {
         if (isUuid) {
           const res = await supabaseAdmin
             .from("orders")
-            .select("id, status, merchant_uid, amount, user_id, course_id, payment_tid, payment_method")
+            .select("*")
             .eq("id", orderId)
             .maybeSingle();
           order = res.data;
@@ -1375,7 +1375,7 @@ async function startServer() {
         if (!order) {
           const res = await supabaseAdmin
             .from("orders")
-            .select("id, status, merchant_uid, amount, user_id, course_id, payment_tid, payment_method")
+            .select("*")
             .eq("merchant_uid", orderId)
             .maybeSingle();
           if (res.data) {
@@ -1387,7 +1387,8 @@ async function startServer() {
         }
 
         if (findError || !order) {
-          return res.status(404).json({ status: "error", message: `주문 내역을 찾을 수 없습니다. (ID: ${orderId})` });
+          const dbDetails = findError ? ` [DB Error: ${findError.message}]` : "";
+          return res.status(404).json({ status: "error", message: `주문 내역을 찾을 수 없습니다.${dbDetails} (ID: ${orderId})` });
         }
 
         if (order.status !== "PAID" && order.status !== "COMPLETED") {
