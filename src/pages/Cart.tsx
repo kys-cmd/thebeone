@@ -156,7 +156,9 @@ export default function Cart() {
     setIsPaying(true);
 
     try {
-      const timestamp = Date.now().toString();
+      const now = new Date();
+      const kstTime = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+      const timestamp = kstTime.toISOString().replace(/[^0-9]/g, "").substring(0, 14);
       const oid = `OID_${item.course_id.substring(0, 8).toUpperCase()}_${timestamp.substring(5)}`;
 
       const response = await fetch('/api/init-pay', {

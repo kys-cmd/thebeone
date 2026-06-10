@@ -190,8 +190,10 @@ async function startServer() {
     const resolvedCancelUrl = config.isSandbox ? INICIS_ENDPOINTS.sandbox.cancel : INICIS_ENDPOINTS.production.cancel;
     const netCancelUrl = req.body.netCancelUrl || authUrl?.replace("/auth", "/netCancel") || resolvedCancelUrl;
 
-    // Application origin URL determination
-    const clientOrigin = process.env.APP_URL || process.env.VITE_APP_URL || `http://localhost:${PORT}`;
+    // Application origin URL determination (dynamically derived from request context to avoid localhost redirection in iframe)
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const host = req.headers['x-forwarded-host'] || req.get('host') || `localhost:${PORT}`;
+    const clientOrigin = process.env.APP_URL || process.env.VITE_APP_URL || `${protocol}://${host}`;
 
     // A. Authentication phase validation
     if (resultCode !== "0000" || !authToken || !authUrl) {
@@ -210,7 +212,9 @@ async function startServer() {
       return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent(resultMsg || "인증 실패")}&oid=${finalOid || ""}&resultCode=${resultCode || "UNKNOWN"}`);
     }
 
-    const timestamp = new Date().toISOString().replace(/[-T:.Z]/g, "").substring(0, 14); // YYYYMMDDHHmmss
+    const now = new Date();
+    const kstTime = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+    const timestamp = kstTime.toISOString().replace(/[^0-9]/g, "").substring(0, 14); // YYYYMMDDHHmmss KST
     const authHashTarget = `authToken=${authToken}&timestamp=${timestamp}`;
     const authSignature = crypto.createHash("sha256").update(authHashTarget).digest("hex");
 

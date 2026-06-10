@@ -2187,7 +2187,7 @@ export default function CommunityPage() {
                 </Badge>
                 <h3 className="text-lg font-black text-slate-800 mb-1.5">{selectedCommunity.name}</h3>
                 <p className="text-slate-600 text-xs sm:text-sm leading-relaxed max-w-sm font-bold mb-5">
-                  본 서브채널은 검증된 소수 정규과정 회원 전용의 공간입니다. 가입 승인을 신청하시면, 담당 지도 튜터가 확인 조치 후 입장해드립니다.
+                  커뮤니티는 가입된 회원만 접근하실 수 있습니다. 가입 승인 요청 후 이용 바랍니다.
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -2195,7 +2195,7 @@ export default function CommunityPage() {
                     onClick={() => handleMenuClick('home-latest')}
                     className="h-10 px-5 rounded-xl font-bold border-slate-150 text-xs sm:text-sm"
                   >
-                    일반 홈광장으로 복귀
+                    커뮤니티 홈으로
                   </Button>
                   {isPendingApproval ? (
                     <div className="bg-amber-50 border border-amber-200 text-amber-700 font-bold h-10 px-5 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm">

@@ -63,7 +63,9 @@ export function useInicisPay() {
 
     try {
       // 1) 고유한 갱신용 상점 주문번호(OID) 생성
-      const timestamp = Date.now().toString();
+      const now = new Date();
+      const kstTime = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+      const timestamp = kstTime.toISOString().replace(/[^0-9]/g, "").substring(0, 14);
       const oid = `OID_${params.courseId.substring(0, 8).toUpperCase()}_${timestamp.substring(5)}`;
 
       // 2) 서버에 결제 서명 및 파라미터 초기화 생성 요청 
