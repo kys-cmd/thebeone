@@ -252,7 +252,7 @@ export default function App() {
           </Route>
         </Routes>
         <Toaster position="top-center" richColors />
-        <FloatingChat />
+        {!(typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('popup') === 'true') && <FloatingChat />}
       </div>
     </Router>
   );

@@ -127,11 +127,21 @@ export default function ChatPage() {
   useEffect(() => {
     if (isPopup) {
       document.body.style.overflow = 'hidden';
+      document.body.style.width = '100vw';
+      document.body.style.height = '100vh';
+      document.body.style.margin = '0';
+      document.body.style.padding = '0';
       document.documentElement.style.overflow = 'hidden';
+      document.documentElement.style.height = '100vh';
     }
     return () => {
       document.body.style.overflow = '';
+      document.body.style.width = '';
+      document.body.style.height = '';
+      document.body.style.margin = '';
+      document.body.style.padding = '';
       document.documentElement.style.overflow = '';
+      document.documentElement.style.height = '';
     };
   }, [isPopup]);
 
@@ -2229,7 +2239,7 @@ export default function ChatPage() {
         {/* ===================================
             3. RIGHT SIDEBAR (Active Room Members list)
             =================================== */}
-        {activeRoom && activeRoom.room_type !== 'dm' && (
+        {activeRoom && activeRoom.room_type !== 'dm' && !isPopup && (
           <div className="hidden lg:flex w-64 border-l border-slate-100 bg-white flex flex-col shrink-0 overflow-hidden text-left">
             <div className="p-4 border-b border-slate-50 shrink-0 flex items-center justify-between">
               <h4 className="text-xs font-black text-slate-900 tracking-tight flex items-center gap-1.5">
