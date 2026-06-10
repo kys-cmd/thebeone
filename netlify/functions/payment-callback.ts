@@ -352,6 +352,17 @@ export const handler: Handler = async (event) => {
       }
 
       try {
+        await supabaseAdmin.from("enrollments").upsert({
+          user_id: userId,
+          course_id: courseId,
+          status: "active",
+          created_at: new Date().toISOString()
+        }, { onConflict: "user_id, course_id" });
+      } catch (enrollmentsErr: any) {
+        console.warn("[PAYMENT-CALLBACK] enrollments warning:", enrollmentsErr.message);
+      }
+
+      try {
         await supabaseAdmin.from("profiles").update({ role: "paid_member" }).eq("id", userId);
       } catch (pErr: any) {
         console.warn("[PAYMENT-CALLBACK] Profile upgrade warning:", pErr.message);

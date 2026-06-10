@@ -343,7 +343,7 @@ export const handler: Handler = async (event) => {
     const courseId = orderData.course_id;
 
     if (userId && courseId) {
-      // 1) 수강생 전용 권한 생성 및 삽입
+      // 1) 수강생 전용 권한 생성 및 삽입 (course_enrollments & enrollments 양쪽 모두 처리)
       try {
         const { data: existingEnroll } = await supabaseAdmin
           .from("course_enrollments")
@@ -365,6 +365,20 @@ export const handler: Handler = async (event) => {
         }
       } catch (enrollErr) {
         console.error("[INICIS-RETURN] enroll 처리 예외 발생:", enrollErr);
+      }
+
+      try {
+        const { error: enrollmentsError } = await supabaseAdmin
+          .from("enrollments")
+          .upsert({
+            user_id: userId,
+            course_id: courseId,
+            status: "active",
+            created_at: new Date().toISOString()
+          }, { onConflict: "user_id, course_id" });
+        if (enrollmentsError) console.warn("[INICIS-RETURN] enrollments 등록 누락:", enrollmentsError.message);
+      } catch (enrollmentsErr) {
+        console.error("[INICIS-RETURN] enrollments 처리 예외 발생:", enrollmentsErr);
       }
 
       // 2) 유선 또는 관련 유료 등급(paid_member) 동기화

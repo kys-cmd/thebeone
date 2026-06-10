@@ -438,16 +438,8 @@ async function startServer() {
         throw new Error(`OID [${finalOid}]에 상응하는 데이터베이스 레코드를 찾을 수 없습니다.`);
       }
 
-      // 1) Update order to PAID/COMPLETED
-      const { error: updateError } = await supabaseAdmin
-        .from("orders")
-        .update({
-          status: "COMPLETED",
-          updated_at: new Date().toISOString()
-        })
-        .eq("merchant_uid", finalOid);
-
-      if (updateError) throw updateError;
+      // 1) Update order to COMPLETED standard state transition using state machine
+      await handleOrderStateTransition(finalOid, "COMPLETED", authResponseData, Number(authResponseData.TotPrice || orderData.amount));
 
       // 2) payment_logs write
       try {
@@ -465,7 +457,7 @@ async function startServer() {
         await writePaymentLogLocal(finalOid, "SUCCESS", authResponseData);
       }
 
-      // 3) Automatic grant privileges
+      // 3) Supplementary grant privileges (Backups for course_enrollments and profile status updates)
       const userId = orderData.user_id;
       const courseId = orderData.course_id;
       if (userId && courseId) {
@@ -1355,6 +1347,167 @@ async function startServer() {
         return res.json({
           status: "success",
           message: "주문 정보가 PAID 로 자동 갱신되었으며, 복식부기 및 수강/커뮤니티 연동 권한이 재처리되었습니다!"
+        });
+      }
+
+      // 8.46 ADMIN: 이니시스 실시간 연계 환불 처리 기능 (Task - Refund Order)
+      if (action === "refund-order") {
+        const { orderId, reason } = req.body;
+        if (!orderId) {
+          return res.status(400).json({ status: "error", message: "Missing orderId parameter" });
+        }
+
+        const { data: order, error: findError } = await supabaseAdmin
+          .from("orders")
+          .select("id, status, merchant_uid, amount, user_id, course_id, payment_tid, payment_method")
+          .eq("id", orderId)
+          .maybeSingle();
+
+        if (findError || !order) {
+          return res.status(404).json({ status: "error", message: "주문 내역을 찾을 수 없습니다." });
+        }
+
+        if (order.status !== "PAID" && order.status !== "COMPLETED") {
+          return res.status(400).json({ status: "error", message: "환불은 결제 완료(PAID/COMPLETED)된 주문만 처리 가능합니다." });
+        }
+
+        const config = await getInicisConfig();
+        const tid = order.payment_tid;
+
+        // Sandbox check (if TID is mock or we are sandbox testing)
+        const isMockTid = !tid || tid.startsWith("TID-MOCK") || tid.includes("MOCK") || !tid.includes("-") || tid.length < 20;
+
+        if (isMockTid || config.isSandbox) {
+          console.log(`[Refund] Mock / Sandbox bypass refund for OID: ${order.merchant_uid}`);
+          // Proceed with local database and permission revocation, skipping real INICIS REST API since it's a test order
+        } else {
+          // Real Inicis API request
+          const cancelUrl = config.isSandbox ? INICIS_ENDPOINTS.sandbox.cancel : INICIS_ENDPOINTS.production.cancel;
+          const timestamp = getInicisKstTimestamp();
+          // PlainText = key + type + paymethod + timestamp + clientIp + mid + tid
+          const type = "Refund";
+          const paymethod = "Card"; // Generic Card mapping or from order.payment_method
+          const clientIp = "127.0.0.1";
+          const plainText = config.signKey + type + paymethod + timestamp + clientIp + config.mid + tid;
+          const hashData = crypto.createHash("sha512").update(plainText).digest("hex");
+
+          const requestParams = new URLSearchParams();
+          requestParams.append("type", type);
+          requestParams.append("paymethod", paymethod);
+          requestParams.append("timestamp", timestamp);
+          requestParams.append("clientIp", clientIp);
+          requestParams.append("mid", config.mid);
+          requestParams.append("tid", tid);
+          requestParams.append("msg", reason || "관리자 환불 처리");
+          requestParams.append("hashData", hashData);
+
+          try {
+            console.log(`[Refund] Requesting real Inicis cancel V2 at: ${cancelUrl} for TID: ${tid}`);
+            const apiResponse = await fetch(cancelUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded"
+              },
+              body: requestParams.toString()
+            });
+
+            const rawText = await apiResponse.text();
+            console.log(`[Refund] Inicis direct response:`, rawText);
+            
+            let result: any = {};
+            try {
+              result = JSON.parse(rawText);
+            } catch (e) {
+              // fallback if it's form-urlencoded or other format
+              console.warn("[Refund] Failed parsing json from Inicis response, attempting url decode", e);
+            }
+
+            const resultCode = result.resultCode || "";
+            const resultMsg = result.resultMsg || rawText || "Inicis Response Error";
+
+            // V2 cancel resultCode is typically "00" on success
+            if (resultCode !== "00" && resultCode !== "0000") {
+              return res.status(400).json({
+                status: "error",
+                message: `이니시스 환불 거부 오류 [코드: ${resultCode}]: ${resultMsg}`
+              });
+            }
+          } catch (fetchErr: any) {
+            console.error("[Refund] HTTP request to Inicis failed:", fetchErr);
+            return res.status(500).json({
+              status: "error",
+              message: `이니시스 게이트웨이와 통신 중 장애가 발생했습니다: ${fetchErr.message}`
+            });
+          }
+        }
+
+        // Apply Refund / Revocation steps
+        // 1. Update order status to CANCELLED
+        await supabaseAdmin
+          .from("orders")
+          .update({
+            status: "CANCELLED",
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", orderId);
+
+        // 2. Clear enrollment
+        await supabaseAdmin
+          .from("enrollments")
+          .update({ status: "expired" })
+          .eq("user_id", order.user_id)
+          .eq("course_id", order.course_id);
+
+        // 3. Kick from community
+        const { data: communities } = await supabaseAdmin
+          .from("communities")
+          .select("id")
+          .eq("course_id", order.course_id);
+
+        if (communities && communities.length > 0) {
+          for (const comm of communities) {
+            await supabaseAdmin
+              .from("community_members")
+              .update({ is_deleted: true })
+              .eq("community_id", comm.id)
+              .eq("user_id", order.user_id);
+          }
+        }
+
+        // 4. Double ledger bookkeeping Reversal (환불 전표)
+        const { data: tx } = await supabaseAdmin
+          .from("transactions")
+          .insert([{
+            description: `[환불완료] 주문번호: ${order.merchant_uid} (사유: ${reason || "관리자 환불"})`,
+            created_by: requestingUser?.id || order.user_id
+          }])
+          .select()
+          .single();
+
+        if (tx) {
+          await supabaseAdmin.from("transaction_lines").insert([
+            {
+              transaction_id: tx.id,
+              user_id: order.user_id,
+              description: `강의 환불 입금 반환 (보통예금 자산 차감)`,
+              debit_amount: 0,
+              credit_amount: order.amount
+            },
+            {
+              transaction_id: tx.id,
+              user_id: order.user_id,
+              description: `강의 환불 매출액 취소`,
+              debit_amount: order.amount,
+              credit_amount: 0
+            }
+          ]);
+        }
+
+        return res.json({
+          status: "success",
+          message: isMockTid 
+            ? "모의 결제 주문이므로 이니시스 통신 없이 즉각 승인 취소 및 수강생 권한 수거가 정합 완료되었습니다."
+            : `이니시스 실시간 거래 승인 취소가 완료되었으며, 수강생 권한 수거 및 복식부기 매출 차감 정리가 완료되었습니다.`
         });
       }
 
@@ -2388,8 +2541,8 @@ async function startServer() {
     const normalizedNewStatus = newStatus.toUpperCase();
 
     // Already processed with terminal state
-    if (currentStatus === "PAID") {
-      console.log(`[OrderTransition] Order ${oid} is already PAID. Skipping side effects (Idempotency).`);
+    if (currentStatus === "PAID" || currentStatus === "COMPLETED") {
+      console.log(`[OrderTransition] Order ${oid} is already ${currentStatus}. Skipping side effects (Idempotency).`);
       return order;
     }
 
@@ -2414,8 +2567,8 @@ async function startServer() {
       throw new Error(`Order status update failed: ${updateError.message}`);
     }
 
-    // E. PAID 시점에만 권한 반영 & SIDEEFFECTS
-    if (normalizedNewStatus === "PAID") {
+    // E. PAID 또는 COMPLETED 시점에만 권한 반영 & SIDEEFFECTS
+    if (normalizedNewStatus === "PAID" || normalizedNewStatus === "COMPLETED") {
       console.log(`[OrderTransition] Applying permissions/enrollments for user ${order.user_id} on course ${order.course_id}`);
       
       // 1. Grant Course Enrollment

@@ -57,41 +57,7 @@ export default function AdminSalesManagement() {
     }
   };
 
-  // --- Sandbox 시뮬레이터 전용 상태 ---
-  const [allProfiles, setAllProfiles] = useState<any[]>([]);
-  const [allCourses, setAllCourses] = useState<any[]>([]);
-  const [selectedUser, setSelectedUser] = useState<string>('');
-  const [selectedCourse, setSelectedCourse] = useState<string>('');
-  const [testAmount, setTestAmount] = useState<string>('');
-  const [selectedOrderForSim, setSelectedOrderForSim] = useState<any | null>(null);
-  const [simulationLogs, setSimulationLogs] = useState<string[]>([]);
-  const [isSimulating, setIsSimulating] = useState<boolean>(false);
-
-  // 로드 시점에 모의 결제용 수강생 리스트와 강좌 목록을 가져옴
-  useEffect(() => {
-    const loadSandboxResources = async () => {
-      try {
-        const { data: profiles, error: pErr } = await supabase
-          .from('profiles')
-          .select('id, name, nickname, email')
-          .order('created_at', { ascending: false });
-
-        const { data: courses, error: cErr } = await supabase
-          .from('courses')
-          .select('id, title, price')
-          .order('created_at', { ascending: false });
-
-        if (pErr) throw pErr;
-        if (cErr) throw cErr;
-
-        setAllProfiles(profiles || []);
-        setAllCourses(courses || []);
-      } catch (err: any) {
-        console.error('Failed to load sandbox resources:', err);
-      }
-    };
-    loadSandboxResources();
-  }, []);
+  // --- Sandbox states are removed ---
 
   const handleGlobalSync = async () => {
     try {
@@ -216,23 +182,16 @@ export default function AdminSalesManagement() {
     }
   };
 
-  // --- Sandbox 시뮬레이터 인터랙션 액션 함수 ---
-
-  // 1. 모의 결제대기(PENDING) 주문 즉시 신규 발행
-  const handleCreateTestOrder = async () => {
-    if (!selectedUser || !selectedCourse) {
-      toast.error('모의 결제 대상을 위해 수강생 회원과 상품 강의를 각각 지정해 주세요.');
-      return;
-    }
-
-    setIsSimulating(true);
-    const logValue = `[Sandbox Console] Creating custom pending order record for user (${selectedUser}) and course (${selectedCourse})...`;
-    setSimulationLogs(prev => [...prev, logValue]);
+  // --- 이니시스 실시간 거래 환불 연계 처리 ---
+  const handleRefundOrder = async (orderId: string) => {
+    const reason = prompt('환불 처리 사유를 입력해주세요 (공란 가능):', '고객 요청 환불');
+    if (reason === null) return; // 취소 버튼 누른 경우
 
     try {
+      setIsProcessing(orderId + '_refund');
       const session = (await supabase.auth.getSession()).data.session;
       if (!session) {
-        toast.error('세션 토큰이 유효하지 않습니다. 다시 로그인해 주세요.');
+        toast.error('로그인 세션 정보가 만료되었습니다.');
         return;
       }
 
@@ -243,88 +202,24 @@ export default function AdminSalesManagement() {
           'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
-          action: 'admin-create-test-order',
-          userId: selectedUser,
-          courseId: selectedCourse,
-          amount: testAmount || '30000'
-        })
-      });
-
-      const result = await response.json();
-      if (result.status === 'success') {
-        toast.success(result.message);
-        
-        // 데이터 리프레시 후, 방금 등록된 모의 주문을 시뮬레이터 제어판에 로드
-        const userProf = allProfiles.find(p => p.id === selectedUser);
-        const courseObj = allCourses.find(c => c.id === selectedCourse);
-        
-        const reconstructedOrder = {
-          ...result.order,
-          profile: userProf,
-          course: courseObj
-        };
-
-        setSimulationLogs(prev => [...prev, `[Gate Agent] Webhook registered: 1 PENDING order created. [ID: ${result.order.id.split('-')[0]}, OID: ${result.order.merchant_uid}]`]);
-        setSelectedOrderForSim(reconstructedOrder);
-        fetchOrders();
-      } else {
-        throw new Error(result.message);
-      }
-    } catch (error: any) {
-      console.error(error);
-      setSimulationLogs(prev => [...prev, `[Exception] Failed to publish mock order: ${error.message}`]);
-      toast.error(`모의 주문 생성 오류: ${error.message}`);
-    } finally {
-      setIsSimulating(false);
-    }
-  };
-
-  // 2. 외부 결제 대행사(이니시스) 완결 웹훅 콜백 수신 모의 테스트 실행
-  const handleSimulatePayment = async (orderId: string, success: boolean) => {
-    setIsSimulating(true);
-    const targetStatusText = success ? 'SUCCESS (PAID)' : 'FAILURE (FAILED)';
-    setSimulationLogs(prev => [...prev, `[Webhook Dispatcher] Simulating PG callback ${targetStatusText} for order: ${orderId}...`]);
-
-    try {
-      const session = (await supabase.auth.getSession()).data.session;
-      if (!session) {
-        toast.error('보안 권한 세션이 유효하지 않습니다.');
-        return;
-      }
-
-      const response = await fetch('/api/core-api', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          action: 'admin-simulate-payment',
+          action: 'refund-order',
           orderId,
-          success
+          reason
         })
       });
 
       const result = await response.json();
       if (result.status === 'success') {
-        toast.success(result.message);
-        setSimulationLogs(prev => [...prev, `[System Dispatch] Webhook feedback successfully handled. [Transaction logged, Double entry recorded, Enrollment enabled]`]);
-        
-        // 현재 제어패널에 선택된 주문 상태도 실시간 피드백 갱신
-        if (selectedOrderForSim && selectedOrderForSim.id === orderId) {
-          setSelectedOrderForSim(prev => prev ? { ...prev, status: success ? 'PAID' : 'FAILED' } : null);
-        }
-
+        toast.success(result.message || '이니시스 실시간 연계 승인 취소 및 환불 처리가 완료되었습니다.');
         fetchOrders();
       } else {
-        throw new Error(result.message);
+        throw new Error(result.message || '환불 승인 거절 또는 통신 오류');
       }
     } catch (error: any) {
       console.error(error);
-      setSimulationLogs(prev => [...prev, `[Gateway ERROR] Webhook apply aborted: ${error.message}`]);
-      toast.error(`콜백 모의 오류: ${error.message}`);
+      toast.error(`환불 처리 실패: ${error.message}`);
     } finally {
-      setIsSimulating(false);
+      setIsProcessing(null);
     }
   };
 
@@ -482,182 +377,7 @@ export default function AdminSalesManagement() {
       </Card>
 
       {/* 🔮 모의 결제 콜백 Sandbox 테스팅 도구 */}
-      <Card className="rounded-[32px] border-none shadow-md overflow-hidden bg-gradient-to-br from-slate-900 to-indigo-950 text-white transition-all duration-350">
-        <CardHeader className="p-6 md:p-8 pb-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <Badge className="bg-purple-500/20 text-purple-300 font-extrabold px-2.5 py-1 text-xs border border-purple-500/30">SANDBOX</Badge>
-                <CardTitle className="text-xl font-black tracking-tight text-white flex items-center gap-2">
-                  <CreditCard className="w-5 h-5 text-purple-400" />
-                  모의 결제 콜백 가상 테스트 샌드박스
-                </CardTitle>
-              </div>
-              <CardDescription className="text-slate-300 font-bold italic mt-1.5 text-xs">
-                실제 원화 이체나 복잡한 계약 연동 없이도, 결제 완결/실패 콜백 및 계정 수강 가입 복식부기 처리를 완벽하게 모의 구동합니다.
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-300 font-black bg-slate-950/40 px-4 py-2 rounded-xl border border-white/5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              테스트 시스템 활성화
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6 md:p-8 pt-0 grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* 하위 제어판 좌측: 가상 pending 생성 */}
-          <div className="lg:col-span-5 bg-slate-950/40 rounded-2xl p-5 border border-white/5 space-y-4">
-            <div className="flex items-center gap-2 border-b border-white/5 pb-2.5">
-              <Badge className="bg-purple-600/30 text-purple-200 text-[10px] font-bold h-5">STEP 1</Badge>
-              <h3 className="text-xs font-black text-purple-300 tracking-wider">가상 결제 대기(PENDING) 주문 발행</h3>
-            </div>
-            
-            <div className="space-y-3.5">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 mb-1">모의 대상 수강 회원 선택</label>
-                <select
-                  value={selectedUser}
-                  onChange={(e) => setSelectedUser(e.target.value)}
-                  className="w-full h-10 px-3 bg-slate-900 border border-slate-700/60 rounded-xl text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-purple-400 appearance-none cursor-pointer"
-                >
-                  <option value="">-- 테스트 타겟 학생 --</option>
-                  {allProfiles.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.nickname || p.name || '알 수 없음'} ({p.email || '이메일 정보 미기입'})
-                    </option>
-                  ))}
-                </select>
-              </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 mb-1">가상 구매 상품(강의)</label>
-                <select
-                  value={selectedCourse}
-                  onChange={(e) => {
-                    const cId = e.target.value;
-                    setSelectedCourse(cId);
-                    const course = allCourses.find(c => c.id === cId);
-                    if (course) {
-                      setTestAmount(course.price?.toString() || '30000');
-                    }
-                  }}
-                  className="w-full h-10 px-3 bg-slate-900 border border-slate-700/60 rounded-xl text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-purple-400 appearance-none cursor-pointer"
-                >
-                  <option value="">-- 모의 테스트 강좌 --</option>
-                  {allCourses.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.title} (₩{(c.price || 0).toLocaleString()})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 mb-1">결제 금액 설정 (₩)</label>
-                <Input
-                  type="number"
-                  placeholder="금액 설정"
-                  value={testAmount}
-                  onChange={(e) => setTestAmount(e.target.value)}
-                  className="h-10 bg-slate-900 border-slate-700/60 rounded-xl text-xs text-white placeholder:text-slate-500 font-bold focus-visible:ring-purple-400"
-                />
-              </div>
-
-              <Button
-                onClick={handleCreateTestOrder}
-                disabled={isSimulating || !selectedUser || !selectedCourse}
-                className="w-full h-11 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5"
-              >
-                {isSimulating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                테스트 주문 발행 완료
-              </Button>
-            </div>
-          </div>
-
-          {/* 하위 제어판 우측: 선택 및 콜백 전송 */}
-          <div className="lg:col-span-7 bg-slate-950/40 rounded-2xl p-5 border border-white/5 flex flex-col justify-between space-y-4">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-purple-600/30 text-purple-200 text-[10px] font-bold h-5">STEP 2</Badge>
-                  <h3 className="text-xs font-black text-purple-300 tracking-wider">이니시스 콜백 상태 웹훅 모의 실행</h3>
-                </div>
-                {selectedOrderForSim && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => setSelectedOrderForSim(null)}
-                    className="h-6 px-2.5 text-[10px] text-rose-300 hover:text-white hover:bg-rose-950/50 font-bold rounded-lg border border-rose-500/10"
-                  >
-                    초기화
-                  </Button>
-                )}
-              </div>
-
-              {selectedOrderForSim ? (
-                <div className="bg-slate-950/60 p-4 rounded-xl border border-purple-500/20 text-slate-200 space-y-3 shadow-inner">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-purple-300">시뮬레이션 할 대상 주문:</span>
-                    <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-black">{selectedOrderForSim.status}</Badge>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-6 text-[11px] font-semibold">
-                    <div className="truncate"><span className="text-slate-400 font-medium">주문 고유번호:</span> {selectedOrderForSim.merchant_uid}</div>
-                    <div className="truncate"><span className="text-slate-400 font-medium">가상 수강생:</span> {selectedOrderForSim.profile?.nickname || selectedOrderForSim.profile?.name || '테스트 학생'}</div>
-                    <div className="truncate"><span className="text-slate-400 font-medium">강좌 상품:</span> {selectedOrderForSim.course?.title || '선택 강의'}</div>
-                    <div className="truncate"><span className="text-slate-400 font-medium">모의 금액:</span> ₩{(selectedOrderForSim.amount || 0).toLocaleString()}</div>
-                  </div>
-                  
-                  <div className="flex gap-2.5 pt-2.5">
-                    <Button
-                      onClick={() => handleSimulatePayment(selectedOrderForSim.id, true)}
-                      disabled={isSimulating}
-                      className="flex-1 h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1"
-                    >
-                      {isSimulating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                      결제 성공 처리 (PAID)
-                    </Button>
-                    <Button
-                      onClick={() => handleSimulatePayment(selectedOrderForSim.id, false)}
-                      disabled={isSimulating}
-                      className="flex-1 h-10 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1"
-                    >
-                      {isSimulating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                      결제 실패 처리 (FAILED)
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-700/60 rounded-xl p-5 text-center text-slate-400 py-8 bg-slate-900/30">
-                  <CreditCard className="w-7 h-7 text-slate-600 mb-2" />
-                  <p className="text-xs font-black text-slate-300">위 STEP 1에서 신규 가상 주문을 생성하시거나,</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">하단의 테이블 명단에서 검증하려는 계정의 <Badge className="bg-purple-950 text-purple-300 text-[8px] h-4">모의 대상을 로드</Badge> 클릭하세요.</p>
-                </div>
-              )}
-            </div>
-
-            {/* 시리얼 터미널 로그 스트림 */}
-            <div className="space-y-1.5">
-              <div className="text-[10px] uppercase font-black text-purple-400 tracking-wider flex items-center gap-1.5">
-                <Activity className="w-3 h-3 text-purple-400 animate-pulse shrink-0" />
-                정합성 및 수강권 자동 바인딩 웹훅 원격 터미널 출력
-              </div>
-              <div className="h-24 bg-slate-950/80 rounded-xl border border-white/5 p-3 font-mono text-[10px] text-emerald-400 overflow-y-auto space-y-1 scrollbar-thin">
-                {simulationLogs.length > 0 ? (
-                  simulationLogs.map((log, lidx) => (
-                    <div key={lidx} className="leading-tight">
-                      <span className="text-slate-500 font-bold">[{format(new Date(), 'HH:mm:ss')}]</span> {log}
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-slate-500 italic flex items-center h-full justify-center text-[10px]">
-                    샌드박스 로그 리스너 대기 중... 모의 결과를 트리거하면 실시간 데이터 정합 상태가 감지됩니다.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Filter Bar */}
       <Card className="rounded-[32px] border-none shadow-sm overflow-hidden">
@@ -775,19 +495,22 @@ export default function AdminSalesManagement() {
                     <td className="p-6 text-right">
                        <div className="flex gap-1.5 justify-end flex-wrap max-w-[280px] ml-auto">
                           
-                          {/* 결제대기 주문에 대해 즉시 샌드박스 테스팅 도구로 바로 로드할 수 있게 함 */}
-                          <Button
-                            onClick={() => {
-                              setSelectedOrderForSim(order);
-                              toast.info(`주문 ${order.merchant_uid} 정보가 샌드박스 콜백 테스팅기에 로드되었습니다.`);
-                            }}
-                            variant="outline"
-                            className="h-8 px-3 text-[10px] font-black rounded-lg text-purple-700 bg-purple-50 border-purple-200 hover:bg-purple-100 shrink-0 gap-1 shadow-xs"
-                          >
-                            <CreditCard className="w-3 h-3 text-purple-600" />
-                            모의 대상을 로드
-                          </Button>
-
+                          {/* 이니시스 실시간 거래 환불 연계 버튼 */}
+                          {(order.status === 'PAID' || order.status === 'COMPLETED') && (
+                            <Button 
+                              onClick={() => handleRefundOrder(order.id)}
+                              disabled={isProcessing !== null}
+                              variant="outline"
+                              className="h-8 px-3 text-[10px] font-black rounded-lg text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 shrink-0 gap-1 shadow-sm cursor-pointer"
+                            >
+                              {isProcessing === order.id + '_refund' ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <RefreshCw className="w-3.5 h-3.5" />
+                              )}
+                              환불
+                            </Button>
+                          )}
                           <Button 
                             onClick={() => handleReprocessOrder(order.id)}
                             disabled={isProcessing !== null}
