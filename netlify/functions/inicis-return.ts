@@ -76,7 +76,17 @@ export const handler: Handler = async (event) => {
   }
 
   // Secure verification: Validate authUrl to prevent SSRF and mock server forgery
-  if (!authUrl.startsWith("https://stdpay.inicis.com") && !authUrl.startsWith("https://iniapi.inicis.com")) {
+  let isVerifiedDomain = false;
+  try {
+    const parsedAuthUrl = new URL(authUrl);
+    if (parsedAuthUrl.protocol === "http:" || parsedAuthUrl.protocol === "https:") {
+      isVerifiedDomain = parsedAuthUrl.hostname === "inicis.com" || parsedAuthUrl.hostname.endsWith(".inicis.com");
+    }
+  } catch (e) {
+    isVerifiedDomain = false;
+  }
+
+  if (!isVerifiedDomain) {
     console.error("Unverified authUrl domain:", authUrl);
     return {
       statusCode: 302,

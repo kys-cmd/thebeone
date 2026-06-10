@@ -314,6 +314,22 @@ async function startServer() {
       return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent(resultMsg || "인증 실패")}&oid=${finalOid || ""}&resultCode=${resultCode || "UNKNOWN"}`);
     }
 
+    // Secure verification: Validate authUrl to prevent SSRF and mock server forgery
+    let isVerifiedDomain = false;
+    try {
+      const parsedAuthUrl = new URL(authUrl);
+      if (parsedAuthUrl.protocol === "http:" || parsedAuthUrl.protocol === "https:") {
+        isVerifiedDomain = parsedAuthUrl.hostname === "inicis.com" || parsedAuthUrl.hostname.endsWith(".inicis.com");
+      }
+    } catch (e) {
+      isVerifiedDomain = false;
+    }
+
+    if (!isVerifiedDomain) {
+      console.error("[INICIS-RETURN] Unverified authUrl domain:", authUrl);
+      return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent("위변조가 의심되는 결제 게이트웨이 도메인입니다.")}&oid=${finalOid || ""}&resultCode=UNVERIFIED_GATEWAY`);
+    }
+
     const timestamp = getInicisKstTimestamp();
     const authHashTarget = `authToken=${authToken}&timestamp=${timestamp}`;
     const authSignature = crypto.createHash("sha256").update(authHashTarget).digest("hex");
@@ -2841,14 +2857,16 @@ async function startServer() {
       const mid = config.mid;
       const signKey = config.signKey;
 
-      const allowedDomains = [
-        "https://stdpay.inicis.com",
-        "https://iniapi.inicis.com",
-        "https://stgstdpay.inicis.com",
-        "https://stginiapi.inicis.com"
-      ];
+      let isVerifiedDomain = false;
+      try {
+        const parsedAuthUrl = new URL(authUrl);
+        if (parsedAuthUrl.protocol === "http:" || parsedAuthUrl.protocol === "https:") {
+          isVerifiedDomain = parsedAuthUrl.hostname === "inicis.com" || parsedAuthUrl.hostname.endsWith(".inicis.com");
+        }
+      } catch (e) {
+        isVerifiedDomain = false;
+      }
 
-      const isVerifiedDomain = allowedDomains.some((domain) => authUrl.startsWith(domain));
       if (!isVerifiedDomain) {
         console.error("Unverified authUrl domain:", authUrl);
         return res.redirect("/payment/callback?status=fail&success=false&message=Unverified+Payment+Gateway+Domain&resultCode=UNVERIFIED_GATEWAY");
