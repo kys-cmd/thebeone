@@ -256,46 +256,67 @@ async function startServer() {
     const netCancelUrl = req.body.netCancelUrl || authUrl?.replace("/auth", "/netCancel") || resolvedCancelUrl;
 
     // Application origin URL determination (Robustly prioritized dynamic request context to avoid hardcoded localhost diversion)
-    let clientOrigin = "";
-    
-    // Prioritize immutable client origin passed dynamically from client's browser context (escapes sandbox reverse proxy pitfalls)
-    if (merchantData && (merchantData.startsWith("http://") || merchantData.startsWith("https://"))) {
-      clientOrigin = merchantData;
-    }
+    const getSecurePublicUrl = (reqObj: any, md: string | null | undefined) => {
+      const DEV_URL = "https://ais-dev-qbvit3fpjqe4xthteyekz2-553123300253.asia-northeast1.run.app";
+      const PRE_URL = "https://ais-pre-qbvit3fpjqe4xthteyekz2-553123300253.asia-northeast1.run.app";
 
-    if (!clientOrigin && req.headers.referer) {
-      try {
-        const refUrl = new URL(req.headers.referer);
-        // Only parse referer if it's not the PG domain (e.g. inicis.com or tosspay) to avoid looping back to PG hosts
-        if (!refUrl.host.includes("inicis.com") && !refUrl.host.includes("toss")) {
-          clientOrigin = `${refUrl.protocol}//${refUrl.host}`;
+      const candidates: string[] = [];
+      if (md) candidates.push(md);
+      
+      const fUrl = process.env.APP_URL || process.env.VITE_APP_URL;
+      if (fUrl) candidates.push(fUrl);
+
+      if (reqObj) {
+        if (reqObj.headers) {
+          if (reqObj.headers['x-forwarded-host']) {
+            const proto = reqObj.headers['x-forwarded-proto'] || 'https';
+            candidates.push(`${proto}://${reqObj.headers['x-forwarded-host']}`);
+          }
+          if (reqObj.headers.referer) {
+            candidates.push(reqObj.headers.referer);
+          }
+          if (reqObj.headers.origin) {
+            candidates.push(reqObj.headers.origin);
+          }
         }
-      } catch (e) {
-        // ignore parsing errors
+        const hostHeader = reqObj.get ? reqObj.get('host') : (reqObj.headers?.host);
+        if (hostHeader) {
+          const proto = reqObj.headers?.['x-forwarded-proto'] || reqObj.protocol || 'https';
+          candidates.push(`${proto}://${hostHeader}`);
+        }
       }
-    }
-    if (!clientOrigin && req.headers.origin) {
-      const originStr = req.headers.origin as string;
-      if (!originStr.includes("inicis.com") && !originStr.includes("toss")) {
-        clientOrigin = originStr;
-      }
-    }
-    
-    // Reverse proxy header lookup fallback
-    if (!clientOrigin) {
-      const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-      const host = req.headers['x-forwarded-host'] || req.get('host') || `localhost:${PORT}`;
-      clientOrigin = `${protocol}://${host}`;
-    }
 
-    // Explicit localhost defense or absolute production override against stale server/proxy environments
-    const fallbackEnv = process.env.APP_URL || process.env.VITE_APP_URL;
-    if (fallbackEnv && !fallbackEnv.includes("localhost")) {
-      const sanitizedFallback = fallbackEnv.endsWith("/") ? fallbackEnv.slice(0, -1) : fallbackEnv;
-      if (!clientOrigin || clientOrigin.includes("localhost") || clientOrigin.includes("inicis.com") || clientOrigin.includes("toss")) {
-        clientOrigin = sanitizedFallback;
+      for (const candidate of candidates) {
+        if (!candidate || typeof candidate !== "string") continue;
+        let clean = candidate.trim();
+        if (clean.endsWith("/")) {
+          clean = clean.slice(0, -1);
+        }
+        if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+          continue;
+        }
+        try {
+          const parsed = new URL(clean);
+          const hostname = parsed.hostname;
+          if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || hostname.includes("localhost")) {
+            continue;
+          }
+          if (hostname.includes("MY_APP_URL") || hostname.includes("your-project") || hostname.includes("inicis.com") || hostname.includes("toss")) {
+            continue;
+          }
+          return clean;
+        } catch (e) {
+          // ignore
+        }
       }
-    }
+
+      if (reqObj && reqObj.headers && reqObj.headers.referer && reqObj.headers.referer.includes("ais-pre")) {
+        return PRE_URL;
+      }
+      return DEV_URL;
+    };
+
+    const clientOrigin = getSecurePublicUrl(req, merchantData);
 
     // A. Authentication phase validation
     if (resultCode !== "0000" || !authToken || !authUrl) {

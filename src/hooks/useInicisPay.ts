@@ -103,8 +103,42 @@ export function useInicisPay() {
 
       const { signature, mKey, mid } = initResult;
 
-      // 3) 도메인 Host 정보 획득 및 리턴 URL 조합
-      const hostOrigin = window.location.origin;
+      // 3) 도메인 Host 정보 획득 및 리턴 URL 조합 (localhost 우회 및 클라우드 외부 도메인 확보)
+      const getFrontendRootUrl = () => {
+        const devUrl = "https://ais-dev-qbvit3fpjqe4xthteyekz2-553123300253.asia-northeast1.run.app";
+        const preUrl = "https://ais-pre-qbvit3fpjqe4xthteyekz2-553123300253.asia-northeast1.run.app";
+        const originUrl = window.location.origin;
+        const envAppUrl = (typeof process !== "undefined" && process?.env?.APP_URL) || import.meta.env?.VITE_APP_URL;
+
+        const candidates = [envAppUrl, originUrl, document.referrer];
+        for (const candidate of candidates) {
+          if (!candidate || typeof candidate !== "string") continue;
+          let cleanUrl = candidate.trim();
+          if (cleanUrl.endsWith("/")) {
+            cleanUrl = cleanUrl.slice(0, -1);
+          }
+          if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+            continue;
+          }
+          try {
+            const parsed = new URL(cleanUrl);
+            const hostname = parsed.hostname;
+            if (hostname === "localhost" || hostname === "127.0.0.1" || hostname.includes("localhost") || hostname.includes("MY_APP_URL")) {
+              continue;
+            }
+            return cleanUrl;
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        if (window.location.href.includes("ais-pre") || document.referrer.includes("ais-pre") || window.location.host.includes("ais-pre")) {
+          return preUrl;
+        }
+        return devUrl;
+      };
+
+      const hostOrigin = getFrontendRootUrl();
       const returnUrl = `${hostOrigin}/api/inicis-return`; // Netlify 및 Express 통합 처리용 리턴 URL
 
       // 4) 기존 임시 폼 컨테이너가 있으면 DOM에서 제거

@@ -46,7 +46,48 @@ export const handler: Handler = async (event) => {
   const authUrl = inicisData.authUrl;
   const netCancelUrl = inicisData.netCancelUrl || authUrl?.replace("/auth", "/netCancel") || "https://iniapi.inicis.com/api/v1/netcancel";
 
-  const clientOrigin = process.env.APP_URL || process.env.VITE_APP_URL || "http://localhost:3000";
+  // 기본 리디렉션 주소 설정 (환경에 따라 구성 및 localhost 우회)
+  const getSecurePublicUrl = (md: string | null | undefined) => {
+    const DEV_URL = "https://ais-dev-qbvit3fpjqe4xthteyekz2-553123300253.asia-northeast1.run.app";
+    const PRE_URL = "https://ais-pre-qbvit3fpjqe4xthteyekz2-553123300253.asia-northeast1.run.app";
+
+    const candidates: string[] = [];
+    if (md) candidates.push(md);
+    
+    const fUrl = process.env.APP_URL || process.env.VITE_APP_URL;
+    if (fUrl) candidates.push(fUrl);
+
+    for (const candidate of candidates) {
+      if (!candidate || typeof candidate !== "string") continue;
+      let clean = candidate.trim();
+      if (clean.endsWith("/")) {
+        clean = clean.slice(0, -1);
+      }
+      if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+        continue;
+      }
+      try {
+        const parsed = new URL(clean);
+        const hostname = parsed.hostname;
+        if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || hostname.includes("localhost")) {
+          continue;
+        }
+        if (hostname.includes("MY_APP_URL") || hostname.includes("your-project") || hostname.includes("inicis.com") || hostname.includes("toss")) {
+          continue;
+        }
+        return clean;
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    if (md && md.includes("ais-pre")) {
+      return PRE_URL;
+    }
+    return DEV_URL;
+  };
+
+  const clientOrigin = getSecurePublicUrl(inicisData.merchantData);
 
   // 1. Check early abort if 인증 실패
   if (resultCode !== "0000" || !authToken || !authUrl) {
