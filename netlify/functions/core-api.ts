@@ -1068,17 +1068,40 @@ export const handler: Handler = async (event, context) => {
         };
       }
 
-      const { data: order, error: findError } = await supabaseAdmin
-        .from("orders")
-        .select("id, status, merchant_uid, amount, user_id, course_id, payment_tid, payment_method")
-        .eq("id", orderId)
-        .maybeSingle();
+      // Resilient order lookup: Try UUID 'id' first, and fallback to 'merchant_uid' (and vice versa)
+      let order = null;
+      let findError = null;
+
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
+      if (isUuid) {
+        const res = await supabaseAdmin
+          .from("orders")
+          .select("id, status, merchant_uid, amount, user_id, course_id, payment_tid, payment_method")
+          .eq("id", orderId)
+          .maybeSingle();
+        order = res.data;
+        findError = res.error;
+      }
+
+      if (!order) {
+        const res = await supabaseAdmin
+          .from("orders")
+          .select("id, status, merchant_uid, amount, user_id, course_id, payment_tid, payment_method")
+          .eq("merchant_uid", orderId)
+          .maybeSingle();
+        if (res.data) {
+          order = res.data;
+          findError = null;
+        } else if (!findError && res.error) {
+          findError = res.error;
+        }
+      }
 
       if (findError || !order) {
         return {
           statusCode: 404,
           headers: responseHeaders,
-          body: JSON.stringify({ status: "error", message: "주문 내역을 찾을 수 없습니다." })
+          body: JSON.stringify({ status: "error", message: `주문 내역을 찾을 수 없습니다. (ID: ${orderId})` })
         };
       }
 
