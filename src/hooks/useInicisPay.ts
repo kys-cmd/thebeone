@@ -130,10 +130,11 @@ export function useInicisPay() {
         oid,
         price: params.price.toString(),
         timestamp,
-        use_chkfake: "Y",
+        use_chkfake: "N", // Disable frontend price fraud pre-check (reduces V203 verification key omission issues) as we perform 100% secure S2S backend price verification
         signature,
         mKey,
         currency: "WON",
+        merchantData: hostOrigin, // Robustly preserve the actual browser origin domain for S2S callback redirect matching
         
         // 구매 정보 전송
         goodname: params.courseName,

@@ -247,7 +247,7 @@ async function startServer() {
   app.post("/api/inicis-return", async (req, res) => {
     console.log("[INICIS-RETURN] Received approval payload:", req.body);
 
-    const { resultCode, resultMsg, mid, orderNumber, oid, authToken, authUrl } = req.body;
+    const { resultCode, resultMsg, mid, orderNumber, oid, authToken, authUrl, merchantData } = req.body;
     const finalOid = orderNumber || oid;
     const config = await getInicisConfig();
     const finalMid = mid || config.mid;
@@ -257,16 +257,28 @@ async function startServer() {
 
     // Application origin URL determination (Robustly prioritized dynamic request context to avoid hardcoded localhost diversion)
     let clientOrigin = "";
-    if (req.headers.referer) {
+    
+    // Prioritize immutable client origin passed dynamically from client's browser context (escapes sandbox reverse proxy pitfalls)
+    if (merchantData && (merchantData.startsWith("http://") || merchantData.startsWith("https://"))) {
+      clientOrigin = merchantData;
+    }
+
+    if (!clientOrigin && req.headers.referer) {
       try {
         const refUrl = new URL(req.headers.referer);
-        clientOrigin = `${refUrl.protocol}//${refUrl.host}`;
+        // Only parse referer if it's not the PG domain (e.g. inicis.com or tosspay) to avoid looping back to PG hosts
+        if (!refUrl.host.includes("inicis.com") && !refUrl.host.includes("toss")) {
+          clientOrigin = `${refUrl.protocol}//${refUrl.host}`;
+        }
       } catch (e) {
         // ignore parsing errors
       }
     }
     if (!clientOrigin && req.headers.origin) {
-      clientOrigin = req.headers.origin as string;
+      const originStr = req.headers.origin as string;
+      if (!originStr.includes("inicis.com") && !originStr.includes("toss")) {
+        clientOrigin = originStr;
+      }
     }
     
     // Reverse proxy header lookup fallback
@@ -276,11 +288,12 @@ async function startServer() {
       clientOrigin = `${protocol}://${host}`;
     }
 
-    // Explicit localhost defense against stale server env overrides
-    if (clientOrigin.includes("localhost") && (process.env.APP_URL || process.env.VITE_APP_URL)) {
-      const fallbackEnv = process.env.APP_URL || process.env.VITE_APP_URL;
-      if (fallbackEnv && !fallbackEnv.includes("localhost")) {
-        clientOrigin = fallbackEnv;
+    // Explicit localhost defense or absolute production override against stale server/proxy environments
+    const fallbackEnv = process.env.APP_URL || process.env.VITE_APP_URL;
+    if (fallbackEnv && !fallbackEnv.includes("localhost")) {
+      const sanitizedFallback = fallbackEnv.endsWith("/") ? fallbackEnv.slice(0, -1) : fallbackEnv;
+      if (!clientOrigin || clientOrigin.includes("localhost") || clientOrigin.includes("inicis.com") || clientOrigin.includes("toss")) {
+        clientOrigin = sanitizedFallback;
       }
     }
 
