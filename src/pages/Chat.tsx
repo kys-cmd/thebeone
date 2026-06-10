@@ -112,7 +112,13 @@ export default function ChatPage() {
   
   // URL에서 선택된 room_id 추출
   const selectedRoomId = searchParams.get('room');
-  const isPopup = searchParams.get('popup') === 'true';
+  const isPopup = searchParams.get('popup') === 'true' || (
+    typeof window !== 'undefined' && (
+      new URLSearchParams(window.location.search).get('popup') === 'true' ||
+      sessionStorage.getItem('is_popup_chat') === 'true' ||
+      window.name === 'BOneChatWindow'
+    )
+  );
 
   // 채팅방 리스트 및 필터 상태
   const [rooms, setRooms] = useState<any[]>([]);

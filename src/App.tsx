@@ -100,7 +100,18 @@ function PublicLayout() {
   const isGoogleUser = provider === 'google';
   const isIncomplete = user && isGoogleUser && (!user.name || !user.nickname || !(user.mobile_phone || user.phone) || !user.gender || !user.birthdate);
 
-  const isPopup = new URLSearchParams(location.search).get('popup') === 'true';
+  const isPopup = typeof window !== 'undefined' && (
+    new URLSearchParams(location.search).get('popup') === 'true' ||
+    new URLSearchParams(window.location.search).get('popup') === 'true' ||
+    sessionStorage.getItem('is_popup_chat') === 'true' ||
+    window.name === 'BOneChatWindow'
+  );
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('popup') === 'true') {
+      sessionStorage.setItem('is_popup_chat', 'true');
+    }
+  }, [location.search]);
 
   if (!isLoading && isIncomplete && !isAuthRoute && location.pathname !== '/mypage') {
     return <Navigate to="/mypage" replace />;
@@ -108,7 +119,7 @@ function PublicLayout() {
 
   if (isPopup) {
     return (
-      <main className="flex-grow min-h-screen">
+      <main className="w-screen h-screen overflow-hidden flex flex-col bg-white">
         <Outlet />
       </main>
     );
@@ -183,9 +194,15 @@ export default function App() {
     };
   }, [setUser, setLoading]);
 
+  const isPopup = typeof window !== 'undefined' && (
+    new URLSearchParams(window.location.search).get('popup') === 'true' ||
+    sessionStorage.getItem('is_popup_chat') === 'true' ||
+    window.name === 'BOneChatWindow'
+  );
+
   return (
     <Router>
-      <div className="flex min-h-screen flex-col font-sans antialiased">
+      <div className={isPopup ? "w-screen h-screen overflow-hidden flex flex-col font-sans antialiased bg-white" : "flex min-h-screen flex-col font-sans antialiased"}>
         <Routes>
           {/* Admin Routes */}
           <Route path="/admin" element={
@@ -252,7 +269,7 @@ export default function App() {
           </Route>
         </Routes>
         <Toaster position="top-center" richColors />
-        {!(typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('popup') === 'true') && <FloatingChat />}
+        {!isPopup && <FloatingChat />}
       </div>
     </Router>
   );
