@@ -53,6 +53,22 @@ const INICIS_ENDPOINTS = {
   },
 };
 
+// Timezone-resilient Korean Standard Time (KST, UTC+9) 14-digit generator (Task 5)
+function getInicisKstTimestamp(): string {
+  const d = new Date();
+  const kstMs = d.getTime() + (d.getTimezoneOffset() * 60000) + (9 * 60 * 60 * 1000);
+  const kstDate = new Date(kstMs);
+  
+  const yyyy = kstDate.getFullYear();
+  const MM = String(kstDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(kstDate.getDate()).padStart(2, '0');
+  const hh = String(kstDate.getHours()).padStart(2, '0');
+  const mm = String(kstDate.getMinutes()).padStart(2, '0');
+  const ss = String(kstDate.getSeconds()).padStart(2, '0');
+  
+  return `${yyyy}${MM}${dd}${hh}${mm}${ss}`;
+}
+
 // Unified Sign Generator (Task 4)
 function generateInicisSignature(
   mid: string,
@@ -114,9 +130,58 @@ async function startServer() {
     next();
   });
 
-  // Basic API verification
-  app.get("/api/test", (req, res) => {
-    res.json({ status: "ok", message: "API is working" });
+  // Basic API verification with full diagnosis capability (Task 1 Debugger)
+  app.get("/api/test", async (req, res) => {
+    const diagData: any = {
+      status: "ok",
+      serverTime: new Date().toISOString(),
+      timezoneOffset: new Date().getTimezoneOffset(),
+      env: {
+        NODE_ENV: process.env.NODE_ENV,
+        INICIS_MID_EXISTS: !!process.env.INICIS_MID,
+        INICIS_MID_VAL: process.env.INICIS_MID || "Not Found",
+        INICIS_SIGNKEY_EXISTS: !!process.env.INICIS_SIGNKEY,
+        SUPABASE_URL_EXISTS: !!process.env.SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY_EXISTS: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      }
+    };
+
+    if (supabaseAdmin) {
+      try {
+        const { data: paySettings, error: payError } = await supabaseAdmin
+          .from("payment_settings")
+          .select("*")
+          .limit(5);
+
+        diagData.database = {
+          connected: true,
+          payment_settings: paySettings || [],
+          payment_settings_error: payError ? payError.message : null,
+        };
+
+        // Try getting last failure log from payment_logs
+        const { data: logs, error: logsError } = await supabaseAdmin
+          .from("payment_logs")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(3);
+
+        diagData.recent_payment_logs = logs || [];
+        diagData.recent_payment_logs_error = logsError ? logsError.message : null;
+      } catch (dbErr: any) {
+        diagData.database = {
+          connected: false,
+          error: dbErr.message,
+        };
+      }
+    } else {
+      diagData.database = {
+        connected: false,
+        message: "supabaseAdmin is not initialized",
+      };
+    }
+
+    res.json(diagData);
   });
 
   // ==========================================
@@ -190,10 +255,34 @@ async function startServer() {
     const resolvedCancelUrl = config.isSandbox ? INICIS_ENDPOINTS.sandbox.cancel : INICIS_ENDPOINTS.production.cancel;
     const netCancelUrl = req.body.netCancelUrl || authUrl?.replace("/auth", "/netCancel") || resolvedCancelUrl;
 
-    // Application origin URL determination (dynamically derived from request context to avoid localhost redirection in iframe)
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const host = req.headers['x-forwarded-host'] || req.get('host') || `localhost:${PORT}`;
-    const clientOrigin = process.env.APP_URL || process.env.VITE_APP_URL || `${protocol}://${host}`;
+    // Application origin URL determination (Robustly prioritized dynamic request context to avoid hardcoded localhost diversion)
+    let clientOrigin = "";
+    if (req.headers.referer) {
+      try {
+        const refUrl = new URL(req.headers.referer);
+        clientOrigin = `${refUrl.protocol}//${refUrl.host}`;
+      } catch (e) {
+        // ignore parsing errors
+      }
+    }
+    if (!clientOrigin && req.headers.origin) {
+      clientOrigin = req.headers.origin as string;
+    }
+    
+    // Reverse proxy header lookup fallback
+    if (!clientOrigin) {
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+      const host = req.headers['x-forwarded-host'] || req.get('host') || `localhost:${PORT}`;
+      clientOrigin = `${protocol}://${host}`;
+    }
+
+    // Explicit localhost defense against stale server env overrides
+    if (clientOrigin.includes("localhost") && (process.env.APP_URL || process.env.VITE_APP_URL)) {
+      const fallbackEnv = process.env.APP_URL || process.env.VITE_APP_URL;
+      if (fallbackEnv && !fallbackEnv.includes("localhost")) {
+        clientOrigin = fallbackEnv;
+      }
+    }
 
     // A. Authentication phase validation
     if (resultCode !== "0000" || !authToken || !authUrl) {
@@ -212,9 +301,7 @@ async function startServer() {
       return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent(resultMsg || "인증 실패")}&oid=${finalOid || ""}&resultCode=${resultCode || "UNKNOWN"}`);
     }
 
-    const now = new Date();
-    const kstTime = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-    const timestamp = kstTime.toISOString().replace(/[^0-9]/g, "").substring(0, 14); // YYYYMMDDHHmmss KST
+    const timestamp = getInicisKstTimestamp();
     const authHashTarget = `authToken=${authToken}&timestamp=${timestamp}`;
     const authSignature = crypto.createHash("sha256").update(authHashTarget).digest("hex");
 

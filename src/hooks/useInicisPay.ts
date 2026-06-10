@@ -62,10 +62,19 @@ export function useInicisPay() {
     setErrorMsg(null);
 
     try {
-      // 1) 고유한 갱신용 상점 주문번호(OID) 생성
-      const now = new Date();
-      const kstTime = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-      const timestamp = kstTime.toISOString().replace(/[^0-9]/g, "").substring(0, 14);
+      // 1) 고유한 갱신용 상점 주문번호(OID) 생성 (시스템 및 디바이스 오리진 타임존 100% 흡수 방지식 KST 생성)
+      const d = new Date();
+      const kstMs = d.getTime() + (d.getTimezoneOffset() * 60000) + (9 * 60 * 60 * 1000);
+      const kstDate = new Date(kstMs);
+      
+      const yyyy = kstDate.getFullYear();
+      const MM = String(kstDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(kstDate.getDate()).padStart(2, '0');
+      const hh = String(kstDate.getHours()).padStart(2, '0');
+      const mm = String(kstDate.getMinutes()).padStart(2, '0');
+      const ss = String(kstDate.getSeconds()).padStart(2, '0');
+      
+      const timestamp = `${yyyy}${MM}${dd}${hh}${mm}${ss}`;
       const oid = `OID_${params.courseId.substring(0, 8).toUpperCase()}_${timestamp.substring(5)}`;
 
       // 2) 서버에 결제 서명 및 파라미터 초기화 생성 요청 

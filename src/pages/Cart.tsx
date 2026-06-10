@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/useAuthStore';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { useInicisPay } from '@/hooks/useInicisPay';
 
 export default function Cart() {
   const navigate = useNavigate();
@@ -16,40 +17,14 @@ export default function Cart() {
   const [items, setItems] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isPaying, setIsPaying] = useState(false);
-  const [isSdkLoaded, setIsSdkLoaded] = useState(false);
+  
+  // Integrated PG hook interface to guarantee unified parameters & time-zone stability
+  const { isSdkLoaded, isInitializing: isPaying, requestPayment } = useInicisPay();
+  const [isBulkPaying, setIsBulkPaying] = useState(false);
 
   // Mileage States
   const [userMileage, setUserMileage] = useState(0);
   const [useMileageInput, setUseMileageInput] = useState<number | ''>('');
-
-  // 1. Load KG Inicis Standard Web Javascript SDK
-  useEffect(() => {
-    const existingScript = document.getElementById('inicis-stdpay-script');
-    if (existingScript) {
-      setIsSdkLoaded(true);
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.id = 'inicis-stdpay-script';
-    script.src = 'https://stdpay.inicis.com/stdjs/INIStdPay.js';
-    script.type = 'text/javascript';
-    script.async = true;
-    script.onload = () => {
-      console.log('[INICIS] Standard Pay SDK loaded securely.');
-      setIsSdkLoaded(true);
-    };
-    script.onerror = () => {
-      console.error('[INICIS] Failed to load Inicis payment script.');
-    };
-    document.head.appendChild(script);
-
-    return () => {
-      const leftover = document.getElementById('inicis-temp-form-container');
-      if (leftover) leftover.remove();
-    };
-  }, []);
 
   // 2. Fetch User's Pending Orders and Mileage from Supabase
   const fetchUserMileage = async () => {
@@ -142,7 +117,7 @@ export default function Cart() {
     }
   };
 
-  // 5. Individual Item Regular Payment Trigger (Inicis)
+  // 5. Individual Item Regular Payment Trigger (Inicis Unified Hook)
   const handlePayment = async (item: any) => {
     if (!user) {
       alert('로그인이 필요한 서비스입니다.');
@@ -153,110 +128,18 @@ export default function Cart() {
       return;
     }
 
-    setIsPaying(true);
-
     try {
-      const now = new Date();
-      const kstTime = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-      const timestamp = kstTime.toISOString().replace(/[^0-9]/g, "").substring(0, 14);
-      const oid = `OID_${item.course_id.substring(0, 8).toUpperCase()}_${timestamp.substring(5)}`;
-
-      const response = await fetch('/api/init-pay', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          price: item.amount,
-          oid,
-          timestamp,
-          userId: user.id,
-          courseId: item.course_id,
-          orderName: item.courses?.title || '온라인 교육 강좌 수강권',
-        }),
+      await requestPayment({
+        price: item.amount,
+        courseId: item.course_id,
+        courseName: item.courses?.title || '온라인 교육 강좌 수강권',
+        userId: user.id,
+        userEmail: user.email || '',
+        userName: user.name || '구매자',
+        userPhone: user.mobile_phone || '010-0000-0000'
       });
-
-      if (!response.ok) {
-        throw new Error('결제 서명 생성 API 통신 실패');
-      }
-
-      const initResult = await response.json();
-      if (initResult.status !== 'success') {
-        throw new Error(initResult.message || '결제 승인 서명 생성 중 오류');
-      }
-
-      const { signature, mKey, mid } = initResult;
-      const clientOrigin = window.location.origin;
-      const appUrl = import.meta.env.VITE_APP_URL || clientOrigin;
-
-      const oldContainer = document.getElementById('inicis-temp-form-container');
-      if (oldContainer) oldContainer.remove();
-
-      const formContainer = document.createElement('div');
-      formContainer.id = 'inicis-temp-form-container';
-      formContainer.style.display = 'none';
-
-      const formId = 'inicis_payment_form';
-      const form = document.createElement('form');
-      form.id = formId;
-      form.method = 'POST';
-      form.acceptCharset = 'UTF-8';
-
-      const fields: Record<string, string> = {
-        P_INI_PAYMENT: 'Card',
-        P_MID: mid,
-        P_OID: oid,
-        P_AMT: item.amount.toString(),
-        P_UNAME: user.name || '구매자',
-        P_TIMESTAMP: timestamp,
-        P_SIGNATURE: signature,
-        P_NEXT_URL: `${appUrl}/api/inicis-return`,
-        P_NOTI_URL: `${appUrl}/api/payment/inicis/notify`,
-        P_RETURN_URL: `${appUrl}/payment/callback`,
-        P_CHARSET: 'UTF-8',
-        P_RESERVED: 'twoseq=Y&block_isp=Y',
-
-        version: '1.0',
-        gopaymethod: 'Card',
-        mid: mid,
-        oid: oid,
-        price: item.amount.toString(),
-        timestamp: timestamp,
-        signature: signature,
-        mKey: mKey,
-        use_chkfake: 'Y',
-        currency: 'WON',
-        goodname: item.courses?.title || '온라인 강좌 수강권',
-        buyername: user.name || '구매자',
-        buyertel: user.mobile_phone || '010-0000-0000',
-        buyeremail: user.email || 'user@example.com',
-        returnUrl: `${appUrl}/api/inicis-return`,
-        closeUrl: `${clientOrigin}/payment/close`,
-        popupUrl: `${clientOrigin}/payment/popup`,
-        payViewType: 'overlay',
-        acceptmethod: 'HPP(1):below1000:center:va_receipt',
-      };
-
-      Object.entries(fields).forEach(([key, value]) => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = value;
-        form.appendChild(input);
-      });
-
-      formContainer.appendChild(form);
-      document.body.appendChild(formContainer);
-
-      if ((window as any).INIStdPay && typeof (window as any).INIStdPay.pay === 'function') {
-        (window as any).INIStdPay.pay(formId);
-      } else {
-        form.submit();
-      }
     } catch (err: any) {
-      toast.error(`결제 초기화 실패: ${err.message || '인증 오류'}`);
-    } finally {
-      setIsPaying(false);
+      toast.error(`결제 오류: ${err.message || '결제 승인 프로세스를 불러오지 못했습니다.'}`);
     }
   };
 
@@ -268,7 +151,7 @@ export default function Cart() {
       return;
     }
 
-    setIsPaying(true);
+    setIsBulkPaying(true);
     const loadToast = toast.loading(`${selectedItems.length}개 강좌의 가상 라이선스 승인 프로세스를 수행 중...`);
 
     try {
@@ -350,7 +233,7 @@ export default function Cart() {
       toast.dismiss(loadToast);
       alert(`테스트 결제 승인 오류: ${err.message || '인증/네트워크 세션 세팅 유실'}`);
     } finally {
-      setIsPaying(false);
+      setIsBulkPaying(false);
     }
   };
 
@@ -627,10 +510,10 @@ export default function Cart() {
                         {/* Instant mock payment for instant enrollment */}
                         <Button
                           onClick={handleBulkTestPayment}
-                          disabled={isPaying}
+                          disabled={isPaying || isBulkPaying}
                           className="w-full h-13 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-sm rounded-2xl shadow-md shadow-emerald-50 flex items-center justify-center gap-1.5"
                         >
-                          {isPaying ? (
+                          {isBulkPaying ? (
                             <Loader2 className="w-5 h-5 animate-spin" />
                           ) : (
                             <>
@@ -643,7 +526,7 @@ export default function Cart() {
                         {/* Standard PG payment for the first selected item to avoid layout or complex SDK payload mismatch */}
                         <Button
                           onClick={() => handlePayment(selectedItems[0])}
-                          disabled={isPaying}
+                          disabled={isPaying || isBulkPaying}
                           variant="outline"
                           className="w-full h-11 border-purple-200 hover:bg-purple-50 hover:text-purple-700 text-purple-700 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-1.5"
                         >
