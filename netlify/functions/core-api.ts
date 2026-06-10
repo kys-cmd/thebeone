@@ -1115,13 +1115,60 @@ export const handler: Handler = async (event, context) => {
       }
 
       const config = await getInicisConfig();
-      const tid = order.payment_tid;
+      let tid = order.payment_tid || "";
 
-      // Sandbox check (if TID is mock or we are sandbox testing)
-      const isMockTid = !tid || tid.startsWith("TID-MOCK") || tid.includes("MOCK") || !tid.includes("-") || tid.length < 20;
+      // Dynamically resolve actual TID from payment_logs successfully
+      try {
+        const { data: logData } = await supabaseAdmin
+          .from("payment_logs")
+          .select("raw_response")
+          .eq("order_id", order.id)
+          .eq("status", "SUCCESS")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      if (isMockTid || config.isSandbox) {
-        console.log(`[Refund] Mock / Sandbox bypass refund for OID: ${order.merchant_uid}`);
+        if (logData) {
+          let resObj: any = null;
+          if (logData.raw_response) {
+            try {
+              resObj = typeof logData.raw_response === "string" ? JSON.parse(logData.raw_response) : logData.raw_response;
+            } catch (e) {
+              console.warn("[Refund-TID-Parser] Failed to parse raw_response as JSON:", e);
+            }
+          }
+
+          if (resObj) {
+            const foundTid = resObj.tid || resObj.TID || resObj.AuthTID || (resObj.details && (resObj.details.tid || resObj.details.TID));
+            if (foundTid) {
+              tid = foundTid;
+              console.log(`[Refund] Successfully resolved real Transaction ID (TID) from payment_logs: ${tid}`);
+            }
+          }
+        }
+      } catch (tidFindErr: any) {
+        console.error("[Refund] Failed to lookup dynamic TID from payment_logs database:", tidFindErr.message);
+      }
+
+      // Determine payment method for precise Cancel API specification
+      let paymethod = "Card"; // Default Card fallback
+      if (order.payment_method) {
+        const methodUpper = order.payment_method.toUpperCase();
+        if (methodUpper.includes("CARD") || methodUpper.includes("신용카드")) {
+          paymethod = "Card";
+        } else if (methodUpper.includes("BANK") || methodUpper.includes("계좌")) {
+          paymethod = "Acct";
+        } else if (methodUpper.includes("VBANK") || methodUpper.includes("가상계좌")) {
+          paymethod = "Vacct";
+        } else if (methodUpper.includes("HPP") || methodUpper.includes("휴대폰")) {
+          paymethod = "HPP";
+        }
+      }
+
+      const isMockTid = !tid || tid.startsWith("TID-MOCK") || tid.includes("MOCK") || tid.toLowerCase().includes("mock") || tid.length < 15;
+
+      if (isMockTid) {
+        console.log(`[Refund] Mock / Sandbox bypass refund for OID: ${order.merchant_uid} because resolved TID is mock or absent.`);
         // Proceed with local database and permission revocation, skipping real INICIS REST API since it's a test order
       } else {
         // Real Inicis API request
@@ -1129,7 +1176,6 @@ export const handler: Handler = async (event, context) => {
         const timestamp = getInicisKstTimestamp();
         // PlainText = key + type + paymethod + timestamp + clientIp + mid + tid
         const type = "Refund";
-        const paymethod = "Card"; // Generic Card mapping or from order.payment_method
         const clientIp = "127.0.0.1";
         const plainText = config.signKey + type + paymethod + timestamp + clientIp + config.mid + tid;
         const hashData = crypto.createHash("sha512").update(plainText).digest("hex");
@@ -1145,7 +1191,7 @@ export const handler: Handler = async (event, context) => {
         requestParams.append("hashData", hashData);
 
         try {
-          console.log(`[Refund] Requesting real Inicis cancel V2 at: ${cancelUrl} for TID: ${tid}`);
+          console.log(`[Refund] Requesting real Inicis cancel V2 at: ${cancelUrl} (TID: ${tid}, MID: ${config.mid}, PayMethod: ${paymethod})`);
           const apiResponse = await fetch(cancelUrl, {
             method: "POST",
             headers: {
@@ -1161,20 +1207,20 @@ export const handler: Handler = async (event, context) => {
           try {
             result = JSON.parse(rawText);
           } catch (e) {
-            console.warn("[Refund] Failed parsing json from Inicis response, attempting url decode", e);
+            console.warn("[Refund] Failed parsing json from Inicis response, attempting fallback raw lookup:", e);
           }
 
           const resultCode = result.resultCode || "";
           const resultMsg = result.resultMsg || rawText || "Inicis Response Error";
 
-          // V2 cancel resultCode is typically "00" on success
+          // V2 cancel resultCode is typically "00" or "0000" on success
           if (resultCode !== "00" && resultCode !== "0000") {
             return {
               statusCode: 400,
               headers: responseHeaders,
               body: JSON.stringify({
                 status: "error",
-                message: `이니시스 환불 거부 오류 [코드: ${resultCode}]: ${resultMsg}`
+                message: `이니시스 실시간 거래 취소 거부 오류 [코드: ${resultCode}]: ${resultMsg}`
               })
             };
           }
@@ -1185,7 +1231,7 @@ export const handler: Handler = async (event, context) => {
             headers: responseHeaders,
             body: JSON.stringify({
               status: "error",
-              message: `이니시스 게이트웨이와 통신 중 장애가 발생했습니다: ${fetchErr.message}`
+              message: `이니시스 게이트웨이와 실시간 통신 중 장애가 발생했습니다: ${fetchErr.message}`
             })
           };
         }
@@ -1355,7 +1401,6 @@ export const handler: Handler = async (event, context) => {
 
       const alertPayload = {
         order_id: orderId,
-        merchant_uid: oid || "UNKNOWN_OID",
         status: "FAILED",
         raw_response: JSON.stringify({
           resultCode,
@@ -1363,6 +1408,7 @@ export const handler: Handler = async (event, context) => {
           analysis,
           userEmail,
           courseTitle,
+          merchant_uid: oid || "UNKNOWN_OID",
           system_message: "정밀 진단 레포트 자동 발행 완료"
         }),
         payment_method: "CARD",

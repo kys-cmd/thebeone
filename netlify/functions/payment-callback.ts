@@ -312,17 +312,20 @@ export const handler: Handler = async (event) => {
 
     // D. Logs
     try {
+      const mergedResponse = {
+        ...authResponseData,
+        merchant_uid: oid
+      };
       await supabaseAdmin.from("payment_logs").insert([{
         order_id: orderData.id,
-        merchant_uid: oid,
         status: "SUCCESS",
-        raw_response: JSON.stringify(authResponseData),
+        raw_response: JSON.stringify(mergedResponse),
         payment_method: authResponseData.payMethod || "CARD",
         amount: Number(authResponseData.TotPrice || orderData.amount),
         created_at: new Date().toISOString()
       }]);
-    } catch (logErr) {
-      console.warn("[PAYMENT-CALLBACK] payment_logs log failed:", logErr);
+    } catch (logErr: any) {
+      console.warn("[PAYMENT-CALLBACK] payment_logs log failed:", logErr.message || logErr);
       await writePaymentLog(supabaseAdmin, oid, "SUCCESS", authResponseData);
     }
 
@@ -449,45 +452,56 @@ async function writePaymentLog(
   if (!supabaseAdmin) return;
   try {
     let orderId: string | null = null;
+    let orderAmount = 0;
+    let payMethod = "CARD";
+
     if (oid) {
       const { data: orderData } = await supabaseAdmin
         .from("orders")
-        .select("id")
+        .select("id, amount, payment_method")
         .eq("merchant_uid", oid)
         .maybeSingle();
       if (orderData) {
         orderId = orderData.id;
+        orderAmount = Number(orderData.amount) || 0;
+        if (orderData.payment_method) {
+          payMethod = orderData.payment_method;
+        }
+      }
+    }
+
+    const unifiedResponse = {
+      details: errorOrResponse,
+      api_additionals: additionals,
+      logged_at: new Date().toISOString(),
+      merchant_uid: oid
+    };
+
+    if (errorOrResponse && typeof errorOrResponse === "object") {
+      if (errorOrResponse.TotPrice) {
+        orderAmount = Number(errorOrResponse.TotPrice);
+      } else if (errorOrResponse.amount) {
+        orderAmount = Number(errorOrResponse.amount);
+      }
+      if (errorOrResponse.payMethod) {
+        payMethod = errorOrResponse.payMethod;
+      } else if (errorOrResponse.payment_method) {
+        payMethod = errorOrResponse.payment_method;
       }
     }
 
     const payload: any = {
       order_id: orderId,
-      merchant_uid: oid,
       status: status,
-      raw_response: typeof errorOrResponse === "string" ? errorOrResponse : JSON.stringify(errorOrResponse),
-      raw_data: {
-        status: status,
-        details: errorOrResponse,
-        ...additionals,
-        logged_at: new Date().toISOString()
-      },
+      raw_response: JSON.stringify(unifiedResponse),
+      payment_method: payMethod,
+      amount: orderAmount,
       created_at: new Date().toISOString()
     };
 
     const { error } = await supabaseAdmin.from("payment_logs").insert([payload]);
     if (error) {
-      console.warn("[writePaymentLog] Primary insert failed, executing standard fallback columns:", error.message);
-      const fallbackPayload: any = {
-        merchant_uid: oid,
-        raw_data: {
-          status: status,
-          details: errorOrResponse,
-          ...additionals,
-          logged_at: new Date().toISOString()
-        }
-      };
-      if (orderId) fallbackPayload.order_id = orderId;
-      await supabaseAdmin.from("payment_logs").insert([fallbackPayload]);
+      console.warn("[writePaymentLog] Unified insert failed:", error.message);
     }
   } catch (err: any) {
     console.warn("[writePaymentLog] Skipped bypass:", err.message);
