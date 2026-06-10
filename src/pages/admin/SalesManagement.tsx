@@ -413,23 +413,26 @@ export default function AdminSalesManagement() {
       </Card>
 
       {/* Main Table */}
-      <Card className="rounded-[40px] border-none shadow-sm overflow-hidden">
+      <Card className="rounded-[40px] border-none shadow-sm overflow-hidden bg-white">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-gray-50/50">
-                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">주문 정보</th>
-                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">구매자</th>
-                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">상품(강의)</th>
-                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">결제 금액</th>
-                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 text-center">상태</th>
-                <th className="p-6 text-right border-b border-gray-50">비고</th>
+                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px]">결제일시</th>
+                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px]">주문번호 (Merchant UID)</th>
+                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px]">승인 거래번호 (TID)</th>
+                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px]">승인번호</th>
+                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px]">구매자 (실명+닉네임)</th>
+                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px]">상품(강의) 및 코스 ID</th>
+                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px] text-right">결제 금액</th>
+                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px] text-center">상태</th>
+                <th className="p-4 text-right border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">비고</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 bg-white">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="p-32 text-center">
+                  <td colSpan={9} className="p-24 text-center">
                     <div className="flex flex-col items-center gap-4">
                       <Loader2 className="w-10 h-10 animate-spin text-purple-600" />
                       <span className="text-sm font-black text-gray-400 italic">결제 데이터를 안전하게 동기화 중입니다...</span>
@@ -437,76 +440,89 @@ export default function AdminSalesManagement() {
                   </td>
                 </tr>
               ) : filteredOrders.length > 0 ? (
-                filteredOrders.map((order, idx) => (
-                  <tr key={order.id || idx} className="hover:bg-purple-50/20 transition-colors group">
-                    <td className="p-6">
-                      <div className="flex items-center gap-3">
-                         <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400">
-                           <Calendar className="w-4 h-4" />
-                         </div>
-                         <div>
-                            <div className="text-xs font-black text-gray-900">{format(new Date(order.created_at), 'yyyy-MM-dd', { locale: ko })}</div>
-                            <div className="text-[10px] text-gray-400 font-bold italic mt-0.5">{format(new Date(order.created_at), 'HH:mm:ss', { locale: ko })}</div>
-                         </div>
-                      </div>
-                    </td>
-                     <td className="p-6">
-                      <div className="flex items-center gap-3">
-                         <div className="w-10 h-10 bg-purple-100 rounded-2xl flex items-center justify-center text-purple-600 font-black text-xs shadow-sm">
-                           {(order.profile?.nickname || order.profile?.name || '익').substring(0, 1)}
-                         </div>
-                         <div>
-                            <div className="text-xs font-black text-gray-900 group-hover:text-purple-600 transition-colors">{order.profile?.nickname || order.profile?.name || '익명'}</div>
-                            <div className="text-[10px] text-gray-400 font-bold flex items-center gap-1 text-gray-400">
-                              <Mail className="w-2.5 h-2.5" />
-                              {order.profile?.email || '-'}
-                            </div>
-                         </div>
-                      </div>
-                    </td>
-                    <td className="p-6">
-                       <div className="flex items-center gap-4">
-                          <div className="w-14 h-10 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 flex-shrink-0">
-                            {order.course?.thumbnail ? (
-                              <img src={order.course.thumbnail} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-200">
-                                <BookOpen className="w-4 h-4" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="max-w-[240px]">
-                             <p className="text-xs font-black text-gray-900 truncate leading-tight mb-1">{order.course?.title || '삭제된 강의 정보'}</p>
-                             <p className="text-[10px] text-gray-400 font-bold">Course ID: {order.id.split('-')[0]}</p>
-                          </div>
-                       </div>
-                    </td>
-                    <td className="p-6">
-                       <div className="text-right">
-                          <span className="text-sm font-black text-gray-900 tracking-tighter">₩{(order.amount || 0).toLocaleString()}</span>
-                          <p className="text-[10px] text-gray-400 font-bold italic mt-0.5">VAT 포함</p>
-                       </div>
-                    </td>
-                    <td className="p-6">
-                       <div className="flex justify-center">
-                          {getOrderStatusBadge(order.status)}
-                       </div>
-                    </td>
-                    <td className="p-6 text-right">
-                       <div className="flex gap-1.5 justify-end flex-wrap max-w-[280px] ml-auto">
+                filteredOrders.map((order, idx) => {
+                  // Parse tid and approval code from logs
+                  let tid = '-';
+                  let applNum = '-';
+                  if (order.logs && order.logs.length > 0) {
+                    const successLog = order.logs.find((l: any) => l.status === 'SUCCESS') || order.logs[0];
+                    if (successLog && successLog.raw_response) {
+                      try {
+                        const parsed = JSON.parse(successLog.raw_response);
+                        const rawObj = parsed.details || parsed;
+                        tid = rawObj.tid || rawObj.TID || rawObj.AuthTID || rawObj.payment_tid || '-';
+                        applNum = rawObj.applNum || rawObj.applNo || rawObj.AuthCode || rawObj.applCode || '-';
+                      } catch (e) {
+                        // ignore parsing error
+                      }
+                    }
+                  }
+
+                  // purchaser formatting: name + nickname
+                  const realName = order.profile?.name || '';
+                  const nickName = order.profile?.nickname || '';
+                  const email = order.profile?.email || '-';
+                  const hasBoth = realName && nickName;
+                  const purchaserText = hasBoth 
+                    ? `${realName}(${nickName})` 
+                    : (realName || nickName || '익명');
+
+                  // Course ID formatting
+                  const courseId = order.course_id || '-';
+                  const courseTitle = order.course?.title || '삭제된 강의 정보';
+
+                  return (
+                    <tr key={order.id || idx} className="hover:bg-purple-50/20 transition-colors group">
+                      <td className="p-4 whitespace-nowrap">
+                        <div className="font-bold text-gray-900">{format(new Date(order.created_at), 'yyyy-MM-dd', { locale: ko })}</div>
+                        <div className="text-[10px] text-gray-400 italic mt-0.5">{format(new Date(order.created_at), 'HH:mm:ss', { locale: ko })}</div>
+                      </td>
+                      <td className="p-4 font-mono font-medium text-gray-600 break-all max-w-[150px]">
+                        {order.merchant_uid || order.id.split('-')[0]}
+                      </td>
+                      <td className="p-4 font-mono text-gray-500 font-medium break-all max-w-[180px]">
+                        {tid}
+                      </td>
+                      <td className="p-4 font-mono text-gray-500 font-bold">
+                        {applNum}
+                      </td>
+                      <td className="p-4">
+                        <div className="font-extrabold text-gray-900">{purchaserText}</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5 font-medium flex items-center gap-1">
+                          <Mail className="w-2.5 h-2.5" />
+                          {email}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="font-extrabold text-gray-900 max-w-[200px] truncate" title={courseTitle}>
+                          {courseTitle}
+                        </div>
+                        <div className="text-[10px] text-gray-400 mt-0.5 font-mono">
+                          코스 ID: {courseId}
+                        </div>
+                      </td>
+                      <td className="p-4 text-right whitespace-nowrap">
+                        <div className="font-extrabold text-gray-900 tracking-tighter">₩{(order.amount || 0).toLocaleString()}</div>
+                        <div className="text-[10px] text-gray-400 italic font-medium mt-0.5">{order.payment_method || 'CARD'}</div>
+                      </td>
+                      <td className="p-4 text-center whitespace-nowrap">
+                        {getOrderStatusBadge(order.status)}
+                      </td>
+                      <td className="p-4 text-right">
+                        <div className="flex gap-1 justify-end flex-wrap max-w-[200px] ml-auto">
                           
-                          {/* 이니시스 실시간 거래 환불 연계 버튼 */}
+                          {/* 환불 버튼 */}
                           {(order.status === 'PAID' || order.status === 'COMPLETED') && (
                             <Button 
                               onClick={() => handleRefundOrder(order.id)}
                               disabled={isProcessing !== null}
                               variant="outline"
-                              className="h-8 px-3 text-[10px] font-black rounded-lg text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 shrink-0 gap-1 shadow-sm cursor-pointer"
+                              className="h-7 px-2 text-[9px] font-black rounded-lg text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 shrink-0 gap-1 shadow-xs cursor-pointer py-0"
                             >
                               {isProcessing === order.id + '_refund' ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <Loader2 className="w-3 h-3 animate-spin" />
                               ) : (
-                                <RefreshCw className="w-3.5 h-3.5" />
+                                <RefreshCw className="w-3 h-3" />
                               )}
                               환불
                             </Button>
@@ -515,49 +531,35 @@ export default function AdminSalesManagement() {
                             onClick={() => handleReprocessOrder(order.id)}
                             disabled={isProcessing !== null}
                             variant="outline"
-                            className="h-8 px-3 text-[10px] font-black rounded-lg text-gray-600 border-gray-100 hover:bg-gray-50 shrink-0 gap-1 shadow-sm"
+                            className="h-7 px-2 text-[9px] font-black rounded-lg text-gray-600 border-gray-200 hover:bg-gray-50 shrink-0 gap-0.5 shadow-xs py-0"
                           >
-                            {isProcessing === order.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <RefreshCw className="w-3 h-3" />
-                            )}
-                            주문 재처리
+                            재처리
                           </Button>
                           
                           <Button 
                             onClick={() => handleRegrantPermission(order.user_id, order.course_id, order.id)}
                             disabled={isProcessing !== null}
                             variant="outline"
-                            className="h-8 px-3 text-[10px] font-black rounded-lg text-amber-600 border-amber-100 hover:bg-amber-50 shrink-0 gap-1 shadow-sm"
+                            className="h-7 px-2 text-[9px] font-black rounded-lg text-amber-600 border-amber-100 hover:bg-amber-50 shrink-0 gap-0.5 shadow-xs py-0"
                           >
-                            {isProcessing === order.id + '_regrant' ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <ShieldCheck className="w-3 h-3" />
-                            )}
                             권한부여
                           </Button>
                           <Button 
                             onClick={() => handleDeleteOrder(order.id)}
                             disabled={isProcessing !== null}
                             variant="outline"
-                            className="h-8 px-3 text-[10px] font-black rounded-lg text-rose-600 border-rose-100 hover:bg-rose-50 shrink-0 gap-1 shadow-sm"
+                            className="h-7 px-2 text-[9px] font-black rounded-lg text-rose-600 border-rose-100 hover:bg-rose-50 shrink-0 gap-0.5 shadow-xs py-0"
                           >
-                            {isProcessing === order.id + '_delete' ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-3 h-3" />
-                            )}
                             삭제
                           </Button>
-                       </div>
-                    </td>
-                  </tr>
-                ))
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan={6} className="p-32 text-center">
+                  <td colSpan={9} className="p-24 text-center">
                     <div className="flex flex-col items-center gap-2">
                        <CreditCard className="w-12 h-12 text-gray-100 mb-2" />
                        <p className="text-sm font-black text-gray-400">조회된 결제 내역이 없습니다.</p>

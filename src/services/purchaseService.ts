@@ -82,7 +82,7 @@ export const purchaseService = {
   async getAllOrders(limit: number = 50) {
     const { data: orders, error: ordersError } = await supabase
       .from('orders')
-      .select('id, amount, status, created_at, user_id, course_id')
+      .select('id, amount, status, created_at, user_id, course_id, merchant_uid, payment_method')
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -91,19 +91,32 @@ export const purchaseService = {
 
     const userIds = [...new Set(orders.map(o => o.user_id).filter(Boolean))];
     const courseIds = [...new Set(orders.map(o => o.course_id).filter(Boolean))];
+    const orderIds = orders.map(o => o.id);
 
-    const [profilesRes, coursesRes] = await Promise.all([
+    const [profilesRes, coursesRes, logsRes] = await Promise.all([
       supabase.from('profiles').select('id, name, nickname, email').in('id', userIds),
-      supabase.from('courses').select('id, title, thumbnail').in('id', courseIds)
+      supabase.from('courses').select('id, title, thumbnail').in('id', courseIds),
+      supabase.from('payment_logs').select('order_id, status, raw_response, payment_method, amount, created_at').in('order_id', orderIds)
     ]);
 
     const profilesMap = new Map(profilesRes.data?.map(p => [p.id, p]));
     const coursesMap = new Map(coursesRes.data?.map(c => [c.id, c]));
 
+    const logsMap = new Map<string, any[]>();
+    if (logsRes.data) {
+      for (const log of logsRes.data) {
+        if (!logsMap.has(log.order_id)) {
+          logsMap.set(log.order_id, []);
+        }
+        logsMap.get(log.order_id)?.push(log);
+      }
+    }
+
     return orders.map(order => ({
       ...order,
       profile: profilesMap.get(order.user_id),
-      course: coursesMap.get(order.course_id)
+      course: coursesMap.get(order.course_id),
+      logs: logsMap.get(order.id) || []
     }));
   },
 
