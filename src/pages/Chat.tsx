@@ -1375,7 +1375,7 @@ export default function ChatPage() {
     if (urls.length > 0) {
       return (
         <div className="flex flex-col gap-1.5 text-left">
-          <p className="text-slate-800 leading-normal text-xs whitespace-pre-wrap">
+          <p className="text-slate-800 leading-normal text-sm whitespace-pre-wrap">
             {parts.map((part, index) => {
               if (urlRegex.test(part) || part.startsWith('http://') || part.startsWith('https://')) {
                 return (
@@ -1401,7 +1401,7 @@ export default function ChatPage() {
     }
 
     // 일반 텍스트
-    return <p className="text-slate-800 leading-normal text-xs whitespace-pre-wrap text-left">{text}</p>;
+    return <p className="text-slate-800 leading-normal text-sm whitespace-pre-wrap text-left">{text}</p>;
   };
 
   return (
@@ -1819,7 +1819,7 @@ export default function ChatPage() {
                             </div>
 
                             <div className="relative group/bubble flex items-center gap-1">
-                              <div className={`p-3 rounded-2xl text-xs font-medium shadow-sm leading-relaxed overflow-hidden ${
+                              <div className={`p-3 rounded-2xl text-sm font-medium shadow-sm leading-relaxed overflow-hidden ${
                                 isMine 
                                 ? 'bg-purple-650 text-white rounded-tr-none text-left' 
                                 : 'bg-white text-slate-800 border border-slate-100 rounded-tl-none'
