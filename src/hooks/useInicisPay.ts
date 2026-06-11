@@ -9,6 +9,7 @@ interface InicisPayParams {
   userEmail: string;
   userName: string;
   userPhone?: string;
+  mileageUsed?: number;
 }
 
 export function useInicisPay() {
@@ -88,7 +89,8 @@ export function useInicisPay() {
           timestamp,
           userId: params.userId,
           courseId: params.courseId,
-          orderName: params.courseName
+          orderName: params.courseName,
+          mileageUsed: params.mileageUsed || 0
         })
       });
 

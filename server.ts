@@ -191,7 +191,7 @@ async function startServer() {
   // 1. Generate Signature & Pre-insert order (Express PORT)
   app.post("/api/init-pay", async (req, res) => {
     try {
-      const { price, oid, timestamp, userId, courseId, orderName } = req.body;
+      const { price, oid, timestamp, userId, courseId, orderName, mileageUsed } = req.body;
 
       if (!price || !oid || !timestamp) {
         return res.status(400).json({ status: "error", message: "Missing price, oid, or timestamp" });
@@ -223,9 +223,16 @@ async function startServer() {
               status: "PENDING",
               order_name: orderName || "온라인 강좌 수강권 구매",
               merchant_uid: oid,
+              mileage_used: Number(mileageUsed) || 0,
               created_at: new Date().toISOString()
             }]);
-            console.log(`[INIT-PAY] Pending order created. OID: ${oid}`);
+            console.log(`[INIT-PAY] Pending order created. OID: ${oid}, Price: ${price}, Mileage: ${mileageUsed}`);
+          } else {
+            await supabaseAdmin.from("orders").update({
+              amount: Number(price),
+              mileage_used: Number(mileageUsed) || 0
+            }).eq("merchant_uid", oid);
+            console.log(`[INIT-PAY] Existing order updated. OID: ${oid}, Price: ${price}, Mileage: ${mileageUsed}`);
           }
         } catch (dbErr: any) {
           console.error("[INIT-PAY] Database order placement failed (ignored):", dbErr.message);
@@ -573,6 +580,36 @@ async function startServer() {
 
       // 1) Update order to COMPLETED standard state transition using state machine
       await handleOrderStateTransition(finalOid, "COMPLETED", authResponseData, Number(authResponseData.TotPrice || orderData.amount));
+
+      // 1.5) Deduct user mileage automatically after successful state transition
+      try {
+        const userId = orderData.user_id;
+        const mileageUsed = Number(orderData.mileage_used || 0);
+        if (mileageUsed > 0 && userId) {
+          const { data: profile, error: pError } = await supabaseAdmin
+            .from("profiles")
+            .select("mileage")
+            .eq("id", userId)
+            .single();
+
+          if (!pError && profile) {
+            const currentMileage = Number(profile.mileage) || 0;
+            const newMileage = Math.max(0, currentMileage - mileageUsed);
+            const { error: updateProfileErr } = await supabaseAdmin
+              .from("profiles")
+              .update({ mileage: newMileage })
+              .eq("id", userId);
+            
+            if (updateProfileErr) {
+              console.error(`[INICIS-RETURN] Mileage deduction profile update error:`, updateProfileErr);
+            } else {
+              console.log(`[INICIS-RETURN] Auto spent mileage successfully. User ${userId} spent ${mileageUsed} P. Next mileage totals ${newMileage} P.`);
+            }
+          }
+        }
+      } catch (mileageErr: any) {
+        console.error("[INICIS-RETURN] Crucial mileage update exception bypass:", mileageErr.message || mileageErr);
+      }
 
       // 2) payment_logs write
       try {

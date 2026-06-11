@@ -32,7 +32,7 @@ export default function Cart() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('mileage')
+        .select('*')
         .eq('id', user.id)
         .single();
       if (!error && data) {
@@ -128,15 +128,21 @@ export default function Cart() {
       return;
     }
 
+    // 마일리지 할인 차감액 계산
+    const itemAmount = Number(item.amount || item.price || 0);
+    const mileageToUse = Math.min(appliedMileage, itemAmount);
+    const priceToPay = Math.max(0, itemAmount - mileageToUse);
+
     try {
       await requestPayment({
-        price: item.amount,
+        price: priceToPay,
         courseId: item.course_id,
         courseName: item.courses?.title || '온라인 교육 강좌 수강권',
         userId: user.id,
         userEmail: user.email || '',
         userName: user.name || '구매자',
-        userPhone: user.mobile_phone || '010-0000-0000'
+        userPhone: user.mobile_phone || '010-0000-0000',
+        mileageUsed: mileageToUse
       });
     } catch (err: any) {
       toast.error(`결제 오류: ${err.message || '결제 승인 프로세스를 불러오지 못했습니다.'}`);

@@ -144,7 +144,7 @@ export default function MyPage() {
       // Fetch latest user profile to get fresh mileage from profiles table
       const { data: profile, error: pErr } = await supabase
         .from('profiles')
-        .select('mileage')
+        .select('*')
         .eq('id', user.id)
         .single();
       if (!pErr && profile) {

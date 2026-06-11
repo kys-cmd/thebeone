@@ -277,19 +277,38 @@ export function PostCard({
 
         {/* 2. Title & Partially truncated body text */}
         <div 
-          className="cursor-pointer group select-text mt-3 text-left" 
+          className="cursor-pointer group select-text mt-3 text-left flex gap-4 justify-between items-start" 
           onClick={() => onCardClick?.(post)}
         >
-          {/* Post Title */}
-          <h3 className="text-base sm:text-md font-black text-slate-900 tracking-tight leading-snug group-hover:text-purple-705 transition-colors">
-            {post.title || (cleanBodyText ? cleanBodyText.substring(0, 35) + '...' : '새로운 이야기')}
-          </h3>
+          <div className="flex-1 min-w-0">
+            {/* Post Title */}
+            <h3 className="text-base sm:text-md font-black text-slate-900 tracking-tight leading-snug group-hover:text-purple-705 transition-colors">
+              {post.title || (cleanBodyText ? cleanBodyText.substring(0, 35) + '...' : '새로운 이야기')}
+            </h3>
 
-          {/* clamped content description */}
-          {cleanBodyText && (
-            <p className="text-[12px] sm:text-[13px] text-slate-600 font-medium leading-relaxed mt-2 line-clamp-3 select-text">
-              {cleanBodyText}
-            </p>
+            {/* clamped content description */}
+            {cleanBodyText && (
+              <p className="text-[12px] sm:text-[13px] text-slate-600 font-medium leading-relaxed mt-2 line-clamp-3 select-text">
+                {cleanBodyText}
+              </p>
+            )}
+          </div>
+
+          {/* Right side Thumbnail image if there is any image */}
+          {post.image_urls && post.image_urls.length > 0 && (
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden shrink-0 border border-slate-150 bg-slate-50 shadow-xs relative">
+              <img 
+                src={post.image_urls[0]} 
+                alt="thumbnail" 
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
+                referrerPolicy="no-referrer"
+              />
+              {post.image_urls.length > 1 && (
+                <div className="absolute bottom-1 right-1 bg-black/60 text-white font-black text-[9px] px-1 rounded-md py-0.5 scale-90 border border-white/10 select-none">
+                  +{post.image_urls.length - 1}
+                </div>
+              )}
+            </div>
           )}
         </div>
 

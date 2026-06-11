@@ -1415,12 +1415,12 @@ export default function ChatPage() {
             {/* Header */}
             <div className="p-5 border-b border-[#2D1D34] flex items-center justify-between shrink-0 bg-[#160E1A]">
               <div className="flex items-center gap-2.5 text-left">
-                <div className="w-8 h-8 rounded-xl bg-purple-600 flex items-center justify-center shadow-lg">
-                  <Sparkles className="w-4.5 h-4.5 text-white" />
+                <div className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center shadow-lg">
+                  <Sparkles className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="font-extrabold text-sm tracking-tight leading-none text-white">Beone Chat</h2>
-                  <span className="text-[9px] font-bold text-purple-300 block mt-1 leading-none">비원아카데미 채팅</span>
+                  <h2 className="font-extrabold text-base tracking-tight leading-none text-white">Beone Chat</h2>
+                  <span className="text-xs font-bold text-purple-300 block mt-1 leading-none">비원아카데미 채팅</span>
                 </div>
               </div>
               <div className="relative group">
@@ -1433,13 +1433,13 @@ export default function ChatPage() {
               {/* 1. PUBLIC CHANNELS */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between px-3 pb-1">
-                  <span className="text-[10px] font-black tracking-wider text-purple-300/50 uppercase">📢 공개 소통방 ({publicRooms.length})</span>
+                  <span className="text-xs font-black tracking-wider text-purple-300/60 uppercase">📢 공개 소통방 ({publicRooms.length})</span>
                   <button 
                      onClick={() => { setCreateType('public'); setIsCreateModalOpen(true); }}
                      className="p-1 hover:bg-white/10 rounded-md text-purple-300 hover:text-white transition-all"
                      title="공개 채널 생성"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-4 h-4" />
                   </button>
                 </div>
                 <div className="space-y-0.5">
@@ -1450,28 +1450,28 @@ export default function ChatPage() {
                       <div 
                         key={room.id}
                         onClick={() => setSearchParams({ room: room.id })}
-                        className={`group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all ${
+                        className={`group flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold cursor-pointer transition-all ${
                           isActive 
                             ? 'bg-purple-600 text-white font-extrabold shadow' 
                             : 'text-purple-100/85 hover:bg-white/5 hover:text-white'
                         }`}
                       >
                         <div className="flex items-center gap-2 truncate">
-                          <Hash className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-purple-300/40'}`} />
+                          <Hash className={`w-4 h-4 ${isActive ? 'text-white' : 'text-purple-300/40'}`} />
                           <span className="truncate">{getRoomDisplayName(room)}</span>
                         </div>
                         
                         {/* 상태 뱃지 */}
                         {!isCurJoined ? (
-                          <span className="text-[9px] font-bold bg-white/10 text-purple-200 px-1.5 py-0.5 rounded-md group-hover:bg-purple-500 group-hover:text-white transition-all scale-95 uppercase">미참여</span>
+                          <span className="text-xs font-bold bg-white/10 text-purple-200 px-2 py-0.5 rounded-md group-hover:bg-purple-500 group-hover:text-white transition-all scale-95 uppercase">미참여</span>
                         ) : (
-                          <span className="text-[9px] font-bold text-purple-300/50">{room.memberCount || 1}명</span>
+                          <span className="text-xs font-bold text-purple-300/50">{room.memberCount || 1}명</span>
                         )}
                       </div>
                     );
                   })}
                   {publicRooms.length === 0 && (
-                    <span className="text-[9px] text-purple-300/30 pl-3 block py-1">조건에 만족하는 공개 채널이 없습니다.</span>
+                    <span className="text-xs text-purple-300/30 pl-3 block py-1">조건에 만족하는 공개 채널이 없습니다.</span>
                   )}
                 </div>
               </div>
@@ -1479,13 +1479,13 @@ export default function ChatPage() {
               {/* 2. PRIVATE GROUPS */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between px-3 pb-1">
-                  <span className="text-[10px] font-black tracking-wider text-purple-300/50 uppercase">🔒 비공개 소통방 ({privateRooms.length})</span>
+                  <span className="text-xs font-black tracking-wider text-purple-300/60 uppercase">🔒 비공개 소통방 ({privateRooms.length})</span>
                   <button 
                     onClick={() => { setCreateType('private'); setIsCreateModalOpen(true); }}
                     className="p-1 hover:bg-white/10 rounded-md text-purple-300 hover:text-white transition-all"
                     title="비공개 협업방 생성"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-4 h-4" />
                   </button>
                 </div>
                 <div className="space-y-0.5">
@@ -1495,22 +1495,22 @@ export default function ChatPage() {
                       <div 
                         key={room.id}
                         onClick={() => setSearchParams({ room: room.id })}
-                        className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all ${
+                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold cursor-pointer transition-all ${
                           isActive 
                           ? 'bg-purple-600 text-white font-extrabold shadow' 
                           : 'text-purple-100/85 hover:bg-white/5 hover:text-white'
                         }`}
                       >
                         <div className="flex items-center gap-2 truncate">
-                          <Lock className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-purple-300/40'}`} />
+                          <Lock className={`w-4 h-4 ${isActive ? 'text-white' : 'text-purple-300/40'}`} />
                           <span className="truncate">{getRoomDisplayName(room)}</span>
                         </div>
-                        <span className="text-[9px] font-bold text-purple-300/50">{room.memberCount || 1}명</span>
+                        <span className="text-xs font-bold text-purple-300/50">{room.memberCount || 1}명</span>
                       </div>
                     );
                   })}
                   {privateRooms.length === 0 && (
-                    <span className="text-[9px] text-purple-300/30 pl-3 block py-1">소속된 비공개방이 없습니다.</span>
+                    <span className="text-xs text-purple-300/30 pl-3 block py-1">소속된 비공개방이 없습니다.</span>
                   )}
                 </div>
               </div>
@@ -1518,13 +1518,13 @@ export default function ChatPage() {
               {/* 3. DIRECT MESSAGES */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between px-3 pb-1">
-                  <span className="text-[10px] font-black tracking-wider text-purple-300/50 uppercase">👤 1:1 대화방 ({dmRooms.length})</span>
+                  <span className="text-xs font-black tracking-wider text-purple-300/60 uppercase">👤 1:1 대화방 ({dmRooms.length})</span>
                   <button 
                     onClick={() => { setCreateType('dm'); setIsCreateModalOpen(true); }}
                     className="p-1 hover:bg-white/10 rounded-md text-purple-300 hover:text-white transition-all"
                     title="1:1 소통 매칭"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="w-4 h-4" />
                   </button>
                 </div>
                 <div className="space-y-0.5">
@@ -1534,21 +1534,21 @@ export default function ChatPage() {
                       <div 
                         key={room.id}
                         onClick={() => setSearchParams({ room: room.id })}
-                        className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all ${
+                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold cursor-pointer transition-all ${
                           isActive 
                           ? 'bg-purple-600 text-white font-extrabold shadow' 
                           : 'text-purple-100/85 hover:bg-white/5 hover:text-white'
                         }`}
                       >
                         <div className="flex items-center gap-2 truncate">
-                          <Users className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-purple-300/40'}`} />
+                          <Users className={`w-4 h-4 ${isActive ? 'text-white' : 'text-purple-300/40'}`} />
                           <span className="truncate">{getRoomDisplayName(room)}</span>
                         </div>
                       </div>
                     );
                   })}
                   {dmRooms.length === 0 && (
-                    <span className="text-[9px] text-purple-300/30 pl-3 block py-1">1:1 소통 전력이 없습니다.</span>
+                    <span className="text-xs text-purple-300/30 pl-3 block py-1">1:1 소통 전력이 없습니다.</span>
                   )}
                 </div>
               </div>
@@ -1557,17 +1557,17 @@ export default function ChatPage() {
             {/* Compact User bottom card */}
             <div className="p-4 bg-[#140D17] border-t border-[#2D1D34] shrink-0 text-left flex items-center justify-between gap-2.5">
               <div className="flex items-center gap-2.5 min-w-0">
-                <Avatar className="w-9 h-9 border border-purple-500/20">
+                <Avatar className="w-10 h-10 border border-purple-500/20">
                   <AvatarImage src={user.avatar_url || undefined} />
-                  <AvatarFallback className="bg-purple-600 text-white font-black text-xs">{(user.nickname || user.name || 'U')[0]}</AvatarFallback>
+                  <AvatarFallback className="bg-purple-600 text-white font-black text-sm">{(user.nickname || user.name || 'U')[0]}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 leading-tight">
-                  <h4 className="font-extrabold text-xs text-slate-100 truncate">{user.nickname || user.name || '본인'}</h4>
-                  <p className="text-[9px] text-slate-400 font-bold tracking-tight truncate mt-0.5">접속 상태: 온라인</p>
+                  <h4 className="font-extrabold text-sm text-slate-100 truncate">{user.nickname || user.name || '본인'}</h4>
+                  <p className="text-xs text-slate-400 font-bold tracking-tight truncate mt-0.5">접속 상태: 온라인</p>
                 </div>
               </div>
               <Link to="/" className="p-1.5 hover:bg-white/5 rounded-lg text-purple-300 hover:text-white transition-colors" title="웹사이트 나가기">
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-4.5 h-4.5" />
               </Link>
             </div>
           </div>
