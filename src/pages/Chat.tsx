@@ -1411,8 +1411,7 @@ export default function ChatPage() {
         {/* ===================================
             1. LEFT WORKSPACE SIDEBAR (Eggplant/Slate Black)
             =================================== */}
-        {!isPopup && (
-          <div className="hidden lg:flex w-72 bg-[#1F1523] text-white flex flex-col shrink-0 border-r border-[#2D1D34] overflow-hidden">
+        <div className={`${activeRoom ? 'hidden md:flex' : 'flex'} w-full md:w-72 bg-[#1F1523] text-white flex-col shrink-0 border-r border-[#2D1D34] overflow-hidden`}>
             {/* Header */}
             <div className="p-5 border-b border-[#2D1D34] flex items-center justify-between shrink-0 bg-[#160E1A]">
               <div className="flex items-center gap-2.5 text-left">
@@ -1572,25 +1571,35 @@ export default function ChatPage() {
               </Link>
             </div>
           </div>
-        )}
 
         {/* ===================================
             2. CENTRAL MESSAGES FEED FRAME
             =================================== */}
-        <div className="flex-grow flex flex-col bg-[#FDFDFD] overflow-hidden">
+        <div className={`${activeRoom ? 'flex' : 'hidden md:flex'} flex-grow flex flex-col bg-[#FDFDFD] overflow-hidden`}>
           
           {activeRoom ? (
             <>
               {/* TOP HUB BAR */}
               <div className="px-4 sm:px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between shrink-0 text-left">
-                <div className="min-w-0 flex items-center gap-3">
+                <div className="min-w-0 flex items-center gap-2">
+                  {/* 뒤로가기 버튼 (모바일 전용) */}
+                  <Button
+                    onClick={() => setSearchParams({})}
+                    variant="ghost"
+                    size="icon"
+                    className="md:hidden w-10 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 shrink-0 text-slate-700 border-none transition-all flex items-center justify-center mr-1"
+                    title="대화 목록으로 돌아가기"
+                  >
+                    <ArrowLeft className="w-5 h-5 text-slate-600" />
+                  </Button>
+
                   {/* Mobile Hamburger toggle */}
                   {!isPopup && (
                     <Button
                       onClick={() => setIsMobileListOpen(true)}
                       variant="ghost"
                       size="icon"
-                      className="lg:hidden w-10 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 shrink-0 text-slate-700 border-none transition-all"
+                      className="hidden lg:hidden w-10 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 shrink-0 text-slate-700 border-none transition-all"
                     >
                       <Menu className="w-5 h-5 text-slate-600" />
                     </Button>
@@ -2228,17 +2237,23 @@ export default function ChatPage() {
                 <MessageSquare className="w-10 h-10 text-purple-600" />
               </div>
               <div className="space-y-2 max-w-sm">
-                <h3 className="text-lg font-black tracking-tight text-gray-950">개설된 소통 채팅방이 없습니다</h3>
+                <h3 className="text-lg font-black tracking-tight text-gray-950">
+                  {rooms.length > 0 ? '대화를 선택해 주세요' : '개설된 소통 채팅방이 없습니다'}
+                </h3>
                 <p className="text-xs text-slate-400 font-semibold leading-relaxed">
-                  좌측 메인 바의 '+' 버튼을 클릭하시어 신규 공개/비공개 채팅 또는 1:1 대화방을 개설해 보세요!
+                  {rooms.length > 0 
+                    ? '왼쪽 대화 리스트에서 원하는 채팅방을 클릭하여 실시간 소통을 시작해 보세요!' 
+                    : '좌측 메인 바의 \'+\' 버튼을 클릭하시어 신규 공개/비공개 채팅 또는 1:1 대화방을 개설해 보세요!'}
                 </p>
               </div>
-              <Button
-                onClick={() => { setCreateType('public'); setIsCreateModalOpen(true); }}
-                className="bg-purple-600 hover:bg-purple-700 h-11 px-6 rounded-2xl font-black text-xs text-white"
-              >
-                첫 소통 채팅방 개설하기
-              </Button>
+              {rooms.length === 0 && (
+                <Button
+                  onClick={() => { setCreateType('public'); setIsCreateModalOpen(true); }}
+                  className="bg-purple-600 hover:bg-purple-700 h-11 px-6 rounded-2xl font-black text-xs text-white"
+                >
+                  첫 소통 채팅방 개설하기
+                </Button>
+              )}
             </div>
           )}
         </div>
