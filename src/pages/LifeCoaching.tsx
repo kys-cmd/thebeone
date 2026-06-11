@@ -30,7 +30,7 @@ export default function LifeCoaching() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
         </div>
       ) : htmlContent && htmlContent.replace(/<[^>]*>?/gm, '').trim() !== '' ? (
-        <div dangerouslySetInnerHTML={{ __html: htmlContent }} className="container mx-auto px-4 py-8" />
+        <div dangerouslySetInnerHTML={{ __html: htmlContent }} className="container mx-auto px-4 py-8 font-sans antialiased text-rendering-optimizeLegibility" />
       ) : (
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] px-4">
           <h1 className="text-4xl font-black text-gray-900 mb-4">라이프코칭</h1>

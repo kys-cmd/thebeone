@@ -278,11 +278,11 @@ export default function NoticePage() {
                                   {/* Real editor content rendering */}
                                   {notice.content && (notice.content.includes('<p>') || notice.content.includes('<h') || notice.content.includes('<div') || notice.content.includes('<ul') || notice.content.includes('<ol') || notice.content.includes('<img') || notice.content.includes('<span') || notice.content.includes('<video')) ? (
                                     <div 
-                                      className="editor-content select-text"
+                                      className="editor-content select-text font-sans antialiased text-rendering-optimizeLegibility"
                                       dangerouslySetInnerHTML={{ __html: notice.content }}
                                     />
                                   ) : (
-                                    <p className="whitespace-pre-wrap select-text text-sm text-slate-700 leading-relaxed font-semibold">
+                                    <p className="whitespace-pre-wrap select-text text-sm text-slate-700 leading-relaxed font-semibold font-sans">
                                       {notice.content}
                                     </p>
                                   )}

@@ -197,6 +197,15 @@ async function startServer() {
         return res.status(400).json({ status: "error", message: "Missing price, oid, or timestamp" });
       }
 
+      // Log Payment Init Request
+      await writePaymentApiLog({
+        merchant_uid: oid,
+        type: "INIT_PAY_REQ",
+        api_url: "/api/init-pay",
+        request_data: req.body,
+        status: "SUCCESS"
+      });
+
       // Pre-insert order into Supabase
       if (supabaseAdmin && userId && courseId) {
         try {
@@ -220,6 +229,16 @@ async function startServer() {
           }
         } catch (dbErr: any) {
           console.error("[INIT-PAY] Database order placement failed (ignored):", dbErr.message);
+          // Log DB Pre-insert Error in communication flow
+          await writePaymentApiLog({
+            merchant_uid: oid,
+            type: "ERROR_LOG",
+            api_url: "/api/init-pay (DB-Preinsert)",
+            request_data: req.body,
+            status: "FAILED",
+            error_code: "DB_PREINSERT_ERROR",
+            error_message: dbErr.message
+          });
         }
       }
 
@@ -227,7 +246,7 @@ async function startServer() {
       const signature = generateInicisSignature(config.mid, config.signKey, oid, Number(price), timestamp);
       const mKey = crypto.createHash("sha256").update(config.signKey).digest("hex");
 
-      return res.json({
+      const responsePayload = {
         status: "success",
         signature,
         mKey,
@@ -236,9 +255,31 @@ async function startServer() {
         price,
         timestamp,
         isSandbox: config.isSandbox,
+      };
+
+      // Log Payment Init Response
+      await writePaymentApiLog({
+        merchant_uid: oid,
+        type: "INIT_PAY_RES",
+        api_url: "/api/init-pay",
+        request_data: req.body,
+        response_data: responsePayload,
+        status: "SUCCESS"
       });
+
+      return res.json(responsePayload);
     } catch (error: any) {
       console.error("[INIT-PAY] API Error:", error);
+      // Log Payment Init Failure
+      await writePaymentApiLog({
+        merchant_uid: req.body?.oid || null,
+        type: "ERROR_LOG",
+        api_url: "/api/init-pay",
+        request_data: req.body,
+        status: "FAILED",
+        error_code: "INIT_PAY_EXCEPTION",
+        error_message: error.message || "Internal Server Error"
+      });
       return res.status(500).json({ status: "error", message: error.message || "Internal Server Error" });
     }
   });
@@ -321,6 +362,18 @@ async function startServer() {
     // A. Authentication phase validation
     if (resultCode !== "0000" || !authToken || !authUrl) {
       console.error(`[INICIS-RETURN] Authentication failed. Code: ${resultCode}, Msg: ${resultMsg}`);
+      
+      // Log Authentication Failure
+      await writePaymentApiLog({
+        merchant_uid: finalOid || null,
+        type: "ERROR_LOG",
+        api_url: "/api/inicis-return (Certification Phase)",
+        request_data: req.body,
+        status: "FAILED",
+        error_code: resultCode || "CERT_FAILURE",
+        error_message: resultMsg || "인증 실패"
+      });
+
       if (supabaseAdmin) {
         await writePaymentLogLocal(finalOid || null, "FAILED", {
           step: "인증단계(Certification Response)",
@@ -348,6 +401,17 @@ async function startServer() {
 
     if (!isVerifiedDomain) {
       console.error("[INICIS-RETURN] Unverified authUrl domain:", authUrl);
+      
+      await writePaymentApiLog({
+        merchant_uid: finalOid || null,
+        type: "ERROR_LOG",
+        api_url: "/api/inicis-return (Security Domain Check)",
+        request_data: { authUrl, resultCode, finalOid },
+        status: "FAILED",
+        error_code: "SECURITY_UNVERIFIED_GATEWAY",
+        error_message: "위변조가 의심되는 결제 게이트웨이 도메인입니다."
+      });
+
       return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent("위변조가 의심되는 결제 게이트웨이 도메인입니다.")}&oid=${finalOid || ""}&resultCode=UNVERIFIED_GATEWAY`);
     }
 
@@ -368,6 +432,23 @@ async function startServer() {
       formData.append("format", "JSON");
 
       console.log(`[INICIS-RETURN] Requesting S2S Approval to URL: ${authUrl}`);
+      
+      // Log S2S Approval API Request
+      await writePaymentApiLog({
+        merchant_uid: finalOid || null,
+        type: "S2S_APPROVAL_REQ",
+        api_url: authUrl,
+        request_data: {
+          mid: finalMid,
+          authToken,
+          timestamp,
+          signature: authSignature,
+          charset: "UTF-8",
+          format: "JSON"
+        },
+        status: "SUCCESS"
+      });
+
       const apiResponse = await fetch(authUrl, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -381,8 +462,34 @@ async function startServer() {
       const resJsonText = await apiResponse.text();
       console.log("[INICIS-RETURN] Response Raw String:", resJsonText);
       authResponseData = JSON.parse(resJsonText);
+
+      // Log S2S Approval API Response
+      await writePaymentApiLog({
+        merchant_uid: finalOid || null,
+        type: "S2S_APPROVAL_RES",
+        api_url: authUrl,
+        request_data: { mid: finalMid, authToken, timestamp },
+        response_data: authResponseData,
+        status: authResponseData?.resultCode === "0000" ? "SUCCESS" : "FAILED",
+        error_code: authResponseData?.resultCode || null,
+        error_message: authResponseData?.resultMsg || null
+      });
+
     } catch (httpErr: any) {
       console.error("[INICIS-RETURN] HTTP Auth Failure, trigger NetCancel immediately. Error: ", httpErr);
+      
+      // Log S2S HTTP Exception
+      await writePaymentApiLog({
+        merchant_uid: finalOid || null,
+        type: "ERROR_LOG",
+        api_url: authUrl,
+        request_data: { mid: finalMid, authToken, timestamp },
+        status: "FAILED",
+        error_code: "S2S_HTTP_ERROR",
+        error_message: httpErr.message || "결제 최종 승인 호출 통신 장애",
+        response_data: { triggeredNetCancel: true, netCancelUrl }
+      });
+
       await triggerNetCancelHelper(netCancelUrl, finalMid, authToken, timestamp, authSignature);
       if (supabaseAdmin) {
         await writePaymentLogLocal(finalOid || null, "FAILED", {
@@ -404,6 +511,19 @@ async function startServer() {
 
     if (authResultCode !== "0000") {
       console.error(`[INICIS-RETURN] Payment system approval rejected. Code: ${authResultCode}, Msg: ${authResultMsg}`);
+      
+      // Log Refused S2S Response
+      await writePaymentApiLog({
+        merchant_uid: finalOid || null,
+        type: "ERROR_LOG",
+        api_url: authUrl,
+        request_data: { mid: finalMid, authToken, timestamp },
+        response_data: authResponseData,
+        status: "FAILED",
+        error_code: authResultCode || "S2S_REJECTED",
+        error_message: authResultMsg
+      });
+
       if (supabaseAdmin) {
         await writePaymentLogLocal(finalOid || null, "FAILED", {
           step: "이니시스 승인거절(S2S Refusal)",
@@ -421,6 +541,19 @@ async function startServer() {
     // D. Database update & Enrollments insertion
     if (!supabaseAdmin) {
       console.error("[INICIS-RETURN] Supabase Client is missing, trigger NetCancel immediately.");
+      
+      // Log Missing Supabase Client Error
+      await writePaymentApiLog({
+        merchant_uid: finalOid || null,
+        type: "ERROR_LOG",
+        api_url: "/api/inicis-return (Supabase Check)",
+        request_data: { finalOid, finalMid },
+        status: "FAILED",
+        error_code: "SUPABASE_CLIENT_MISSING",
+        error_message: "Supabase Administrator credentials not configured.",
+        response_data: { triggeredNetCancel: true, netCancelUrl }
+      });
+
       await triggerNetCancelHelper(netCancelUrl, finalMid, authToken, timestamp, authSignature);
       return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent("데이터베이스 설정이 누락되어 승인이 자동 취소되었습니다.")}&oid=${finalOid || ""}&resultCode=DATABASE_MAPPING_ERROR`);
     }
@@ -487,6 +620,19 @@ async function startServer() {
 
     } catch (dbErr: any) {
       console.error("[INICIS-RETURN] Database state update error! Execute NetCancel ASAP.", dbErr);
+      
+      // Log DB Mapping Exception
+      await writePaymentApiLog({
+        merchant_uid: finalOid || null,
+        type: "ERROR_LOG",
+        api_url: "/api/inicis-return (DB updates)",
+        request_data: { finalOid, authResponseData },
+        status: "FAILED",
+        error_code: "DATABASE_MAPPING_ERROR",
+        error_message: dbErr.message || "DB 업데이트 실패",
+        response_data: { triggeredNetCancel: true, netCancelUrl }
+      });
+
       await triggerNetCancelHelper(netCancelUrl, finalMid, authToken, timestamp, authSignature);
       if (supabaseAdmin) {
         await writePaymentLogLocal(finalOid || null, "FAILED", {
@@ -516,6 +662,15 @@ async function startServer() {
       cancelParams.append("format", "JSON");
 
       console.warn(`[NETCANCEL] Calling NetCancel for API recovery -> URL: ${netCancelUrl}`);
+      
+      // Log NetCancel Request
+      await writePaymentApiLog({
+        type: "NET_CANCEL_REQ",
+        api_url: netCancelUrl,
+        request_data: { mid, authToken, timestamp, signature },
+        status: "SUCCESS"
+      });
+
       const res = await fetch(netCancelUrl, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -523,8 +678,37 @@ async function startServer() {
       });
       const responseText = await res.text();
       console.warn("[NETCANCEL] NetCancel response payload:", responseText);
+
+      let responseJson = null;
+      try {
+        responseJson = JSON.parse(responseText);
+      } catch (e) {
+        responseJson = { raw_payload: responseText };
+      }
+
+      // Log NetCancel Response
+      await writePaymentApiLog({
+        type: "NET_CANCEL_RES",
+        api_url: netCancelUrl,
+        request_data: { mid, authToken, timestamp },
+        response_data: responseJson,
+        status: responseJson?.resultCode === "00" || responseJson?.resultCode === "0000" ? "SUCCESS" : "FAILED",
+        error_code: responseJson?.resultCode || null,
+        error_message: responseJson?.resultMsg || null
+      });
+
     } catch (cancelErr: any) {
       console.error("[NETCANCEL] Critical: Double connection error triggered on cancel request.", cancelErr);
+      
+      // Log NetCancel Exception
+      await writePaymentApiLog({
+        type: "ERROR_LOG",
+        api_url: netCancelUrl,
+        request_data: { mid, authToken, timestamp },
+        status: "FAILED",
+        error_code: "NET_CANCEL_HTTP_ERROR",
+        error_message: cancelErr.message || "NetCancel 통신에 실패했습니다"
+      });
     }
   }
 
@@ -592,6 +776,55 @@ async function startServer() {
       }
     } catch (err: any) {
       console.warn("[writePaymentLogLocal] Skipped bypass:", err.message);
+    }
+  }
+
+  // Universal payment API communication logs writer
+  async function writePaymentApiLog(params: {
+    merchant_uid?: string | null;
+    orderId?: string | null;
+    type: 'INIT_PAY_REQ' | 'INIT_PAY_RES' | 'S2S_APPROVAL_REQ' | 'S2S_APPROVAL_RES' | 'NET_CANCEL_REQ' | 'NET_CANCEL_RES' | 'REFUND_REQ' | 'REFUND_RES' | 'ERROR_LOG';
+    api_url?: string | null;
+    request_data?: any;
+    response_data?: any;
+    status: 'SUCCESS' | 'FAILED';
+    error_code?: string | null;
+    error_message?: string | null;
+  }) {
+    if (!supabaseAdmin) {
+      console.warn("[writePaymentApiLog] Supabase Admin not initialized. Log skipped:", params);
+      return;
+    }
+    try {
+      let resolvedOrderId = params.orderId || null;
+      let resolvedMerchantUid = params.merchant_uid || null;
+
+      if (!resolvedOrderId && resolvedMerchantUid) {
+        const { data: orderData } = await supabaseAdmin
+          .from("orders")
+          .select("id")
+          .eq("merchant_uid", resolvedMerchantUid)
+          .maybeSingle();
+        if (orderData) {
+          resolvedOrderId = orderData.id;
+        }
+      }
+
+      await supabaseAdmin.from("payment_api_logs").insert([{
+        order_id: resolvedOrderId,
+        merchant_uid: resolvedMerchantUid,
+        type: params.type,
+        api_url: params.api_url || null,
+        request_data: params.request_data ? (typeof params.request_data === "object" ? params.request_data : { raw: params.request_data }) : null,
+        response_data: params.response_data ? (typeof params.response_data === "object" ? params.response_data : { raw: params.response_data }) : null,
+        status: params.status,
+        error_code: params.error_code || null,
+        error_message: params.error_message || null,
+        created_at: new Date().toISOString()
+      }]);
+      console.log(`[writePaymentApiLog] Recorded payment API log of type ${params.type} for OID: ${resolvedMerchantUid}`);
+    } catch (err: any) {
+      console.error("[writePaymentApiLog] Failed to insert log to database:", err.message || err);
     }
   }
 
@@ -826,6 +1059,84 @@ async function startServer() {
       const currentCallerIsAdmin = await isAdminCheck(requestingUser.id);
       if (!currentCallerIsAdmin) {
         return res.status(403).json({ status: "error", message: "Forbidden - Administrator access credentials required." });
+      }
+
+      // 8.47 ADMIN: 결제/환불 API 통신 로그 조회
+      if (action === "admin-get-payment-api-logs") {
+        const { limit = 100, offset = 0 } = req.body;
+        
+        try {
+          const { data, count, error } = await supabaseAdmin
+            .from("payment_api_logs")
+            .select(`
+              *,
+              orders (
+                id,
+                order_name,
+                amount,
+                status,
+                user_id
+              )
+            `, { count: "exact" })
+            .order("created_at", { ascending: false })
+            .range(offset, offset + limit - 1);
+
+          if (error) {
+            return res.status(500).json({ status: "error", message: `로그 조회 실패: ${error.message}` });
+          }
+
+          const logsWithProfiles = [];
+          if (data && data.length > 0) {
+            const userIds = data
+              .map((l: any) => l.orders?.user_id)
+              .filter((id: any) => !!id);
+            
+            let profilesMap: Record<string, any> = {};
+            if (userIds.length > 0) {
+              const { data: pData } = await supabaseAdmin
+                .from("profiles")
+                .select("id, email, name")
+                .in("id", userIds);
+              
+              if (pData) {
+                profilesMap = pData.reduce((acc: any, curr: any) => {
+                  acc[curr.id] = curr;
+                  return acc;
+                }, {});
+              }
+            }
+
+            for (const log of data) {
+              const logCopy = { ...log };
+              if (logCopy.orders && logCopy.orders.user_id) {
+                logCopy.orders.profiles = profilesMap[logCopy.orders.user_id] || null;
+              }
+              logsWithProfiles.push(logCopy);
+            }
+          }
+
+          return res.json({ status: "success", logs: logsWithProfiles, count });
+        } catch (err: any) {
+          return res.status(500).json({ status: "error", message: `로그 조회 중 예외 발생: ${err.message}` });
+        }
+      }
+
+      // 8.48 ADMIN: 결제/환불 API 통신 로그 전체 삭제
+      if (action === "admin-clear-payment-api-logs") {
+        try {
+          const { error } = await supabaseAdmin
+            .from("payment_api_logs")
+            .delete()
+            .neq("id", "00000000-0000-0000-0000-000000000000");
+
+          if (error) {
+            return res.status(500).json({ status: "error", message: `로그 전체 삭제 실패: ${error.message}` });
+          }
+
+          return res.json({ status: "success", message: "결제/환불 통신 API 로그가 전체 정리되었습니다." });
+        } catch (err: any) {
+          return res.status(500).json({ status: "error", message: `로그 전체 삭제 중 예외 발생: ${err.message}` });
+        }
       }
 
       // 3. ADMIN: grant-enrollment / revoke-enrollment
@@ -1466,6 +1777,16 @@ async function startServer() {
         if (isMockTid) {
           console.log(`[Refund] Mock / Sandbox bypass refund for OID: ${order.merchant_uid} because resolved TID is mock or absent.`);
           // Skip Real Gateway Communication since it's a simulated order
+          
+          await writePaymentApiLog({
+            merchant_uid: order.merchant_uid,
+            orderId: order.id,
+            type: "REFUND_REQ",
+            api_url: "/api/core-api (Mock Refund Bypass)",
+            request_data: { orderId: order.id, merchant_uid: order.merchant_uid, reason, tid },
+            response_data: { message: "Mock Refund Bypass (No Inicis S2S calls)" },
+            status: "SUCCESS"
+          });
         } else {
           // Real Inicis API request
           const cancelUrl = config.isSandbox ? INICIS_ENDPOINTS.sandbox.cancel : INICIS_ENDPOINTS.production.cancel;
@@ -1486,6 +1807,26 @@ async function startServer() {
           requestParams.append("msg", reason || "관리자 환불 처리");
           requestParams.append("hashData", hashData);
 
+          const reqObj = {
+            type,
+            paymethod,
+            timestamp,
+            clientIp,
+            mid: config.mid,
+            tid,
+            msg: reason || "관리자 환불 처리"
+          };
+
+          // Log Refund Request
+          await writePaymentApiLog({
+            merchant_uid: order.merchant_uid,
+            orderId: order.id,
+            type: "REFUND_REQ",
+            api_url: cancelUrl,
+            request_data: reqObj,
+            status: "SUCCESS"
+          });
+
           try {
             console.log(`[Refund] Requesting real Inicis cancel V2 at: ${cancelUrl} (TID: ${tid}, MID: ${config.mid}, PayMethod: ${paymethod})`);
             const apiResponse = await fetch(cancelUrl, {
@@ -1503,11 +1844,25 @@ async function startServer() {
             try {
               result = JSON.parse(rawText);
             } catch (e) {
+              result = { raw_payload: rawText };
               console.warn("[Refund] Failed parsing json from Inicis response, attempting fallback raw lookup:", e);
             }
 
             const resultCode = result.resultCode || "";
             const resultMsg = result.resultMsg || rawText || "Inicis Response Error";
+
+            // Log Refund Response
+            await writePaymentApiLog({
+              merchant_uid: order.merchant_uid,
+              orderId: order.id,
+              type: "REFUND_RES",
+              api_url: cancelUrl,
+              request_data: reqObj,
+              response_data: result,
+              status: resultCode === "00" || resultCode === "0000" ? "SUCCESS" : "FAILED",
+              error_code: resultCode || null,
+              error_message: resultMsg || null
+            });
 
             // V2 cancel resultCode is typically "00" or "0000" on success
             if (resultCode !== "00" && resultCode !== "0000") {
@@ -1518,6 +1873,19 @@ async function startServer() {
             }
           } catch (fetchErr: any) {
             console.error("[Refund] HTTP request to Inicis failed:", fetchErr);
+            
+            // Log Refund Exception
+            await writePaymentApiLog({
+              merchant_uid: order.merchant_uid,
+              orderId: order.id,
+              type: "ERROR_LOG",
+              api_url: cancelUrl,
+              request_data: reqObj,
+              status: "FAILED",
+              error_code: "REFUND_HTTP_ERROR",
+              error_message: fetchErr.message || "환불 통신 장애"
+            });
+
             return res.status(500).json({
               status: "error",
               message: `이니시스 게이트웨이와 실시간 통신 중 장애가 발생했습니다: ${fetchErr.message}`

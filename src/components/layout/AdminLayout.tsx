@@ -16,7 +16,8 @@ import {
   Command,
   Star,
   BarChart,
-  AlertTriangle
+  AlertTriangle,
+  Type
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,7 +41,7 @@ export default function AdminLayout() {
   const navigate = useNavigate();
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc]">
+    <div className="flex min-h-screen bg-[#f8fafc] font-sans antialiased text-rendering-optimizeLegibility">
       {/* Sidebar */}
       <aside className="w-72 bg-white border-r border-gray-100 flex flex-col fixed h-full z-30">
         <div className="p-8 border-b border-gray-50 flex items-center justify-between">
@@ -83,6 +84,10 @@ export default function AdminLayout() {
              <Link to="/admin/errors" className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-black text-sm transition-all ${location.pathname === '/admin/errors' ? 'bg-purple-600 text-white shadow-xl shadow-purple-200' : 'text-gray-500 hover:bg-gray-50 hover:text-purple-600'}`}>
                <AlertTriangle className="w-5 h-5 text-gray-400" />
                <span>오류 로그 수집기</span>
+             </Link>
+             <Link to="/admin/font-demo" className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-black text-sm transition-all ${location.pathname === '/admin/font-demo' ? 'bg-purple-600 text-white shadow-xl shadow-purple-200' : 'text-gray-500 hover:bg-gray-50 hover:text-purple-600'}`}>
+               <Type className="w-5 h-5 text-gray-400" />
+               <span>글꼴 타이포 검증</span>
              </Link>
            </div>
         </nav>

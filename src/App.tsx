@@ -53,6 +53,7 @@ import AdminInstructorManagement from './pages/admin/InstructorManagement';
 import AdminReviewManagement from './pages/admin/ReviewManagement';
 import AdminSupportInquiries from './pages/admin/SupportInquiries';
 import AdminErrorLogs from './pages/admin/ErrorLogs';
+import AdminFontDemo from './pages/admin/FontDemo';
 import { Outlet } from 'react-router-dom';
 
 function AdminPrivateRoute({ children }: { children: React.ReactNode }) {
@@ -229,6 +230,7 @@ export default function App() {
             <Route path="settings" element={<AdminSystemSettings />} />
             <Route path="support" element={<AdminSupportInquiries />} />
             <Route path="errors" element={<AdminErrorLogs />} />
+            <Route path="font-demo" element={<AdminFontDemo />} />
           </Route>
 
           <Route path="/course/:id/learn" element={<LearningPlayer />} />
