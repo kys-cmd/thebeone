@@ -440,7 +440,7 @@ export default function CourseDetail() {
                           disabled
                           className="flex-1 h-16 bg-gray-200 text-gray-500 font-black text-xl rounded-2xl cursor-not-allowed"
                         >
-                          모집이 마감되었습니다
+                          {isOffline ? "마감 되었습니다" : "모집이 마감되었습니다"}
                         </Button>
                       );
                     } else if (course.is_free) {
@@ -840,7 +840,7 @@ export default function CourseDetail() {
               disabled
               className="w-full h-14 bg-gray-200 text-gray-500 font-black rounded-2xl"
             >
-              마감됨
+              {isOffline ? "마감 되었습니다" : "마감됨"}
             </Button>
           ) : !user ? (
             <Button 
