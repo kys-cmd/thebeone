@@ -141,7 +141,7 @@ function CourseCard({ course, type }: { course: Course, type: 'online' | 'offlin
             "absolute top-4 right-4 text-white font-black text-[10px] px-2 py-0.5 rounded-full shadow-lg flex items-center",
             isSoldOut ? "bg-gray-500" : "bg-red-600"
           )}>
-            {isSoldOut ? "모집 마감" : course.max_capacity ? `잔여 ${course.max_capacity - (course.enrolled_count || 0)}석` : "신청 가능"}
+            {isSoldOut ? "모집 마감" : course.max_capacity ? `모집 인원 ${course.max_capacity}명` : "신청 가능"}
           </div>
         )}
       </div>

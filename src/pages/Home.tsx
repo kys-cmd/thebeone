@@ -173,7 +173,7 @@ export default function Home() {
     location: c.location || '별도 안내',
     date: c.start_date ? new Date(c.start_date).toLocaleDateString('ko-KR') : '일정 예정',
     thumbnail: c.thumbnail || "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&q=80&w=800",
-    seats: 20, // Default or from DB if applicable
+    seats: c.max_capacity || 0,
     price: c.price || 0,
     discount_price: c.discount_price,
     is_free: c.is_free,
@@ -480,9 +480,9 @@ function CourseSection({ title, subtitle, items, type = 'regular' }: any) {
                     <Play className="w-5 h-5 text-purple-600 fill-current" />
                   </div>
                 )}
-                {item.seats && (
-                  <Badge className="absolute bottom-4 left-4 bg-red-600 text-white font-bold px-3 py-1 rounded-full">
-                    잔여 {item.seats}석
+                {item.seats && item.seats > 0 && (
+                  <Badge className="absolute bottom-4 left-4 bg-slate-850 text-white font-bold px-3 py-1 rounded-full border-none">
+                    모집 인원 {item.seats}명
                   </Badge>
                 )}
               </div>

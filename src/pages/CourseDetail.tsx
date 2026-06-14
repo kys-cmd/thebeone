@@ -198,8 +198,9 @@ export default function CourseDetail() {
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div></div>;
   if (!course) return <div className="min-h-screen flex items-center justify-center font-bold">강의를 찾을 수 없습니다.</div>;
 
+  const isOffline = course.category === 'special_offline' || course.category === 'beone_exclusive_offline';
   const isSoldOut = course.is_force_closed || (
-                     (course.category === 'special_offline' || course.category === 'beone_exclusive_offline') && 
+                     isOffline && 
                      course.max_capacity !== null && 
                      course.max_capacity !== undefined && 
                      enrolledCount >= course.max_capacity
@@ -236,8 +237,8 @@ export default function CourseDetail() {
                     모집 마감
                   </Badge>
                 ) : (course.category === 'special_offline' || course.category === 'beone_exclusive_offline') && course.max_capacity ? (
-                  <Badge className="bg-red-600 text-white font-black border-none px-4 py-1.5 text-sm animate-pulse">
-                    선착순 {course.max_capacity - enrolledCount}석 남음
+                  <Badge className="bg-red-600 text-white font-black border-none px-4 py-1.5 text-sm">
+                    모집 인원 {course.max_capacity}명
                   </Badge>
                 ) : (
                   <Badge className="bg-red-600 text-white font-black border-none px-4 py-1.5 text-sm animate-bounce">
@@ -610,7 +611,7 @@ export default function CourseDetail() {
 
             {/* Integrated Player (Playlist Style) */}
             <AnimatePresence>
-              {activeLesson && (
+              {!isOffline && activeLesson && (
                 <motion.div 
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
@@ -667,13 +668,17 @@ export default function CourseDetail() {
                   </div>
                   <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
                     {section.items.map((item, itemIdx) => {
-                      const isActive = activeLesson?.id === item.id;
+                      const isActive = !isOffline && activeLesson?.id === item.id;
                       const isLocked = !isEnrolled && !item.is_free;
                       
                       return (
                         <button 
                           key={item.id} 
                           onClick={() => {
+                            if (isOffline) {
+                              toast.info('본 강좌는 오프라인 현장 아카데미 특강이므로 동영상 및 플레이어가 제공되지 않습니다.');
+                              return;
+                            }
                             if (isLocked) {
                               toast.error('수강 신청 후 시청 가능합니다.');
                               return;
@@ -683,7 +688,7 @@ export default function CourseDetail() {
                           }}
                           className={cn(
                             "w-full p-5 flex items-center justify-between group transition-all text-left relative",
-                            isActive ? "bg-purple-600 text-white" : isLocked ? "opacity-60 bg-gray-50/50" : "hover:bg-purple-50/50"
+                            isActive ? "bg-purple-600 text-white" : (isLocked && !isOffline) ? "opacity-60 bg-gray-50/50" : "hover:bg-purple-50/50"
                           )}
                         >
                           {isActive && (
@@ -701,9 +706,15 @@ export default function CourseDetail() {
                             </span>
                             <div className={cn(
                               "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
-                              isActive ? "bg-white/20 text-white" : isLocked ? "bg-gray-100 text-gray-400" : "bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white"
+                              isActive ? "bg-white/20 text-white" : (isLocked && !isOffline) ? "bg-gray-100 text-gray-400" : "bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white"
                             )}>
-                              {isLocked ? <Lock className="w-4 h-4" /> : <Video className="w-5 h-5" />}
+                              {isOffline ? (
+                                <CheckCircle2 className="w-5 h-5 text-purple-600 group-hover:text-white transition-colors" />
+                              ) : isLocked ? (
+                                <Lock className="w-4 h-4" />
+                              ) : (
+                                <Video className="w-5 h-5" />
+                              )}
                             </div>
                             <div className="space-y-0.5">
                               <p className={cn(
@@ -714,9 +725,9 @@ export default function CourseDetail() {
                               </p>
                               <div className="flex items-center gap-2">
                                 <span className={cn("text-[10px] font-bold", isActive ? "text-white/60" : "text-gray-400")}>
-                                  {item.duration || "00:00"}
+                                  {isOffline ? "현장 세션 아젠다" : (item.duration || "00:00")}
                                 </span>
-                                {item.is_free && !isActive && (
+                                {item.is_free && !isActive && !isOffline && (
                                   <Badge className="h-4 px-1.5 text-[8px] bg-purple-100 text-purple-600 border-none font-black uppercase">Free</Badge>
                                 )}
                               </div>
@@ -730,6 +741,10 @@ export default function CourseDetail() {
                                 <motion.div animate={{ height: [12, 4, 12] }} transition={{ repeat: Infinity, duration: 0.8 }} className="w-1 bg-white rounded-full" />
                                 <motion.div animate={{ height: [6, 12, 6] }} transition={{ repeat: Infinity, duration: 0.7 }} className="w-1 bg-white rounded-full" />
                               </div>
+                            ) : isOffline ? (
+                              <Badge className="bg-slate-100 text-[9px] font-black tracking-tight text-slate-500 border-none px-2 py-0.5 rounded cursor-default">
+                                오프라인 현장 진행
+                              </Badge>
                             ) : (
                               <ChevronRight className={cn(
                                 "w-4 h-4 transition-all opacity-0 group-hover:opacity-100 group-hover:translate-x-1",
@@ -800,8 +815,8 @@ export default function CourseDetail() {
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-4 flex items-center justify-between z-50">
         <div>
           <p className="text-2xl font-black">{(course.discount_price || course.price || 0).toLocaleString()}원</p>
-          <p className={cn("text-xs font-bold", isSoldOut ? "text-gray-400" : "text-red-500")}>
-            {isSoldOut ? "모집 마감" : (course.category === 'special_offline' || course.category === 'beone_exclusive_offline') && course.max_capacity ? `선착순 ${course.max_capacity - enrolledCount}석 남음!` : "마감 임박!"}
+          <p className={cn("text-xs font-bold", isSoldOut ? "text-gray-400" : "text-slate-500")}>
+            {isSoldOut ? "모집 마감" : isOffline && course.max_capacity ? `모집 인원 ${course.max_capacity}명` : "마감 임박!"}
           </p>
         </div>
         <div className="flex-1">
@@ -809,9 +824,15 @@ export default function CourseDetail() {
             <Button 
               size="lg" 
               className="w-full h-14 bg-green-600 text-white font-black rounded-2xl"
-              onClick={() => navigate(`/course/${course.id}/learn`)}
+              onClick={() => {
+                if (isOffline) {
+                  toast.success('오프라인 특강 등록이 성공적으로 확보되었습니다. 현장에서 뵙겠습니다!');
+                } else {
+                  navigate(`/course/${course.id}/learn`);
+                }
+              }}
             >
-              이어학습
+              {isOffline ? "현장 강좌 신청완료" : "이어학습"}
             </Button>
           ) : isSoldOut ? (
             <Button 
