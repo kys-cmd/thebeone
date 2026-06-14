@@ -47,6 +47,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/assets/*"
+  to = "/.netlify/functions/assets"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/auth/send-reset-otp"
   to = "/.netlify/functions/auth"
   status = 200
