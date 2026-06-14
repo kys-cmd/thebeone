@@ -92,11 +92,12 @@ async function getInicisConfig() {
         .maybeSingle();
 
       if (!error && data?.pg_id && data?.inicis_sign_key) {
+        const isSandbox = data.pg_mode ? data.pg_mode !== "live" : (data.is_sandbox !== false);
         return {
           mid: data.pg_id,
           signKey: data.inicis_sign_key,
           apiKey: data.inicis_api_key || null,
-          isSandbox: data.is_sandbox !== false,
+          isSandbox: isSandbox,
         };
       }
     } catch (e) {
@@ -224,7 +225,7 @@ async function startServer() {
       try {
         const { data: paySettings, error: payError } = await supabaseAdmin
           .from("payment_settings")
-          .select("pg_id, is_sandbox") // Exclude sensitive sign key anyway
+          .select("pg_id, pg_mode") // Exclude sensitive sign key anyway
           .limit(5);
 
         diagData.database = {
@@ -875,6 +876,38 @@ async function startServer() {
           }]);
         } catch (enrollErr) {
           console.warn("[INICIS-RETURN] course_enrollments overlap bypass:", enrollErr);
+        }
+
+        // Calculate expires_at dynamically read from courses table
+        let expiresAt: string | null = null;
+        try {
+          const { data: courseInfo } = await supabaseAdmin
+            .from("courses")
+            .select("is_duration_based, duration_days")
+            .eq("id", courseId)
+            .single();
+          
+          if (courseInfo && courseInfo.is_duration_based && courseInfo.duration_days) {
+            const expDate = new Date();
+            expDate.setDate(expDate.getDate() + Number(courseInfo.duration_days));
+            expiresAt = expDate.toISOString();
+          }
+        } catch (courseErr) {
+          console.warn("[INICIS-RETURN] Failed to calculate course duration, default to infinite:", courseErr);
+        }
+
+        try {
+          await supabaseAdmin.from("enrollments").upsert({
+            user_id: userId,
+            course_id: courseId,
+            status: "active",
+            is_deleted: false,
+            expires_at: expiresAt,
+            created_at: new Date().toISOString()
+          }, { onConflict: "user_id, course_id" });
+          console.log(`[INICIS-RETURN] Successfully enrolled user in enrollments: user_id=${userId}, course_id=${courseId}, expires_at=${expiresAt}`);
+        } catch (enrollmentErr) {
+          console.warn("[INICIS-RETURN] enrollments upsert bypass:", enrollmentErr);
         }
 
         try {

@@ -437,6 +437,11 @@ export default function AdminSystemSettings() {
                         placeholder="SignKey 입력"
                       />
                       <p className="text-[10px] text-muted-foreground">이니시스 가맹점 관리자 {'->'} 변경/추가 {'->'} API 요청정보</p>
+                      <div className="mt-3 p-2.5 bg-purple-50/70 rounded-lg border border-purple-100 text-[10px] leading-relaxed text-purple-700">
+                        <strong className="text-purple-900 block mb-0.5">💡 실 운영 환불(취소) 처리용 주요 정보:</strong>
+                        실시간 거래 취소 API 승인은 표준 사인키와 무관하게 이니시스 가맹점 관리자에서 명세한 <strong className="font-bold underline text-purple-800">iniAPIKey (상점 취소 Key)</strong>를 필수 요구합니다. 
+                        인프라 설정 또는 환경 변수(<code className="bg-white text-purple-900 px-1 py-0.5 rounded font-mono border tracking-tight text-[9px]">INICIS_APIKEY</code>)에 해당 취소용 API Key를 등록해주시면 에러 없는 원 터치 즉시 환불이 보장됩니다.
+                      </div>
                     </div>
                   </div>
 

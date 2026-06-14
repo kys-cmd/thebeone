@@ -83,11 +83,12 @@ async function getInicisConfig() {
         .maybeSingle();
 
       if (!error && data?.pg_id && data?.inicis_sign_key) {
+        const isSandbox = data.pg_mode ? data.pg_mode !== "live" : (data.is_sandbox !== false);
         return {
           mid: data.pg_id,
           signKey: data.inicis_sign_key,
           apiKey: data.inicis_api_key || null,
-          isSandbox: data.is_sandbox !== false,
+          isSandbox: isSandbox,
         };
       }
     } catch (e) {

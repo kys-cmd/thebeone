@@ -511,6 +511,24 @@ export const handler: Handler = async (event) => {
         console.error("[INICIS-RETURN] enroll 처리 예외 발생:", enrollErr);
       }
 
+      // Calculate expires_at dynamically read from courses table
+      let expiresAt: string | null = null;
+      try {
+        const { data: courseInfo } = await supabaseAdmin
+          .from("courses")
+          .select("is_duration_based, duration_days")
+          .eq("id", courseId)
+          .single();
+        
+        if (courseInfo && courseInfo.is_duration_based && courseInfo.duration_days) {
+          const expDate = new Date();
+          expDate.setDate(expDate.getDate() + Number(courseInfo.duration_days));
+          expiresAt = expDate.toISOString();
+        }
+      } catch (courseErr) {
+        console.warn("[INICIS-RETURN] Failed to calculate course duration, default to infinite:", courseErr);
+      }
+
       try {
         const { error: enrollmentsError } = await supabaseAdmin
           .from("enrollments")
@@ -518,6 +536,8 @@ export const handler: Handler = async (event) => {
             user_id: userId,
             course_id: courseId,
             status: "active",
+            is_deleted: false,
+            expires_at: expiresAt,
             created_at: new Date().toISOString()
           }, { onConflict: "user_id, course_id" });
         if (enrollmentsError) console.warn("[INICIS-RETURN] enrollments 등록 누락:", enrollmentsError.message);
