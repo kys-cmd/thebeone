@@ -95,11 +95,11 @@ export default function Courses() {
           <div className="w-full">
             {banners[currentBannerIndex].html_content ? (
               <div 
-                className="w-full min-h-[400px]"
+                className="w-full aspect-[1920/450]"
                 dangerouslySetInnerHTML={{ __html: banners[currentBannerIndex].html_content }} 
               />
             ) : (
-              <div className="relative h-[400px] lg:h-[500px] overflow-hidden group">
+              <div className="relative w-full aspect-[1920/450] overflow-hidden group">
                 <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent z-10" />
                 {banners[currentBannerIndex].image ? (
                   <img 
@@ -115,23 +115,23 @@ export default function Courses() {
                   <motion.div
                     initial={{ y: 30, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
-                    className="max-w-2xl space-y-6"
+                    className="max-w-2xl space-y-1 sm:space-y-3 md:space-y-6"
                   >
-                    <div className="bg-purple-600 text-white border-none py-1.5 px-4 text-xs font-black rounded-full w-fit">
+                    <div className="text-[9px] py-0.5 px-2 md:text-xs md:py-1.5 md:px-4 rounded-full w-fit bg-purple-600 text-white font-black">
                       RECOMMENDED COURSE
                     </div>
-                    <h1 className="text-4xl md:text-6xl font-black text-white leading-tight tracking-tighter">
+                    <h1 className="text-base sm:text-2xl md:text-4xl lg:text-5xl xl:text-6xl font-black text-white leading-tight tracking-tighter">
                       {banners[currentBannerIndex].title}
                     </h1>
                     {banners[currentBannerIndex].subtitle && (
-                      <p className="text-lg text-white/70 font-medium whitespace-pre-line leading-relaxed max-w-xl">
+                      <p className="hidden sm:block text-[10px] sm:text-sm md:text-base lg:text-lg text-white/70 font-medium whitespace-pre-line leading-relaxed max-w-xl">
                         {banners[currentBannerIndex].subtitle}
                       </p>
                     )}
-                    <div className="flex gap-4 pt-4">
+                    <div className="flex gap-4 pt-1 sm:pt-2 md:pt-4">
                       <Link 
                         to={banners[currentBannerIndex].link}
-                        className={cn(buttonVariants({ variant: 'default', size: 'lg' }), "bg-white text-black hover:bg-gray-100 font-black h-14 px-10 rounded-full shadow-2xl transition-all active:scale-95")}
+                        className={cn(buttonVariants({ variant: 'default', size: 'lg' }), "bg-white text-black hover:bg-gray-100 font-black h-7 sm:h-10 md:h-12 lg:h-14 px-4 sm:px-6 md:px-10 rounded-full shadow-2xl transition-all active:scale-95 text-[9px] sm:text-[11px] md:text-sm lg:text-base flex items-center justify-center border-none")}
                       >
                         지금 바로 수강하기
                       </Link>
@@ -141,14 +141,14 @@ export default function Courses() {
 
                 {/* Optional navigation if multiple course banners exist */}
                 {banners.length > 1 && (
-                  <div className="absolute bottom-10 right-10 z-30 flex items-center gap-2">
+                  <div className="absolute bottom-2 right-2 sm:bottom-6 sm:right-6 md:bottom-10 md:right-10 z-30 flex items-center gap-1 sm:gap-2">
                     {banners.map((_, idx) => (
                       <button
                         key={idx}
                         onClick={() => setCurrentBannerIndex(idx)}
                         className={cn(
-                          "h-1.5 transition-all duration-300 rounded-full",
-                          currentBannerIndex === idx ? "w-8 bg-white" : "w-1.5 bg-white/30 hover:bg-white/50"
+                          "h-1 sm:h-1.5 transition-all duration-300 rounded-full",
+                          currentBannerIndex === idx ? "w-4 sm:w-8 bg-white" : "w-1 sm:w-1.5 bg-white/30 hover:bg-white/50"
                         )}
                       />
                     ))}

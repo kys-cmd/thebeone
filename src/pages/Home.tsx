@@ -194,7 +194,7 @@ export default function Home() {
       <section className="mt-6 mb-0 overflow-hidden">
         <div className="container mx-auto px-4 overflow-visible text-center">
           {!loading ? (
-            <div className="relative h-[380px] md:h-[450px] w-full">
+            <div className="relative w-full aspect-[1920/450]">
               <div 
                 className="flex h-full transition-transform duration-500 ease-in-out"
                 style={{ 
@@ -215,9 +215,9 @@ export default function Home() {
                             alt={banner.title || "Banner Image"}
                           />
                         ) : (
-                          <div className="w-full h-full flex flex-col justify-center items-center p-8 bg-purple-900 text-white select-none">
-                            <h1 className="text-2xl md:text-4xl font-extrabold text-center tracking-tight">{banner.title}</h1>
-                            {banner.subtitle && <p className="text-sm mt-2 opacity-80 text-center">{banner.subtitle}</p>}
+                          <div className="w-full h-full flex flex-col justify-center items-center p-2 sm:p-8 bg-purple-900 text-white select-none">
+                            <h1 className="text-xs sm:text-2xl md:text-4xl font-extrabold text-center tracking-tight">{banner.title}</h1>
+                            {banner.subtitle && <p className="hidden sm:block text-[10px] sm:text-sm mt-2 opacity-80 text-center">{banner.subtitle}</p>}
                           </div>
                         )}
                       </div>
@@ -237,8 +237,8 @@ export default function Home() {
               </div>
 
               {/* BOTTOM LEFT: Index */}
-              <div className="absolute bottom-6 left-8 lg:left-12 z-40 flex items-center gap-3 bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/5">
-                <div className="flex items-center gap-1.5 text-white/50 font-black text-[10px] tracking-widest">
+              <div className="absolute bottom-2 left-3 sm:bottom-6 sm:left-8 lg:left-12 z-40 flex items-center gap-3 bg-black/40 backdrop-blur-sm px-2 py-0.5 sm:px-3 sm:py-1.5 rounded-full border border-white/5">
+                <div className="flex items-center gap-1.5 text-white/50 font-black text-[8px] sm:text-[10px] tracking-widest">
                    <span className="text-white">{String(currentSlide + 1).padStart(2, '0')}</span>
                    <span className="opacity-20">/</span>
                    <span>{String(finalBanners.length).padStart(2, '0')}</span>
@@ -246,28 +246,28 @@ export default function Home() {
               </div>
 
               {/* BOTTOM RIGHT: Controls */}
-              <div className="absolute bottom-6 right-8 lg:right-12 z-40 flex items-center bg-black/60 backdrop-blur-md rounded-full border border-white/5 p-1">
+              <div className="absolute bottom-2 right-3 sm:bottom-6 sm:right-8 lg:right-12 z-40 flex items-center bg-black/60 backdrop-blur-md rounded-full border border-white/5 p-0.5 sm:p-1">
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="w-8 h-8 rounded-full text-white hover:bg-white/10"
+                  className="w-5 h-5 sm:w-8 sm:h-8 rounded-full text-white hover:bg-white/10 border-none"
                   onClick={() => paginate(-1)}
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4" />
                 </Button>
-                <div className="w-px h-3 bg-white/10 mx-1" />
+                <div className="w-px h-2.5 sm:h-3 bg-white/10 mx-0.5 sm:mx-1" />
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="w-8 h-8 rounded-full text-white hover:bg-white/10"
+                  className="w-5 h-5 sm:w-8 sm:h-8 rounded-full text-white hover:bg-white/10 border-none"
                   onClick={() => paginate(1)}
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="h-[400px] w-full flex items-center justify-center bg-gray-50 rounded-2xl">
+            <div className="aspect-[1920/450] w-full flex items-center justify-center bg-gray-50 rounded-2xl">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
             </div>
           )}
