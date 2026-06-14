@@ -103,9 +103,9 @@ export default function LifeCoaching() {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-base sm:text-lg text-slate-600 font-medium leading-relaxed max-w-2xl mx-auto mb-10 text-left sm:text-center space-y-6"
+            className="text-lg sm:text-xl text-slate-700 font-medium leading-relaxed max-w-2xl mx-auto mb-10 text-left sm:text-center space-y-6"
           >
-            <p className="text-slate-700">
+            <p className="text-slate-700 font-medium">
               학교, 학원, 대학, 직장, 노후, 경쟁. 우리는 알게 모르게 남들이 만들어 놓은 규칙 속에서 나를 소모하고 있습니다. 지금 필요한 건 더 많은 노력이 아니라, 판을 바꾸는 전략입니다. 열심히 살아야 하지만, 열심히만 살아서는 안되는 이유입니다.
             </p>
           </motion.div>
@@ -141,12 +141,12 @@ export default function LifeCoaching() {
                 소모되는 시간이 아닌 쌓이고 성장하는 삶의 "룰"
               </h2>
               
-              <div className="text-slate-600 space-y-5 font-medium text-sm sm:text-base leading-relaxed">
+              <div className="text-slate-700 space-y-5 font-medium text-base sm:text-lg leading-relaxed">
                 <p>
                   우리는 누구나 한 번 뿐인 인생을 살아갑니다. 지금 이 순간도 한 번 사는 시간이 흘러갑니다. 
                   누구나 초보 인생을 살아가지만, 소모되는 시간이 아닌 쌓이고 성장하는 삶에는 룰이 존재합니다. 
                 </p>
-                <div className="bg-amber-50/50 border-l-4 border-amber-500 p-5 text-slate-700 italic rounded-r-xl">
+                <div className="bg-amber-50/50 border-l-4 border-amber-500 p-5 text-slate-800 font-bold text-base sm:text-lg italic rounded-r-xl leading-relaxed">
                   "우리는 그동안 그것을 누군가에게 배우지 못했기 때문에 열심히 하는데도 제자리 걸음이었습니다. 그것은 당신의 잘못이 절대 아닙니다."
                 </div>
               </div>
@@ -169,14 +169,14 @@ export default function LifeCoaching() {
                 인생의 바둑판에서<br className="sm:hidden" /> 앞으로 가는 수를 두는 법
               </h3>
               <div className="w-12 h-1 bg-amber-500 mb-6" />
-              <div className="text-slate-300 text-sm sm:text-base leading-relaxed space-y-4 font-medium">
+              <div className="text-slate-200 text-base sm:text-lg leading-relaxed space-y-4 font-medium">
                 <p>
                   더퍼스트라이프코칭은 당신의 인생의 바둑판에서 앞으로 가는 수를 두는 것을 도와드립니다. 
                 </p>
                 <p>
                   바둑판 한 귀퉁이에서 오목을 두는 게임에서 벗어나 바둑판 전체를 넓게 사용하며 현재 상태를 정밀 진단해서 핵심이 되는 수를 두는 것을 1:1로 도와드립니다. 
                 </p>
-                <p className="text-white font-bold bg-white/10 p-4 rounded-xl border border-white/10">
+                <p className="text-white font-extrabold bg-white/10 p-4 rounded-xl border border-white/10 text-base sm:text-lg">
                   "그 수를 두어야 당신은 어제와 다른 오늘을 기대할 수 있습니다."
                 </p>
               </div>
@@ -215,10 +215,10 @@ export default function LifeCoaching() {
                   <h3 className="text-lg font-black text-slate-900 group-hover:text-purple-600 transition-colors">
                     {aud.title}
                   </h3>
-                  <p className="text-xs font-black text-purple-600 mt-1 mb-3.5 italic">
+                  <p className="text-sm font-black text-purple-600 mt-1.5 mb-3.5 italic">
                     "{aud.subtitle}"
                   </p>
-                  <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">
+                  <p className="text-sm sm:text-base text-slate-700 font-medium leading-relaxed">
                     {aud.desc}
                   </p>
                 </div>
@@ -243,7 +243,7 @@ export default function LifeCoaching() {
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-4">
               더퍼스트라이프코칭은,
             </h2>
-            <p className="text-slate-600 font-medium text-sm sm:text-base leading-relaxed max-w-2xl mx-auto">
+            <p className="text-slate-700 font-medium text-base sm:text-lg leading-relaxed max-w-2xl mx-auto">
               시스템 점검을 통해 현재 당신의 자본주의 좌표를 정확히 판단합니다.
               자본주의테크트리 6단계를 점검함으로써 어떤 단계에서 혈이 막혀 있는지를 파악해서 그 혈을 뚫는 솔류션을 제공합니다.
             </p>
@@ -264,7 +264,7 @@ export default function LifeCoaching() {
                   <h3 className="text-base font-black text-slate-900 mb-3 tracking-tight">
                     {step.title}
                   </h3>
-                  <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">
+                  <p className="text-sm sm:text-base text-slate-750 font-medium leading-relaxed">
                     {step.desc}
                   </p>
                 </div>
@@ -272,7 +272,7 @@ export default function LifeCoaching() {
             ))}
           </div>
 
-          <div className="p-6 rounded-2xl bg-amber-50 border border-amber-200/80 text-left max-w-3xl mx-auto text-slate-800 text-sm sm:text-base font-medium leading-relaxed flex gap-3.5">
+          <div className="p-6 rounded-2xl bg-amber-50 border border-amber-200/80 text-left max-w-3xl mx-auto text-slate-800 text-base sm:text-lg font-medium leading-relaxed flex gap-3.5">
             <div className="w-10 h-10 rounded-full bg-amber-100 shrink-0 flex items-center justify-center text-amber-700">
               <CheckCircle2 className="w-5 h-5" />
             </div>
@@ -324,38 +324,38 @@ export default function LifeCoaching() {
             </div>
 
             {/* Coach Details Bio */}
-            <div className="md:col-span-8 space-y-6 text-slate-700 text-sm sm:text-base leading-relaxed">
+            <div className="md:col-span-8 space-y-6 text-slate-800 text-base sm:text-lg leading-relaxed">
               <div className="p-4 bg-white border border-slate-200/60 rounded-2xl flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-sm font-bold text-slate-700">
-                  위즈덤하우스 화제의 신간 <span className="text-slate-900 border-b-2 border-amber-300">&lt;더 퍼스트&gt;의 저자</span>이자, 8만 명이 구독하는 블로그 <span className="font-black text-slate-900">《시간으로부터의 자유》의 운영자</span>입니다.
+                <CheckCircle2 className="w-5.5 h-5.5 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-base sm:text-lg font-bold text-slate-800">
+                  위즈덤하우스 화제의 신간 <span className="text-slate-950 border-b-2 border-amber-300 font-black">&lt;더 퍼스트&gt;의 저자</span>이자, 8만 명이 구독하는 블로그 <span className="font-black text-slate-950">《시간으로부터의 자유》의 운영자</span>입니다.
                 </p>
               </div>
 
-              <div className="space-y-4 font-medium text-slate-600">
+              <div className="space-y-4 font-medium text-slate-700">
                 <p>
                   고려대 사회학과 졸업 후 실전 투자와 사업을 통해 자본주의 원리를 깨달았고, 단순한 부의 증식을 넘어 삶의 주도권을 되찾는 [자본주의 테크트리] 이론을 집대성했습니다.
                 </p>
-                <p className="font-bold text-slate-900">
+                <p className="font-bold text-slate-950">
                   당신의 현재 문제를 정밀 진단하고, 1:1 심층 코칭을 통해 가장 현실적이고 강력한 가이드를 제공하겠습니다.
                 </p>
               </div>
 
               {/* Bio facts list */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-slate-200/60">
-                <div className="flex items-center gap-2 text-xs font-black text-slate-600">
+                <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
                   <div className="w-2 h-2 rounded-full bg-slate-900" />
                   고려대 사회학과 졸업
                 </div>
-                <div className="flex items-center gap-2 text-xs font-black text-slate-600">
+                <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
                   <div className="w-2 h-2 rounded-full bg-slate-900" />
                   8만 구독 블로그 《시간으로부터의 자유》
                 </div>
-                <div className="flex items-center gap-2 text-xs font-black text-slate-600">
+                <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
                   <div className="w-2 h-2 rounded-full bg-slate-900" />
                   위즈덤하우스 &lt;더 퍼스트&gt; 저자
                 </div>
-                <div className="flex items-center gap-2 text-xs font-black text-slate-600">
+                <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
                   <div className="w-2 h-2 rounded-full bg-slate-900" />
                   자본주의 테크트리 창시 및 1:1 라이프코칭
                 </div>
@@ -381,7 +381,7 @@ export default function LifeCoaching() {
               <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-snug">
                 첫 번째(The First) 주도권,<br />이제 당신의 것입니다.
               </h2>
-              <p className="text-sm sm:text-base text-slate-600 font-bold mt-4 mb-8 leading-relaxed">
+              <p className="text-base sm:text-lg text-slate-700 font-bold mt-4 mb-8 leading-relaxed">
                 당신의 현재 문제를 정밀 진단하고, 1:1 심층 코칭을 통해 가장 현실적이고 강력한 가이드를 제공하겠습니다.
               </p>
 
