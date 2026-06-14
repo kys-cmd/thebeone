@@ -120,6 +120,28 @@ async function startServer() {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
+  // A helper to verify if requesting user is an administrator
+  async function adminCheck(authHeader?: string): Promise<boolean> {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) return false;
+    const token = authHeader.split(" ")[1];
+    if (!supabaseAdmin) return false;
+    
+    try {
+      const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+      if (authErr || !user) return false;
+
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      return !!(profile && (profile.role === "admin" || profile.role === "super_admin"));
+    } catch {
+      return false;
+    }
+  }
+
   // Log all requests
   app.use((req, res, next) => {
     if (req.url.startsWith("/api")) {
@@ -169,6 +191,8 @@ async function startServer() {
 
   // Basic API verification with full diagnosis capability (Task 1 Debugger)
   app.get("/api/test", async (req, res) => {
+    const isAuthorized = await adminCheck(req.headers.authorization);
+
     const diagData: any = {
       status: "ok",
       serverTime: new Date().toISOString(),
@@ -176,18 +200,18 @@ async function startServer() {
       env: {
         NODE_ENV: process.env.NODE_ENV,
         INICIS_MID_EXISTS: !!process.env.INICIS_MID,
-        INICIS_MID_VAL: process.env.INICIS_MID || "Not Found",
+        INICIS_MID_VAL: isAuthorized ? (process.env.INICIS_MID || "Not Found") : "Protected",
         INICIS_SIGNKEY_EXISTS: !!process.env.INICIS_SIGNKEY,
         SUPABASE_URL_EXISTS: !!process.env.SUPABASE_URL,
         SUPABASE_SERVICE_ROLE_KEY_EXISTS: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
       }
     };
 
-    if (supabaseAdmin) {
+    if (isAuthorized && supabaseAdmin) {
       try {
         const { data: paySettings, error: payError } = await supabaseAdmin
           .from("payment_settings")
-          .select("*")
+          .select("pg_id, is_sandbox") // Exclude sensitive sign key anyway
           .limit(5);
 
         diagData.database = {
@@ -199,7 +223,7 @@ async function startServer() {
         // Try getting last failure log from payment_logs
         const { data: logs, error: logsError } = await supabaseAdmin
           .from("payment_logs")
-          .select("*")
+          .select("id, order_id, status, payment_method, amount, created_at") // Exclude raw responses to prevent token/key leaks
           .order("created_at", { ascending: false })
           .limit(3);
 
@@ -211,6 +235,11 @@ async function startServer() {
           error: dbErr.message,
         };
       }
+    } else if (supabaseAdmin) {
+      diagData.database = {
+        connected: true,
+        message: "Diagnostics restricted to administrators only."
+      };
     } else {
       diagData.database = {
         connected: false,
@@ -2325,6 +2354,11 @@ async function startServer() {
   app.post("/api/admin/reset-password", async (req, res) => {
     console.log("POST /api/admin/reset-password called");
     try {
+      const isAuthorized = await adminCheck(req.headers.authorization);
+      if (!isAuthorized) {
+        return res.status(403).json({ status: "error", message: "Forbidden - Administrator access only" });
+      }
+
       const { email, userId, requestId, password } = req.body;
       if (!email && !userId) {
         return res.status(400).json({ status: "error", message: "Required fields (email or userId) are missing" });
@@ -2404,6 +2438,11 @@ async function startServer() {
   app.post("/api/admin/delete-auth-user", async (req, res) => {
     console.log("POST /api/admin/delete-auth-user called");
     try {
+      const isAuthorized = await adminCheck(req.headers.authorization);
+      if (!isAuthorized) {
+        return res.status(403).json({ status: "error", message: "Forbidden - Administrator access only" });
+      }
+
       const { userId } = req.body;
       if (!userId) {
         return res.status(400).json({ status: "error", message: "Required field (userId) is missing" });
@@ -2447,6 +2486,11 @@ async function startServer() {
   app.get("/api/admin/orphaned-auth-users", async (req, res) => {
     console.log("GET /api/admin/orphaned-auth-users called");
     try {
+      const isAuthorized = await adminCheck(req.headers.authorization);
+      if (!isAuthorized) {
+        return res.status(403).json({ status: "error", message: "Forbidden - Administrator access only" });
+      }
+
       if (!supabaseAdmin) {
         return res.status(500).json({ status: "error", message: "Supabase Admin is not initialized on the server" });
       }
@@ -2499,6 +2543,11 @@ async function startServer() {
   app.post("/api/admin/bulk-delete-auth-users", async (req, res) => {
     console.log("POST /api/admin/bulk-delete-auth-users called");
     try {
+      const isAuthorized = await adminCheck(req.headers.authorization);
+      if (!isAuthorized) {
+        return res.status(403).json({ status: "error", message: "Forbidden - Administrator access only" });
+      }
+
       const { userIds } = req.body;
       if (!userIds || !Array.isArray(userIds)) {
         return res.status(400).json({ status: "error", message: "Required parameter 'userIds' array is missing" });
@@ -2535,6 +2584,11 @@ async function startServer() {
   app.get("/api/admin/reset-requests", async (req, res) => {
     console.log("GET /api/admin/reset-requests called");
     try {
+      const isAuthorized = await adminCheck(req.headers.authorization);
+      if (!isAuthorized) {
+        return res.status(403).json({ status: "error", message: "Forbidden - Administrator access only" });
+      }
+
       if (!supabaseAdmin) {
         return res.status(500).json({ status: "error", message: "Supabase Admin is not initialized on the server" });
       }
@@ -3294,25 +3348,6 @@ async function startServer() {
   });
 
   // 2. Admin Recovery & Sync Tools
-  // A helper to verify if requesting user is an administrator
-  async function adminCheck(authHeader?: string): Promise<boolean> {
-    if (!authHeader || !authHeader.startsWith("Bearer ")) return false;
-    const token = authHeader.split(" ")[1];
-    if (!supabaseAdmin) return false;
-    
-    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
-    if (authErr || !user) return false;
-
-    // Custom safeguarding direct check - Bypass removed for security reasons
-
-    const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    return !!(profile && (profile.role === "admin" || profile.role === "super_admin"));
-  }
 
   app.post("/api/admin/recovery", async (req, res) => {
     try {

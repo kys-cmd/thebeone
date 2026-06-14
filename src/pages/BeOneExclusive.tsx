@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 
 export default function BeOneExclusive() {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuthStore();
+  const { user, isLoading: authLoading } = useAuthStore();
   const [courses, setCourses] = useState<Course[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
