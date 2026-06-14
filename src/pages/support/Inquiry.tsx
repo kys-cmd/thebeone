@@ -93,6 +93,7 @@ export default function InquiryPage() {
                     <option value="사이트 오류">사이트 오류</option>
                     <option value="강의 오류">강의 오류</option>
                     <option value="커뮤니티/채팅">커뮤니티/채팅</option>
+                    <option value="환불 문의">환불 문의</option>
                     <option value="계정/정보">계정/정보</option>
                     <option value="기타">기타</option>
                   </select>

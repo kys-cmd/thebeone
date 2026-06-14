@@ -20,7 +20,6 @@ export default function Cart() {
   
   // Integrated PG hook interface to guarantee unified parameters & time-zone stability
   const { isSdkLoaded, isInitializing: isPaying, requestPayment } = useInicisPay();
-  const [isBulkPaying, setIsBulkPaying] = useState(false);
 
   // Mileage States
   const [userMileage, setUserMileage] = useState(0);
@@ -146,100 +145,6 @@ export default function Cart() {
       });
     } catch (err: any) {
       toast.error(`결제 오류: ${err.message || '결제 승인 프로세스를 불러오지 못했습니다.'}`);
-    }
-  };
-
-  // 6. Bulk Test Payment - Loops through all selected items for an instant checkout experience
-  const handleBulkTestPayment = async () => {
-    const selectedItems = items.filter(item => selectedIds.includes(item.id));
-    if (selectedItems.length === 0) {
-      toast.error('결제할 수강 항목을 선택해주세요.');
-      return;
-    }
-
-    setIsBulkPaying(true);
-    const loadToast = toast.loading(`${selectedItems.length}개 강좌의 가상 라이선스 승인 프로세스를 수행 중...`);
-
-    try {
-      const sessionData = await supabase.auth.getSession();
-      const token = sessionData.data.session?.access_token || '';
-
-      // A. Deduct mileage from profile
-      if (appliedMileage > 0 && user?.id) {
-        const nextMileage = Math.max(0, userMileage - appliedMileage);
-        const { error: profileDiscountErr } = await supabase
-          .from('profiles')
-          .update({ mileage: nextMileage })
-          .eq('id', user.id);
-        
-        if (profileDiscountErr) {
-          console.error('[Profiles Mileage Update Error]:', profileDiscountErr);
-          throw new Error(`마일리지 차감 오류: ${profileDiscountErr.message}`);
-        } else {
-          setUserMileage(nextMileage);
-        }
-      }
-
-      let successCount = 0;
-      let remainingMileageToDeduct = appliedMileage;
-
-      for (let i = 0; i < selectedItems.length; i++) {
-        const item = selectedItems[i];
-        let itemMileageUsed = 0;
-
-        if (appliedMileage > 0) {
-          if (i === selectedItems.length - 1) {
-            itemMileageUsed = remainingMileageToDeduct;
-          } else {
-            itemMileageUsed = Math.round((Number(item.amount || 0) / selectedSubtotal) * appliedMileage);
-            remainingMileageToDeduct -= itemMileageUsed;
-          }
-        }
-
-        try {
-          const response = await fetch('/api/core-api', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              action: 'process-payment',
-              merchant_uid: item.merchant_uid,
-              amount: Number(item.amount || item.price || 0),
-              courseId: item.course_id,
-              userId: user?.id,
-              payment_method: 'Test_Instant_Auth',
-              payment_tid: `TID_MOCK_${crypto.randomUUID().substring(0, 8).toUpperCase()}`,
-              mileage_used: itemMileageUsed
-            })
-          });
-
-          const result = await response.json();
-          if (response.ok && result.status === 'success') {
-            successCount++;
-          }
-        } catch (e) {
-          console.error('[Bulk item fail]:', item.id, e);
-        }
-      }
-
-      toast.dismiss(loadToast);
-      window.dispatchEvent(new Event('cart-updated'));
-
-      if (successCount > 0) {
-        toast.success(`🎉 선택하신 ${successCount}개의 강의가 승인되어 즉시 수강 권한이 정식으로 부여되었습니다!`);
-        setTimeout(() => {
-          navigate(`/payment/callback?status=success&message=${encodeURIComponent(`선택된 ${successCount}개의 강의가 즉시 자동 일괄 활성화되었습니다!`)}`);
-        }, 800);
-      } else {
-        throw new Error('선택한 강의 승인에 실패하였습니다.');
-      }
-    } catch (err: any) {
-      toast.dismiss(loadToast);
-      alert(`테스트 결제 승인 오류: ${err.message || '인증/네트워크 세션 세팅 유실'}`);
-    } finally {
-      setIsBulkPaying(false);
     }
   };
 
@@ -513,35 +418,18 @@ export default function Cart() {
                     {selectedItems.length > 0 ? (
                       <div className="space-y-2.5">
                         
-                        {/* Instant mock payment for instant enrollment */}
+                        {/* Standard PG payment with high contrast primary button */}
                         <Button
-                          onClick={handleBulkTestPayment}
-                          disabled={isPaying || isBulkPaying}
-                          className="w-full h-13 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-sm rounded-2xl shadow-md shadow-emerald-50 flex items-center justify-center gap-1.5"
+                          onClick={() => handlePayment(selectedItems[0])}
+                          disabled={isPaying}
+                          className="w-full h-13 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-sm rounded-2xl shadow-md shadow-purple-100 flex items-center justify-center gap-1.5 transition-all"
                         >
-                          {isBulkPaying ? (
+                          {isPaying ? (
                             <Loader2 className="w-5 h-5 animate-spin" />
                           ) : (
                             <>
-                              <Sparkles className="w-4 h-4 animate-pulse" />
-                              선택 {selectedItems.length}건 간편 테스트 승인
-                            </>
-                          )}
-                        </Button>
-
-                        {/* Standard PG payment for the first selected item to avoid layout or complex SDK payload mismatch */}
-                        <Button
-                          onClick={() => handlePayment(selectedItems[0])}
-                          disabled={isPaying || isBulkPaying}
-                          variant="outline"
-                          className="w-full h-11 border-purple-200 hover:bg-purple-50 hover:text-purple-700 text-purple-700 font-extrabold text-xs rounded-2xl flex items-center justify-center gap-1.5"
-                        >
-                          {isPaying ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <>
-                              <CreditCard className="w-4 h-4" />
-                              상점 신용카드 실결제 ({selectedItems[0].courses?.title?.substring(0, 6)}...)
+                              <CreditCard className="w-4.5 h-4.5" />
+                              신용카드 결제하기 ({selectedItems.length}건)
                             </>
                           )}
                         </Button>

@@ -116,6 +116,91 @@ export const handler: Handler = async (event) => {
     const { path: reqPath } = event;
     const body = JSON.parse(event.body || "{}");
 
+    // Route: Find email (/api/auth/find-email)
+    if (reqPath.endsWith("find-email")) {
+      const { name, mobile } = body;
+      if (!name || !name.trim()) {
+        return {
+          statusCode: 400,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: "이름을 입력해 주세요." })
+        };
+      }
+      if (!mobile || !mobile.trim()) {
+        return {
+          statusCode: 400,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: "휴대전화번호를 입력해 주세요." })
+        };
+      }
+
+      // Query profiles by real name
+      const { data: matchedProfiles, error: pErr } = await supabaseAdmin
+        .from("profiles")
+        .select("email, name, mobile_phone, phone, is_deleted")
+        .eq("name", name.trim());
+
+      if (pErr) {
+        console.error("[Find Email] Error checking profiles:", pErr);
+        return {
+          statusCode: 500,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: "데이터베이스 조회 중 오류가 발생했습니다." })
+        };
+      }
+
+      if (!matchedProfiles || matchedProfiles.length === 0) {
+        return {
+          statusCode: 400,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: "일치하는 회원 정보를 찾을 수 없습니다." })
+        };
+      }
+
+      const cleanInputPhone = mobile.replace(/[^0-9]/g, '');
+
+      const matchedEmails = matchedProfiles
+        .filter(profile => {
+          if (profile.is_deleted) return false;
+          const cleanDbMobile = (profile.mobile_phone || '').replace(/[^0-9]/g, '');
+          const cleanDbPhone = (profile.phone || '').replace(/[^0-9]/g, '');
+          return cleanDbMobile === cleanInputPhone || cleanDbPhone === cleanInputPhone;
+        })
+        .map(profile => profile.email);
+
+      if (matchedEmails.length === 0) {
+        return {
+          statusCode: 400,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: "입력하신 정보와 일치하는 이메일 주소를 찾을 수 없습니다." })
+        };
+      }
+
+      // Mask matched emails
+      const maskedEmails = matchedEmails.map(email => {
+        if (!email || !email.includes('@')) return email;
+        const [localPart, domain] = email.split('@');
+        if (localPart.length <= 3) {
+          const visibleLength = Math.max(1, localPart.length - 1);
+          const visible = localPart.substring(0, visibleLength);
+          const stars = '*'.repeat(localPart.length - visibleLength);
+          return `${visible}${stars}@${domain}`;
+        }
+        const visible = localPart.substring(0, 3);
+        const stars = '*'.repeat(localPart.length - 3);
+        return `${visible}${stars}@${domain}`;
+      });
+
+      return {
+        statusCode: 200,
+        headers: responseHeaders,
+        body: JSON.stringify({
+          status: "success",
+          emails: maskedEmails
+        })
+      };
+    }
+
     // Route: Send OTP (/api/auth/send-reset-otp)
     if (reqPath.endsWith("send-reset-otp")) {
       const { email } = body;

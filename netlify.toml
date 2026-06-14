@@ -65,6 +65,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/auth/find-email"
+  to = "/.netlify/functions/auth"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
