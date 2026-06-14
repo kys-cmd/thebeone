@@ -2261,22 +2261,24 @@ export default function ChatPage() {
         {/* ===================================
             3. RIGHT SIDEBAR (Active Room Members list)
             =================================== */}
-        {activeRoom && activeRoom.room_type !== 'dm' && !isPopup && (
-          <div className="hidden lg:flex w-64 border-l border-slate-100 bg-white flex flex-col shrink-0 overflow-hidden text-left">
+        {activeRoom && (
+          <div className="hidden md:flex w-60 lg:w-64 border-l border-slate-100 bg-white flex flex-col shrink-0 overflow-hidden text-left">
             <div className="p-4 border-b border-slate-50 shrink-0 flex items-center justify-between">
               <h4 className="text-xs font-black text-slate-900 tracking-tight flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-purple-600" />
                 참여자 리스트 ({roomMembers.length})
               </h4>
-              <Button
-                onClick={() => setIsInviteModalOpen(true)}
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-[10px] bg-purple-50 hover:bg-purple-100 text-purple-600 font-extrabold rounded-lg flex items-center"
-              >
-                <Plus className="w-3 h-3 mr-0.5" />
-                초대
-              </Button>
+              {activeRoom.room_type !== 'dm' && (
+                <Button
+                  onClick={() => setIsInviteModalOpen(true)}
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-[10px] bg-purple-50 hover:bg-purple-100 text-purple-600 font-extrabold rounded-lg flex items-center border-none"
+                >
+                  <Plus className="w-3 h-3 mr-0.5" />
+                  초대
+                </Button>
+              )}
             </div>
 
             <div className="flex-grow overflow-y-auto p-4 space-y-3">
@@ -2487,22 +2489,24 @@ export default function ChatPage() {
                 </div>
 
                 {/* 4. Active Room Members list for Mobile view inside the drawer */}
-                {activeRoom && activeRoom.room_type !== 'dm' && (
+                {activeRoom && (
                   <div className="pt-4 border-t border-[#2D1D34] space-y-3">
                     <div className="flex items-center justify-between px-3">
                       <span className="text-[10px] font-black tracking-wider text-purple-300/50 uppercase flex items-center gap-1">
                         <Users className="w-3.5 h-3.5 text-purple-400" />
                         참여자 리스트 ({roomMembers.length})
                       </span>
-                      <button
-                        onClick={() => {
-                          setIsInviteModalOpen(true);
-                          setIsMobileListOpen(false);
-                        }}
-                        className="text-[9px] bg-purple-600 hover:bg-purple-700 text-white font-bold p-1 px-2 rounded-md border-none transition-all shadow-sm"
-                      >
-                        초대
-                      </button>
+                      {activeRoom.room_type !== 'dm' && (
+                        <button
+                          onClick={() => {
+                            setIsInviteModalOpen(true);
+                            setIsMobileListOpen(false);
+                          }}
+                          className="text-[9px] bg-purple-600 hover:bg-purple-700 text-white font-bold p-1 px-2 rounded-md border-none transition-all shadow-sm"
+                        >
+                          초대
+                        </button>
+                      )}
                     </div>
                     <div className="max-h-[140px] overflow-y-auto px-2 space-y-2">
                       {roomMembers.map(member => {
