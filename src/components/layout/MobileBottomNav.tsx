@@ -49,6 +49,9 @@ export default function MobileBottomNav() {
     if (tab === 'chat') {
       setActiveSheet(null);
       navigate('/chat');
+    } else if (tab === 'community') {
+      setActiveSheet(null);
+      navigate('/community');
     } else {
       if (activeSheet === tab) {
         setActiveSheet(null); // Toggle close

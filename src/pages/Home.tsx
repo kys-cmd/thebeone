@@ -190,8 +190,8 @@ export default function Home() {
   }, [finalBanners.length, currentSlide, siteConfig?.banner_interval]);
 
   return (
-    <div className="flex flex-col gap-20 pb-20">
-      <section className="mt-6 mb-0 overflow-hidden">
+    <div className="flex flex-col gap-12 md:gap-20 pb-20 pt-5 md:pt-0">
+      <section className="mt-6 mb-0 overflow-hidden hidden md:block">
         <div className="container mx-auto px-4 overflow-visible text-center">
           {!loading ? (
             <div className="relative w-full aspect-[1920/450]">
@@ -275,14 +275,14 @@ export default function Home() {
       </section>
 
       {/* 최신 공지사항 게시글 형태 (배경이 100% 가득 차는 회색 최신글 슬롯 구조) */}
-      <section className="w-full bg-slate-50 border-y border-slate-200/60 py-4.5 -mt-12 -mb-8">
+      <section className="w-full bg-slate-50 border-y border-slate-200/60 py-4.5 mt-0 md:-mt-6 sm:-mt-12 -mb-4 sm:-mb-8">
         <div className="container mx-auto px-4">
           {latestNotice ? (
             <Link 
               to={`/support/notice?id=${latestNotice.id}`}
               className="block w-full hover:bg-slate-100/60 p-3 rounded-xl transition-all duration-200 text-left"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center justify-between gap-4 min-w-0">
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="bg-slate-200 text-slate-700 font-black text-[10.5px] px-2.5 py-1 rounded-md shrink-0 select-none">
                     최신공지
@@ -292,7 +292,7 @@ export default function Home() {
                   </h3>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-slate-400 font-bold font-mono shrink-0 select-none">
-                  <span>{new Date(latestNotice.created_at).toLocaleDateString('ko-KR')}</span>
+                  <span className="hidden sm:inline">{new Date(latestNotice.created_at).toLocaleDateString('ko-KR')}</span>
                   <ArrowRight className="w-3.5 h-3.5 text-slate-405" />
                 </div>
               </div>
@@ -355,12 +355,12 @@ export default function Home() {
       />
 
       {/* Testimonials Section */}
-      <section className="bg-gray-50 py-24">
+      <section className="bg-gray-50 py-10 sm:py-24">
         <div className="container mx-auto px-4">
-          <div className="flex items-end justify-between mb-12">
-            <div className="space-y-4">
-              <Badge variant="outline" className="text-purple-600 border-purple-200 bg-purple-50 px-3 py-1 font-bold">REVIEWS</Badge>
-              <h2 className="text-4xl font-black tracking-tighter text-gray-900">베스트 수강후기</h2>
+          <div className="flex items-end justify-between mb-6 sm:mb-12">
+            <div className="space-y-2 sm:space-y-4">
+              <Badge variant="outline" className="text-purple-600 border-purple-200 bg-purple-50 px-2.5 py-0.5 sm:px-3 sm:py-1 font-bold text-[10px] sm:text-xs">REVIEWS</Badge>
+              <h2 className="text-2xl sm:text-4xl font-black tracking-tighter text-gray-900">베스트 수강후기</h2>
             </div>
           </div>
           
@@ -370,27 +370,27 @@ export default function Home() {
                 <motion.div 
                   key={review.id || idx}
                   whileHover={{ y: -5 }}
-                  className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between"
+                  className="bg-white p-5 sm:p-8 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between"
                 >
                   <div>
-                    <div className="flex items-center gap-1 text-yellow-400 mb-6">
+                    <div className="flex items-center gap-1 text-yellow-400 mb-4 sm:mb-6">
                       {[...Array(5)].map((_, j) => (
-                        <Star key={j} className={`w-5 h-5 ${j < review.rating ? 'fill-current' : 'text-gray-300'}`} />
+                        <Star key={j} className={`w-4 h-4 sm:w-5 sm:h-5 ${j < review.rating ? 'fill-current' : 'text-gray-300'}`} />
                       ))}
                     </div>
-                    <p className="text-base font-bold leading-relaxed text-gray-800 line-clamp-4 whitespace-pre-wrap mb-6">
+                    <p className="text-xs sm:text-base font-bold leading-relaxed text-gray-800 line-clamp-4 whitespace-pre-wrap mb-4 sm:mb-6">
                       "{review.content}"
                     </p>
                   </div>
-                  <div className="flex items-center gap-4 border-t pt-6 mt-auto">
-                    <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-100 flex-shrink-0">
+                  <div className="flex items-center gap-3 sm:gap-4 border-t pt-4 sm:pt-6 mt-auto">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-gray-100 flex-shrink-0">
                       <img src={review.user_avatar || `https://i.pravatar.cc/150?u=${review.user_id}`} alt="User" className="w-full h-full object-cover" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-bold text-gray-900 truncate">
+                      <p className="font-bold text-xs sm:text-base text-gray-900 truncate">
                         {review.user_name || '익명 수강생'}
                       </p>
-                      <p className="text-xs text-purple-600 font-medium line-clamp-1">
+                      <p className="text-[10px] sm:text-xs text-purple-600 font-medium line-clamp-1">
                         {review.course_title || '비원아카데미 강의 수강'}
                       </p>
                     </div>
@@ -428,10 +428,10 @@ function CourseSection({ title, subtitle, items, type = 'regular' }: any) {
 
   return (
     <section className="container mx-auto px-4 relative">
-      <div className="flex items-end justify-between mb-10">
-        <div className="space-y-3">
-          <h2 className="text-2xl md:text-3xl font-black tracking-tighter text-gray-900 break-keep">{title}</h2>
-          <p className="text-gray-500 font-medium tracking-tight break-keep">{subtitle}</p>
+      <div className="flex items-end justify-between mb-6 sm:mb-10">
+        <div className="space-y-2">
+          <h2 className="text-xl sm:text-3xl font-black tracking-tighter text-gray-900 break-keep">{title}</h2>
+          <p className="text-gray-500 font-medium tracking-tight break-keep text-xs sm:text-sm hidden sm:block">{subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button 

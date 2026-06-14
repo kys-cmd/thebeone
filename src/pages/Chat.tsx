@@ -9,7 +9,7 @@ import {
   MessageSquare, UserMinus, ShieldAlert, ArrowLeft, LogOut, Check,
   Sparkles, Smile, Image as ImageIcon, CheckCircle, FileText, ChevronDown,
   Bold, Italic, Underline, Strikethrough, Link as LinkIcon, List, ListOrdered, 
-  Quote, Code, Braces, AtSign, HelpCircle, ExternalLink, Menu, X
+  Quote, Code, Braces, AtSign, HelpCircle, ExternalLink, Menu, X, Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -114,7 +114,6 @@ export default function ChatPage() {
   const selectedRoomId = searchParams.get('room');
   const isPopup = searchParams.get('popup') === 'true' || (
     typeof window !== 'undefined' && (
-      window.location.pathname === '/chat' ||
       new URLSearchParams(window.location.search).get('popup') === 'true' ||
       sessionStorage.getItem('is_popup_chat') === 'true' ||
       window.name === 'BOneChatWindow'
@@ -154,6 +153,7 @@ export default function ChatPage() {
 
   // 실시간 메시지 상태
   const [messages, setMessages] = useState<any[]>([]);
+  const [lastMessagesMap, setLastMessagesMap] = useState<Record<string, { message: string, created_at: string, nickname: string }>>({});
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -249,6 +249,73 @@ export default function ChatPage() {
       return `${prefix} ${nameStr}`;
     }
     return nameStr;
+  };
+
+  const formatTimeKorean = (isoString?: string) => {
+    if (!isoString) return '';
+    try {
+      const date = new Date(isoString);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      
+      const isToday = date.toDateString() === now.toDateString();
+      
+      if (diffMins < 1) return '방금 전';
+      if (diffMins < 60) return `${diffMins}분 전`;
+      if (isToday) return `${diffHours}시간 전`;
+      
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const isYesterday = date.toDateString() === yesterday.toDateString();
+      if (isYesterday) return '어제';
+      
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      return `${month}월 ${day}일`;
+    } catch (e) {
+      return '';
+    }
+  };
+
+  const getRoomAvatar = (room: any) => {
+    if (room.room_type === 'dm' || room.room_type === 'one_to_one') {
+      const otherMembers = room.chat_room_members?.filter((m: any) => m.user_id !== user?.id) || [];
+      if (otherMembers.length > 0) {
+        const profile = otherMembers[0].profiles;
+        if (profile?.avatar_url) {
+          return (
+            <Avatar className="w-12 h-12 border border-slate-100 shrink-0">
+              <AvatarImage src={profile.avatar_url} referrerPolicy="no-referrer" />
+              <AvatarFallback className="bg-purple-600 text-white font-extrabold text-sm">
+                {(profile.nickname || profile.name || 'U')[0]}
+              </AvatarFallback>
+            </Avatar>
+          );
+        }
+      }
+    }
+
+    const name = getRoomDisplayName(room);
+    const firstChar = name ? name.replace(/[\[\]]/g, '').trim()[0] : '소';
+    
+    const colors = [
+      'bg-purple-100 text-purple-700 font-extrabold',
+      'bg-indigo-100 text-indigo-700 font-extrabold',
+      'bg-emerald-100 text-emerald-700 font-extrabold',
+      'bg-rose-100 text-rose-700 font-extrabold',
+      'bg-amber-100 text-amber-700 font-extrabold',
+      'bg-blue-100 text-blue-700 font-extrabold',
+    ];
+    const colorIndex = name ? name.length % colors.length : 0;
+    const colorClass = colors[colorIndex];
+
+    return (
+      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm shrink-0 font-extrabold ${colorClass}`}>
+        {firstChar}
+      </div>
+    );
   };
 
   // 1. 기초 사용자, 커뮤니티 및 회원 데이터 목록 로딩
@@ -396,6 +463,58 @@ export default function ChatPage() {
 
       setRooms(visibleRooms);
 
+      // 각 방의 최근 메시지 상세 정보 및 시각을 1:1 매핑 비동기 로드해 프론트엔드 캐싱
+      const fetchLastMessages = async (roomsList: any[]) => {
+        try {
+          const promises = roomsList.map(async (room) => {
+            const { data: rawMsg } = await supabase
+              .from('chat_messages')
+              .select('id, message, content, created_at, user_id')
+              .eq('room_id', room.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (rawMsg) {
+              let nickname = '익명';
+              if (rawMsg.user_id) {
+                const { data: profile } = await supabase
+                  .from('profiles')
+                  .select('nickname, name')
+                  .eq('id', rawMsg.user_id)
+                  .maybeSingle();
+                if (profile) {
+                  nickname = profile.nickname || profile.name || '익명';
+                }
+              }
+              return {
+                roomId: room.id,
+                message: rawMsg.message || rawMsg.content || '',
+                created_at: rawMsg.created_at,
+                nickname
+              };
+            }
+            return { roomId: room.id, message: '', created_at: '', nickname: '' };
+          });
+          const results = await Promise.all(promises);
+          const map: Record<string, any> = {};
+          results.forEach((res) => {
+            if (res.created_at) {
+              map[res.roomId] = {
+                message: res.message,
+                created_at: res.created_at,
+                nickname: res.nickname
+              };
+            }
+          });
+          setLastMessagesMap(map);
+        } catch (e) {
+          console.error("Last messages fetch error:", e);
+        }
+      };
+      
+      fetchLastMessages(visibleRooms);
+
       // URL에 지정된 방이 있는 상태에서 활성화 처리
       if (selectedRoomId) {
         const target = visibleRooms.find(r => r.id === selectedRoomId);
@@ -414,15 +533,7 @@ export default function ChatPage() {
           }
         }
       } else {
-        // 기본 디폴트 방 선택 (가장 최신 공개방)
-        const defaultRoom = visibleRooms.find(r => r.room_type === 'public' || !r.room_type);
-        if (defaultRoom) {
-          setSearchParams({ room: defaultRoom.id });
-        } else if (visibleRooms.length > 0) {
-          setSearchParams({ room: visibleRooms[0].id });
-        } else {
-          setActiveRoom(null);
-        }
+        setActiveRoom(null);
       }
     } catch (err) {
       console.error('All rooms fetch failed:', err);
@@ -598,6 +709,14 @@ export default function ChatPage() {
               if (prev.some(m => m.id === enriched.id)) return prev;
               return [...prev, enriched];
             });
+            setLastMessagesMap(prev => ({
+              ...prev,
+              [activeRoom.id]: {
+                message: enriched.message || enriched.content || '',
+                created_at: enriched.created_at,
+                nickname: enriched.profiles?.nickname || enriched.profiles?.name || '익명'
+              }
+            }));
           } else if (payload.eventType === 'DELETE') {
             const oldId = payload.old.id;
             setMessages(prev => prev.filter(m => m.id !== oldId));
@@ -1405,13 +1524,121 @@ export default function ChatPage() {
   };
 
   return (
-    <div className={isPopup ? "w-screen h-screen bg-white flex flex-col overflow-hidden font-sans" : "min-h-screen bg-[#F8F9FA] pt-20 pb-4 px-4 font-sans"}>
-      <div className={isPopup ? "w-full h-full bg-white flex border-none shadow-none rounded-none" : "max-w-7xl mx-auto h-[78vh] bg-white rounded-[32px] overflow-hidden border border-slate-200/50 shadow-2xl flex"}>
+    <div className={isPopup ? "w-screen h-screen bg-white flex flex-col overflow-hidden font-sans" : `font-sans flex flex-col min-h-screen bg-[#F8F9FA] ${activeRoom ? 'h-screen w-screen md:w-auto md:h-auto pt-0 pb-0 px-0 md:pt-20 md:pb-4 md:px-4 overflow-hidden' : 'pt-5 md:pt-20 pb-4 px-4'}`}>
+      <div className={isPopup ? "w-full h-full bg-white flex border-none shadow-none rounded-none" : `w-full bg-white flex ${activeRoom ? 'h-screen md:h-[78vh] max-w-7xl mx-auto rounded-none border-none shadow-none md:rounded-[32px] md:border border-slate-200/50 md:shadow-2xl' : 'max-w-7xl mx-auto h-[78vh] rounded-none border-none shadow-none md:rounded-[32px] md:border border-slate-200/50 md:shadow-2xl'}`}>
         
         {/* ===================================
-            1. LEFT WORKSPACE SIDEBAR (Eggplant/Slate Black)
+            1. LEFT WORKSPACE SIDEBAR (Eggplant/Slate Black on Desktop, Beautiful Native Chat List on Mobile)
             =================================== */}
-        <div className={`${activeRoom ? 'hidden md:flex' : 'flex'} w-full md:w-72 bg-[#1F1523] text-white flex-col shrink-0 border-r border-[#2D1D34] overflow-hidden`}>
+        <div className={`${activeRoom ? 'hidden md:flex' : 'flex'} w-full md:w-72 flex-col shrink-0 border-r border-[#2D1D34] overflow-hidden bg-[#1F1523]`}>
+          
+          {/* MOBILE VIEW LIST (White Theme, matching Kakao/Telegram reference image) */}
+          <div className="flex md:hidden w-full h-full bg-white flex-col">
+            {/* Mobile Header */}
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">채팅</h1>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => { setCreateType('public'); setIsCreateModalOpen(true); }}
+                  className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500 hover:text-slate-950 transition-all"
+                  title="새로운 소통방 만들기"
+                >
+                  <Plus className="w-6 h-6 stroke-[2.5]" />
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile Unified List */}
+            <div className="flex-grow overflow-y-auto px-4 py-2 space-y-0.5 divide-y divide-slate-100/50">
+              {(() => {
+                const sortedMobileRooms = [...rooms].sort((a, b) => {
+                  const aLast = lastMessagesMap[a.id]?.created_at || a.created_at;
+                  const bLast = lastMessagesMap[b.id]?.created_at || b.created_at;
+                  return new Date(bLast).getTime() - new Date(aLast).getTime();
+                });
+
+                if (sortedMobileRooms.length === 0) {
+                  return (
+                    <div className="text-center py-12">
+                      <p className="text-sm text-slate-400 font-bold">참여 가능한 소통방이 존재하지 않습니다.</p>
+                      <Button 
+                        onClick={() => { setCreateType('public'); setIsCreateModalOpen(true); }}
+                        className="mt-3 bg-purple-600 hover:bg-purple-700 font-bold rounded-lg text-xs"
+                      >
+                        신규 소통방 생성
+                      </Button>
+                    </div>
+                  );
+                }
+
+                return sortedMobileRooms.map(room => {
+                  const isActive = activeRoom?.id === room.id;
+                  const lastMsg = lastMessagesMap[room.id];
+                  const lastMsgText = lastMsg ? lastMsg.message : (room.description || '대화 기록이 아직 없습니다.');
+                  const lastMsgTime = lastMsg ? formatTimeKorean(lastMsg.created_at) : formatTimeKorean(room.created_at);
+                  const lastMsgNickname = lastMsg ? lastMsg.nickname : '';
+
+                  return (
+                    <div 
+                      key={room.id}
+                      onClick={() => setSearchParams({ room: room.id })}
+                      className="flex items-center gap-3.5 py-4 cursor-pointer active:bg-slate-50 hover:bg-slate-50/50 transition-all text-left border-none"
+                    >
+                      {/* Circle Avatar */}
+                      {getRoomAvatar(room)}
+
+                      {/* Main Info */}
+                      <div className="min-w-0 flex-grow">
+                        <div className="flex items-center justify-between gap-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-extrabold text-slate-900 text-[14px] sm:text-base truncate leading-snug">
+                              {getRoomDisplayName(room)}
+                            </span>
+                            <span className="text-xs text-slate-400 font-bold shrink-0">
+                              ({room.memberCount || 1})
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-400 font-medium shrink-0">
+                            {lastMsgTime}
+                          </span>
+                        </div>
+
+                        {/* Latest message text preview snippet */}
+                        <p className="text-[13px] text-slate-500 font-medium leading-relaxed truncate max-w-[200px] sm:max-w-[260px] mt-0.5">
+                          {lastMsgNickname ? `${lastMsgNickname} : ` : ''}{lastMsgText}
+                        </p>
+
+                        {/* Small metadata tag line */}
+                        <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">
+                          {room.room_type === 'private' ? '비공개 협업그룹' : room.room_type === 'dm' ? '1:1 비밀대화' : '공개 소통방'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+            
+            {/* Mobile Exit Bar */}
+            <div className="p-3 bg-slate-50 border-t border-slate-100 shrink-0 text-left flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Avatar className="w-8 h-8 border border-purple-500/10">
+                  <AvatarImage src={user.avatar_url || undefined} />
+                  <AvatarFallback className="bg-purple-650 text-white font-black text-xs">{(user.nickname || user.name || 'U')[0]}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 leading-tight">
+                  <h4 className="font-extrabold text-xs text-slate-800 truncate">{user.nickname || user.name || '본인'}</h4>
+                  <p className="text-[9px] text-slate-400 font-bold tracking-tight truncate">온라인</p>
+                </div>
+              </div>
+              <Link to="/" className="p-1.5 hover:bg-slate-200/50 rounded-lg text-slate-500 hover:text-slate-950 transition-colors" title="웹사이트 나가기">
+                <LogOut className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+
+          {/* DESKTOP VIEW LIST (Eggplant Dark Theme Workspace) */}
+          <div className="hidden md:flex w-full h-full bg-[#1F1523] text-white flex-col">
             {/* Header */}
             <div className="p-5 border-b border-[#2D1D34] flex items-center justify-between shrink-0 bg-[#160E1A]">
               <div className="flex items-center gap-2.5 text-left">
@@ -1563,7 +1790,7 @@ export default function ChatPage() {
                 </Avatar>
                 <div className="min-w-0 leading-tight">
                   <h4 className="font-extrabold text-sm text-slate-100 truncate">{user.nickname || user.name || '본인'}</h4>
-                  <p className="text-xs text-slate-400 font-bold tracking-tight truncate mt-0.5">접속 상태: 온라인</p>
+                  <p className="text-xs text-slate-400 font-bold tracking-tight truncate mt-0.5">접속 상태: ONLINE</p>
                 </div>
               </div>
               <Link to="/" className="p-1.5 hover:bg-white/5 rounded-lg text-purple-300 hover:text-white transition-colors" title="웹사이트 나가기">
@@ -1571,6 +1798,8 @@ export default function ChatPage() {
               </Link>
             </div>
           </div>
+
+        </div>
 
         {/* ===================================
             2. CENTRAL MESSAGES FEED FRAME
@@ -1581,191 +1810,206 @@ export default function ChatPage() {
             <>
               {/* TOP HUB BAR */}
               <div className="px-4 sm:px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between shrink-0 text-left">
-                <div className="min-w-0 flex items-center gap-2">
-                  {/* 뒤로가기 버튼 (모바일 전용) */}
-                  <Button
-                    onClick={() => setSearchParams({})}
-                    variant="ghost"
-                    size="icon"
-                    className="md:hidden w-10 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 shrink-0 text-slate-700 border-none transition-all flex items-center justify-center mr-1"
-                    title="대화 목록으로 돌아가기"
-                  >
-                    <ArrowLeft className="w-5 h-5 text-slate-600" />
-                  </Button>
-
-                  {/* Mobile Hamburger toggle */}
+                {/* 1) MOBILE HEADER (visible on screens under md) */}
+                <div className="flex md:hidden items-center justify-between w-full">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Button
+                      onClick={() => setSearchParams({})}
+                      variant="ghost"
+                      size="icon"
+                      className="w-9 h-9 rounded-xl bg-slate-50 hover:bg-slate-100 shrink-0 text-slate-700 border-none transition-all flex items-center justify-center mr-1"
+                      title="대화 목록으로 돌아가기"
+                    >
+                      <ArrowLeft className="w-5 h-5 text-slate-600" />
+                    </Button>
+                    <div className="min-w-0">
+                      <h3 className="font-black text-slate-900 text-[14px] sm:text-[15px] tracking-tight truncate max-w-[170px] leading-tight">
+                        {getRoomDisplayName(activeRoom)}
+                      </h3>
+                      <span className="text-[10px] text-slate-400 font-bold block mt-0.5 leading-none">
+                        총 {roomMembers.length}명 참여중
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Hamburger menu positioned on the far top-right on mobile */}
                   {!isPopup && (
                     <Button
                       onClick={() => setIsMobileListOpen(true)}
                       variant="ghost"
                       size="icon"
-                      className="hidden lg:hidden w-10 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 shrink-0 text-slate-700 border-none transition-all"
+                      className="w-9 h-9 rounded-xl bg-slate-50 hover:bg-slate-100 shrink-0 text-slate-700 border-none transition-all flex items-center justify-center"
                     >
                       <Menu className="w-5 h-5 text-slate-600" />
                     </Button>
                   )}
-
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 leading-none flex-wrap">
-                      <h3 className="font-black text-slate-900 text-sm sm:text-base tracking-tight truncate max-w-[160px] sm:max-w-[280px]">
-                        {getRoomDisplayName(activeRoom)}
-                      </h3>
-                      <Badge className="bg-purple-50 hover:bg-purple-100 text-purple-600 border-none font-bold text-[8px] leading-none px-1.5 py-0.5 whitespace-nowrap">
-                        {activeRoom.room_type === 'private' ? '비공개' : activeRoom.room_type === 'dm' ? '1:1' : '공개채팅방'}
-                      </Badge>
-
-                      {/* 드롭다운 빠른 이동 메뉴 트리거 */}
-                      <div className="relative inline-block ml-1 z-30">
-                        <Button
-                          onClick={() => setIsRoomDropdownOpen(!isRoomDropdownOpen)}
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2.5 bg-purple-50 hover:bg-purple-100 text-purple-600 font-extrabold text-[11px] rounded-lg border-none flex items-center gap-1 transition-all"
-                        >
-                          <span>채팅방 선택</span>
-                          <ChevronDown className="w-3 h-3 shrink-0" />
-                        </Button>
-
-                        <AnimatePresence>
-                          {isRoomDropdownOpen && (
-                            <>
-                              <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setIsRoomDropdownOpen(false)} />
-                              <motion.div
-                                initial={{ opacity: 0, y: 5 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 5 }}
-                                className="absolute left-0 mt-1 w-72 bg-white border border-slate-200/80 rounded-2xl shadow-xl z-50 overflow-hidden text-left max-h-80 overflow-y-auto"
-                              >
-                                <div className="p-2.5 bg-slate-50 border-b border-slate-100/80 sticky top-0 flex items-center justify-between z-10 shrink-0">
-                                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-wide">입장 가능한 채팅방 선택</span>
-                                  <span className="text-[9px] font-bold text-slate-400 text-right shrink-0">Beone Messenger</span>
-                                </div>
-                                <div className="p-1.5 space-y-3.5 py-3.5">
-                                  {/* public */}
-                                  {publicRooms.length > 0 && (
-                                    <div className="space-y-1">
-                                      <div className="text-[9px] font-black text-purple-500 pl-2 block tracking-wider uppercase">📢 공개 소통방 ({publicRooms.length})</div>
-                                      <div className="space-y-0.5">
-                                        {publicRooms.map(r => {
-                                          const isActive = activeRoom?.id === r.id;
-                                          return (
-                                            <button
-                                              key={r.id}
-                                              type="button"
-                                              onClick={() => {
-                                                setSearchParams({ room: r.id, popup: isPopup ? 'true' : 'false' });
-                                                setIsRoomDropdownOpen(false);
-                                              }}
-                                              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-between transition-all ${
-                                                isActive ? 'bg-purple-600 text-white shadow font-black' : 'text-slate-700 hover:bg-slate-50'
-                                              }`}
-                                            >
-                                              <span className="truncate pr-2">{getRoomDisplayName(r)}</span>
-                                              {r.isJoined && (
-                                                <span className={`text-[8px] px-1 py-0.5 rounded ${isActive ? 'bg-white/20 text-white' : 'bg-purple-50 text-purple-600'} font-extrabold shrink-0`}>참여 중</span>
-                                              )}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* private */}
-                                  {privateRooms.length > 0 && (
-                                    <div className="space-y-1">
-                                      <div className="text-[9px] font-black text-rose-500 pl-2 block tracking-wider uppercase">🔒 *비공개 협업방* ({privateRooms.length})</div>
-                                      <div className="space-y-0.5">
-                                        {privateRooms.map(r => {
-                                          const isActive = activeRoom?.id === r.id;
-                                          return (
-                                            <button
-                                              key={r.id}
-                                              type="button"
-                                              onClick={() => {
-                                                setSearchParams({ room: r.id, popup: isPopup ? 'true' : 'false' });
-                                                setIsRoomDropdownOpen(false);
-                                              }}
-                                              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-between transition-all ${
-                                                isActive ? 'bg-purple-600 text-white shadow font-black' : 'text-slate-700 hover:bg-slate-50'
-                                              }`}
-                                            >
-                                              <span className="truncate pr-2">{getRoomDisplayName(r)}</span>
-                                              <span className={`text-[8px] font-bold ${isActive ? 'text-white/70' : 'text-slate-400'}`}>{r.memberCount || 1}명</span>
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* DM */}
-                                  {dmRooms.length > 0 && (
-                                    <div className="space-y-1">
-                                      <div className="text-[9px] font-black text-blue-500 pl-2 block tracking-wider uppercase">👤 1:1 대화방 ({dmRooms.length})</div>
-                                      <div className="space-y-0.5">
-                                        {dmRooms.map(r => {
-                                          const isActive = activeRoom?.id === r.id;
-                                          return (
-                                            <button
-                                              key={r.id}
-                                              type="button"
-                                              onClick={() => {
-                                                setSearchParams({ room: r.id, popup: isPopup ? 'true' : 'false' });
-                                                setIsRoomDropdownOpen(false);
-                                              }}
-                                              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-between transition-all ${
-                                                isActive ? 'bg-purple-600 text-white shadow font-black' : 'text-slate-700 hover:bg-slate-50'
-                                              }`}
-                                            >
-                                              <span className="truncate pr-2">{getRoomDisplayName(r)}</span>
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </motion.div>
-                            </>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-slate-400 font-semibold mt-1 tracking-normal truncate">
-                      {activeRoom.room_type === 'dm' 
-                        ? '상호 간의 비밀 대화 및 일대일 매칭 대화방입니다.'
-                        : `수강생 전용 소통 구역 · 총 ${roomMembers.length}명의 회원이 함께하는 중`
-                      }
-                    </p>
-                  </div>
                 </div>
 
-                <div className="flex items-center gap-2 h-9 shrink-0">
-                  {/* 관리자 완전 삭제 */}
-                  {isAdmin && (
-                    <Button 
-                      onClick={handleDeleteRoom}
+                {/* 2) DESKTOP HEADER (visible on screen md:flex and larger) */}
+                <div className="hidden md:flex items-center justify-between w-full">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 leading-none flex-wrap">
+                        <h3 className="font-black text-slate-900 text-sm sm:text-base tracking-tight truncate max-w-[160px] sm:max-w-[280px]">
+                          {getRoomDisplayName(activeRoom)}
+                        </h3>
+                        <Badge className="bg-purple-50 hover:bg-purple-100 text-purple-600 border-none font-bold text-[8px] leading-none px-1.5 py-0.5 whitespace-nowrap">
+                          {activeRoom.room_type === 'private' ? '비공개' : activeRoom.room_type === 'dm' ? '1:1' : '공개채팅방'}
+                        </Badge>
+
+                        {/* 드롭다운 빠른 이동 메뉴 트리거 */}
+                        <div className="relative inline-block ml-1 z-30">
+                          <Button
+                            onClick={() => setIsRoomDropdownOpen(!isRoomDropdownOpen)}
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2.5 bg-purple-50 hover:bg-purple-100 text-purple-600 font-extrabold text-[11px] rounded-lg border-none flex items-center gap-1 transition-all"
+                          >
+                            <span>채팅방 선택</span>
+                            <ChevronDown className="w-3 h-3 shrink-0" />
+                          </Button>
+
+                          <AnimatePresence>
+                            {isRoomDropdownOpen && (
+                              <>
+                                <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setIsRoomDropdownOpen(false)} />
+                                <motion.div
+                                  initial={{ opacity: 0, y: 5 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: 5 }}
+                                  className="absolute left-0 mt-1 w-72 bg-white border border-slate-200/80 rounded-2xl shadow-xl z-50 overflow-hidden text-left max-h-80 overflow-y-auto"
+                                >
+                                  <div className="p-2.5 bg-slate-50 border-b border-slate-100/80 sticky top-0 flex items-center justify-between z-10 shrink-0">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-wide">입장 가능한 채팅방 선택</span>
+                                    <span className="text-[9px] font-bold text-slate-400 text-right shrink-0">Beone Messenger</span>
+                                  </div>
+                                  <div className="p-1.5 space-y-3.5 py-3.5">
+                                    {/* public */}
+                                    {publicRooms.length > 0 && (
+                                      <div className="space-y-1">
+                                        <div className="text-[9px] font-black text-purple-500 pl-2 block tracking-wider uppercase">📢 공개 소통방 ({publicRooms.length})</div>
+                                        <div className="space-y-0.5">
+                                          {publicRooms.map(r => {
+                                            const isActive = activeRoom?.id === r.id;
+                                            return (
+                                              <button
+                                                key={r.id}
+                                                type="button"
+                                                onClick={() => {
+                                                  setSearchParams({ room: r.id, popup: isPopup ? 'true' : 'false' });
+                                                  setIsRoomDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-between transition-all ${
+                                                  isActive ? 'bg-purple-600 text-white shadow font-black' : 'text-slate-700 hover:bg-slate-50'
+                                                }`}
+                                              >
+                                                <span className="truncate pr-2">{getRoomDisplayName(r)}</span>
+                                                {r.isJoined && (
+                                                  <span className={`text-[8px] px-1 py-0.5 rounded ${isActive ? 'bg-white/20 text-white' : 'bg-purple-50 text-purple-600'} font-extrabold shrink-0`}>참여 중</span>
+                                                )}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* private */}
+                                    {privateRooms.length > 0 && (
+                                      <div className="space-y-1">
+                                        <div className="text-[9px] font-black text-rose-500 pl-2 block tracking-wider uppercase">🔒 *비공개 협업방* ({privateRooms.length})</div>
+                                        <div className="space-y-0.5">
+                                          {privateRooms.map(r => {
+                                            const isActive = activeRoom?.id === r.id;
+                                            return (
+                                              <button
+                                                key={r.id}
+                                                type="button"
+                                                onClick={() => {
+                                                  setSearchParams({ room: r.id, popup: isPopup ? 'true' : 'false' });
+                                                  setIsRoomDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-between transition-all ${
+                                                  isActive ? 'bg-purple-600 text-white shadow font-black' : 'text-slate-700 hover:bg-slate-50'
+                                                }`}
+                                              >
+                                                <span className="truncate pr-2">{getRoomDisplayName(r)}</span>
+                                                <span className={`text-[8px] font-bold ${isActive ? 'text-white/70' : 'text-slate-400'}`}>{r.memberCount || 1}명</span>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* DM */}
+                                    {dmRooms.length > 0 && (
+                                      <div className="space-y-1">
+                                        <div className="text-[9px] font-black text-blue-500 pl-2 block tracking-wider uppercase">👤 1:1 대화방 ({dmRooms.length})</div>
+                                        <div className="space-y-0.5">
+                                          {dmRooms.map(r => {
+                                            const isActive = activeRoom?.id === r.id;
+                                            return (
+                                              <button
+                                                key={r.id}
+                                                type="button"
+                                                onClick={() => {
+                                                  setSearchParams({ room: r.id, popup: isPopup ? 'true' : 'false' });
+                                                  setIsRoomDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-between transition-all ${
+                                                  isActive ? 'bg-purple-600 text-white shadow font-black' : 'text-slate-700 hover:bg-slate-50'
+                                                }`}
+                                              >
+                                                <span className="truncate pr-2">{getRoomDisplayName(r)}</span>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </motion.div>
+                              </>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-1 tracking-normal truncate">
+                        {activeRoom.room_type === 'dm' 
+                          ? '상호 간의 비밀 대화 및 일대일 매칭 대화방입니다.'
+                          : `수강생 전용 소통 구역 · 총 ${roomMembers.length}명의 회원이 함께하는 중`
+                        }
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 h-9 shrink-0">
+                    {/* 관리자 완전 삭제 */}
+                    {isAdmin && (
+                      <Button 
+                        onClick={handleDeleteRoom}
+                        variant="ghost"
+                        size="sm"
+                        className="text-rose-600 hover:bg-rose-50 h-8 text-[11px] font-black rounded-lg px-2.5 border border-rose-100/60"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-1" />
+                        채팅방 완전 삭제
+                      </Button>
+                    )}
+
+                    {/* 방 탈퇴 */}
+                    <Button
+                      type="button"
+                      onClick={handleLeaveRoom}
                       variant="ghost"
                       size="sm"
-                      className="text-rose-600 hover:bg-rose-50 h-8 text-[11px] font-black rounded-lg px-2.5 border border-rose-100/60"
+                      className="text-gray-500 hover:bg-gray-50 border border-slate-200 h-8 text-[11px] font-bold rounded-lg px-2.5"
                     >
-                      <Trash2 className="w-3.5 h-3.5 mr-1" />
-                      채팅방 완전 삭제
+                      <UserMinus className="w-3.5 h-3.5 mr-1" />
+                      채팅방 나가기
                     </Button>
-                  )}
-
-                  {/* 방 탈퇴 */}
-                  <Button
-                    type="button"
-                    onClick={handleLeaveRoom}
-                    variant="ghost"
-                    size="sm"
-                    className="text-gray-500 hover:bg-gray-50 border border-slate-200 h-8 text-[11px] font-bold rounded-lg px-2.5"
-                  >
-                    <UserMinus className="w-3.5 h-3.5 mr-1" />
-                    채팅방 나가기
-                  </Button>
+                  </div>
                 </div>
               </div>
 

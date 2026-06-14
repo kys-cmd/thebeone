@@ -192,7 +192,7 @@ export default function Header() {
         >
           <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
             <span className="bg-white text-gray-900 px-2 py-0.5 rounded-full text-[10px] shrink-0">HOT</span>
-            <p className="text-sm md:text-base tracking-tight truncate">
+            <p className="text-xs md:text-base tracking-tight truncate">
               {siteConfig.event_banner_text}
             </p>
           </div>
@@ -205,15 +205,15 @@ export default function Header() {
           <div className="flex items-center gap-10 flex-shrink-0">
             <Link to="/" className="flex items-center gap-2 group">
               {siteConfig?.logo_url ? (
-                <img src={siteConfig.logo_url} alt={siteConfig.site_name} className="h-[25px] w-auto object-contain" />
+                <img src={siteConfig.logo_url} alt={siteConfig.site_name} className="h-[18px] sm:h-[25px] w-auto object-contain" />
               ) : (
                 <>
-                  <div className="w-9 h-9 bg-purple-600 rounded-lg flex items-center justify-center transform group-hover:rotate-12 transition-transform duration-300">
-                    <span className="text-white font-black text-xl">
+                  <div className="w-7 h-7 sm:w-9 sm:h-9 bg-purple-600 rounded-lg flex items-center justify-center transform group-hover:rotate-12 transition-transform duration-300 shrink-0">
+                    <span className="text-white font-black text-sm sm:text-xl">
                       {siteConfig?.site_name ? siteConfig.site_name.charAt(0) : 'B'}
                     </span>
                   </div>
-                  <span className="text-2xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-purple-700 to-indigo-600">
+                  <span className="text-base sm:text-2xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-purple-700 to-indigo-600">
                     {siteConfig?.site_name || '비원아카데미'}
                   </span>
                 </>
@@ -263,75 +263,6 @@ export default function Header() {
 
           {/* Actions & Social (Right) */}
           <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
-            {/* Mobile Menu Trigger */}
-            <div className="lg:hidden">
-              <Sheet>
-                <SheetTrigger render={<Button variant="ghost" size="icon" className="text-gray-700 h-10 w-10 active:scale-95 transition-transform" />}>
-                    <Menu className="h-6 w-6" />
-                </SheetTrigger>
-                <SheetContent side="left" className="w-[300px] p-0">
-                  <div className="flex flex-col h-full bg-white">
-                    <div className="p-6 border-b">
-                      <Link to="/" className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
-                          <span className="text-white font-black text-lg">
-                            {siteConfig?.site_name ? siteConfig.site_name.charAt(0) : 'B'}
-                          </span>
-                        </div>
-                        <span className="text-xl font-black tracking-tighter text-gray-900">
-                          {siteConfig?.site_name || '비원아카데미'}
-                        </span>
-                      </Link>
-                    </div>
-                    
-                    <div className="flex-1 overflow-y-auto py-6 px-4">
-                      <nav className="flex flex-col gap-2">
-                        {user && (
-                          <Link to="/mypage?tab=classroom" className="flex items-center gap-3 p-4 rounded-xl bg-purple-50 hover:bg-purple-100 transition-colors font-black text-purple-700 border border-purple-100/50">
-                            <BookOpen className="w-5 h-5 text-purple-600 animate-bounce" /> 내 강의실 바로가기
-                          </Link>
-                        )}
-                        <Link to="/courses" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
-                          <BookOpen className="w-5 h-5 text-purple-600" /> 정규강의
-                        </Link>
-                        <Link to="/special" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
-                          <Star className="w-5 h-5 text-purple-600" /> 특강
-                        </Link>
-                        <div className="rounded-xl border border-slate-100 bg-slate-50/30 overflow-hidden flex flex-col">
-                          <Link to="/beone" className="flex items-center gap-3 p-4 hover:bg-purple-50 transition-colors font-bold text-gray-700 border-b border-dashed border-slate-100">
-                            <Badge className="bg-purple-100 text-purple-600 border-none scale-90">B1</Badge> 비원커뮤니티회원전용 메인
-                          </Link>
-                          <Link to="/live" className="flex items-center gap-3 p-4 pl-10 hover:bg-purple-50 transition-colors font-bold text-gray-700">
-                            <div className="w-2 h-2 rounded-full bg-red-600 animate-pulse" /> 비원Live
-                          </Link>
-                        </div>
-                        <Link to="/lifecoaching" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
-                          <User className="w-5 h-5 text-purple-600" /> 라이프코칭
-                        </Link>
-                        <Link to="/techtree" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
-                          <Hash className="w-5 h-5 text-purple-600" /> 자본주의 테크트리
-                        </Link>
-                        <Link to="/community" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
-                          <MessageSquare className="w-5 h-5 text-purple-600" /> 커뮤니티
-                        </Link>
-                      </nav>
-                    </div>
-
-                    {!user && (
-                      <div className="p-6 border-t bg-gray-50 flex flex-col gap-2">
-                        <Link to="/auth/login" className="w-full">
-                          <Button variant="outline" className="w-full rounded-xl font-bold">로그인</Button>
-                        </Link>
-                        <Link to="/auth/register" className="w-full">
-                          <Button className="w-full bg-purple-600 text-white rounded-xl font-bold">회원가입</Button>
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                </SheetContent>
-              </Sheet>
-            </div>
-
             {/* 알림 서비스 벨 버튼 */}
             {user && (
               <DropdownMenu>
@@ -369,12 +300,12 @@ export default function Header() {
                     ) : (
                       notifications.map((notif) => (
                         <DropdownMenuItem 
-                          key={notif.id}
-                          onClick={() => handleMarkAsRead(notif.id, notif.link)}
-                          className={cn(
-                            "p-3 rounded-xl cursor-pointer flex flex-col items-start gap-1 font-semibold text-xs leading-normal border-b border-white last:border-none focus:bg-purple-50",
-                            notif.isRead ? "opacity-60 bg-white" : "bg-purple-50/30"
-                          )}
+                           key={notif.id}
+                           onClick={() => handleMarkAsRead(notif.id, notif.link)}
+                           className={cn(
+                             "p-3 rounded-xl cursor-pointer flex flex-col items-start gap-1 font-semibold text-xs leading-normal border-b border-white last:border-none focus:bg-purple-50",
+                             notif.isRead ? "opacity-60 bg-white" : "bg-purple-50/30"
+                           )}
                         >
                           <div className="flex items-center justify-between w-full">
                             <span className="font-extrabold text-purple-800 text-[10px] uppercase">
@@ -394,7 +325,7 @@ export default function Header() {
               </DropdownMenu>
             )}
 
-            {/* 채팅방 띄우기 버튼 */}
+            {/* 채팅방 띄우기 버튼 - 모바일에서는 숨김(hidden lg:flex) */}
             <Button
               variant="ghost"
               size="icon"
@@ -414,7 +345,7 @@ export default function Header() {
                   navigate('/auth/login');
                 }
               }}
-              className="relative rounded-full h-10 w-10 text-gray-700 hover:bg-slate-50 transition-colors mr-1 shrink-0"
+              className="hidden lg:flex relative rounded-full h-10 w-10 text-gray-700 hover:bg-slate-50 transition-colors mr-1 shrink-0"
               title="실시간 메신저 Lounge"
             >
               <MessageSquare className="h-5.5 w-5.5 text-purple-600" />
@@ -423,13 +354,13 @@ export default function Header() {
               )}
             </Button>
 
-            {/* 수강 바구니 퀵 버튼 */}
+            {/* 수강 바구니 퀵 버튼 - 모바일에서는 숨김(hidden lg:flex) */}
             {user && (
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => navigate('/cart')}
-                className="relative rounded-full h-10 w-10 text-gray-700 hover:bg-slate-50 transition-colors mr-1 shrink-0"
+                className="hidden lg:flex relative rounded-full h-10 w-10 text-gray-700 hover:bg-slate-50 transition-colors mr-1 shrink-0"
                 title="수강 바구니"
               >
                 <ShoppingCart className="h-5.5 w-5.5 text-purple-600" />
@@ -490,13 +421,82 @@ export default function Header() {
             ) : (
               <div className="flex items-center gap-2">
                 <Link to="/auth/login">
-                  <Button variant="ghost" className="font-bold text-gray-700">로그인</Button>
+                  <Button variant="ghost" className="font-bold text-gray-700 text-xs sm:text-sm px-2.5 sm:px-4">로그인</Button>
                 </Link>
-                <Link to="/auth/register">
+                <Link to="/auth/register" className="hidden sm:inline-block">
                   <Button className="bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-full px-6 shadow-lg shadow-purple-200">회원가입</Button>
                 </Link>
               </div>
             )}
+
+            {/* Mobile Menu Trigger - 가장 오른쪽에 위치 */}
+            <div className="lg:hidden">
+              <Sheet>
+                <SheetTrigger render={<Button variant="ghost" size="icon" className="text-gray-700 h-10 w-10 active:scale-95 transition-transform cursor-pointer" />}>
+                    <Menu className="h-6 w-6" />
+                </SheetTrigger>
+                <SheetContent side="left" className="w-[300px] p-0">
+                  <div className="flex flex-col h-full bg-white">
+                    <div className="p-6 border-b">
+                      <Link to="/" className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center animate-pulse">
+                          <span className="text-white font-black text-lg">
+                            {siteConfig?.site_name ? siteConfig.site_name.charAt(0) : 'B'}
+                          </span>
+                        </div>
+                        <span className="text-xl font-black tracking-tighter text-gray-900">
+                          {siteConfig?.site_name || '비원아카데미'}
+                        </span>
+                      </Link>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto py-6 px-4">
+                      <nav className="flex flex-col gap-2">
+                        {user && (
+                          <Link to="/mypage?tab=classroom" className="flex items-center gap-3 p-4 rounded-xl bg-purple-50 hover:bg-purple-100 transition-colors font-black text-purple-700 border border-purple-100/50">
+                            <BookOpen className="w-5 h-5 text-purple-600 animate-bounce" /> 내 강의실 바로가기
+                          </Link>
+                        )}
+                        <Link to="/courses" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
+                          <BookOpen className="w-5 h-5 text-purple-600" /> 정규강의
+                        </Link>
+                        <Link to="/special" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
+                          <Star className="w-5 h-5 text-purple-600" /> 특강
+                        </Link>
+                        <div className="rounded-xl border border-slate-100 bg-slate-50/30 overflow-hidden flex flex-col">
+                          <Link to="/beone" className="flex items-center gap-3 p-4 hover:bg-purple-50 transition-colors font-bold text-gray-700 border-b border-dashed border-slate-100">
+                            <Badge className="bg-purple-100 text-purple-600 border-none scale-90">B1</Badge> 비원커뮤니티회원전용 메인
+                          </Link>
+                          <Link to="/live" className="flex items-center gap-3 p-4 pl-10 hover:bg-purple-50 transition-colors font-bold text-gray-700">
+                            <div className="w-2 h-2 rounded-full bg-red-600 animate-pulse" /> 비원Live
+                          </Link>
+                        </div>
+                        <Link to="/lifecoaching" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
+                          <User className="w-5 h-5 text-purple-600" /> 라이프코칭
+                        </Link>
+                        <Link to="/techtree" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
+                          <Hash className="w-5 h-5 text-purple-600" /> 자본주의 테크트리
+                        </Link>
+                        <Link to="/community" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
+                          <MessageSquare className="w-5 h-5 text-purple-600" /> 커뮤니티
+                        </Link>
+                      </nav>
+                    </div>
+
+                    {!user && (
+                      <div className="p-6 border-t bg-gray-50 flex flex-col gap-2">
+                        <Link to="/auth/login" className="w-full">
+                          <Button variant="outline" className="w-full rounded-xl font-bold">로그인</Button>
+                        </Link>
+                        <Link to="/auth/register" className="w-full">
+                          <Button className="w-full bg-purple-600 text-white rounded-xl font-bold">회원가입</Button>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
           </div>
         </div>
       </header>

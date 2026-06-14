@@ -102,7 +102,6 @@ function PublicLayout() {
   const isIncomplete = user && isGoogleUser && (!user.name || !user.nickname || !(user.mobile_phone || user.phone) || !user.gender || !user.birthdate);
 
   const isPopup = typeof window !== 'undefined' && (
-    location.pathname === '/chat' ||
     new URLSearchParams(location.search).get('popup') === 'true' ||
     new URLSearchParams(window.location.search).get('popup') === 'true' ||
     sessionStorage.getItem('is_popup_chat') === 'true' ||
@@ -127,14 +126,22 @@ function PublicLayout() {
     );
   }
 
+  const isChatRoomOnMobile = location.pathname === '/chat' && !!new URLSearchParams(location.search).get('room');
+
   return (
     <>
-      <Header />
-      <main className="flex-1 pb-16 md:pb-0">
+      <div className={isChatRoomOnMobile ? "hidden md:block" : "block"}>
+        <Header />
+      </div>
+      <main className={`flex-1 ${isChatRoomOnMobile ? "pb-0" : "pb-16 md:pb-0"}`}>
         <Outlet />
       </main>
-      <Footer />
-      <MobileBottomNav />
+      <div className={isChatRoomOnMobile ? "hidden md:block" : "block"}>
+        <Footer />
+      </div>
+      <div className={isChatRoomOnMobile ? "hidden md:block" : "block"}>
+        <MobileBottomNav />
+      </div>
     </>
   );
 }
@@ -205,76 +212,90 @@ export default function App() {
 
   return (
     <Router>
-      <div className={isPopup ? "w-screen h-screen overflow-hidden flex flex-col font-sans antialiased bg-white" : "flex min-h-screen flex-col font-sans antialiased"}>
-        <Routes>
-          {/* Admin Routes */}
-          <Route path="/admin" element={
-            <AdminPrivateRoute>
-              <AdminLayout />
-            </AdminPrivateRoute>
-          }>
-            <Route index element={<AdminDashboard />} />
-            <Route path="courses" element={<AdminCourseManagement />} />
-            <Route path="courses/edit/:id" element={<AdminCourseEditor />} />
-            <Route path="instructors" element={<AdminInstructorManagement />} />
-            <Route path="reviews" element={<AdminReviewManagement />} />
-            <Route path="cms" element={<AdminCMS />} />
-            <Route path="users" element={<AdminUserManagement />} />
-            <Route path="users/:id" element={<AdminUserManagement />} />
-            <Route path="community" element={<AdminCommunityManagement />} />
-            <Route path="community/create" element={<AdminCommunityEditor />} />
-            <Route path="community/edit/:id" element={<AdminCommunityEditor />} />
-            <Route path="community/:id" element={<AdminCommunityManagement />} />
-            <Route path="sales" element={<AdminSalesManagement />} />
-            <Route path="stats" element={<AdminStatistics />} />
-            <Route path="settings" element={<AdminSystemSettings />} />
-            <Route path="support" element={<AdminSupportInquiries />} />
-            <Route path="errors" element={<AdminErrorLogs />} />
-            <Route path="font-demo" element={<AdminFontDemo />} />
-          </Route>
-
-          <Route path="/course/:id/learn" element={<LearningPlayer />} />
-
-          {/* Public Routes with Shared Layout */}
-          <Route element={<PublicLayout />}>
-            <Route path="/" element={<Home />} />
-            <Route path="/courses" element={<Courses />} />
-            <Route path="/special" element={<SpecialLectures />} />
-            <Route path="/beone" element={<BeOneExclusive />} />
-            <Route path="/live" element={<LivePage />} />
-            <Route path="/live/:id" element={<LivePage />} />
-            <Route path="/techtree" element={<TechTreePage />} />
-            <Route path="/lifecoaching" element={<LifeCoaching />} />
-            <Route path="/course/:id" element={<CourseDetail />} />
-            <Route path="/community" element={<CommunityPage />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/mypage" element={<MyPage />} />
-            <Route path="/cart" element={<CartPage />} />
-            <Route path="/auth/login" element={<Login />} />
-            <Route path="/auth/register" element={<Register />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="/auth/reset-password" element={<ResetPassword />} />
-            <Route path="/payment/callback" element={<PaymentCallback />} />
-            
-            {/* Support Routes */}
-            <Route path="/support/notice" element={<NoticePage />} />
-            <Route path="/support/suggestion" element={<SuggestionPage />} />
-            <Route path="/support/inquiry" element={<InquiryPage />} />
-            <Route path="/support/faq" element={<FAQPage />} />
-            <Route path="/support/apply" element={<MasterApplyPage />} />
-            
-            {/* Legal Routes */}
-            <Route path="/legal/terms" element={<TermsPage />} />
-            <Route path="/legal/privacy" element={<PrivacyPage />} />
-            
-            {/* Fallback */}
-            <Route path="*" element={<Home />} />
-          </Route>
-        </Routes>
-        <Toaster position="top-center" richColors />
-        {!isPopup && <FloatingChat />}
-      </div>
+      <AppContent />
     </Router>
+  );
+}
+
+function AppContent() {
+  const location = useLocation();
+  const isPopup = typeof window !== 'undefined' && (
+    location.pathname === '/chat' ||
+    new URLSearchParams(location.search).get('popup') === 'true' ||
+    sessionStorage.getItem('is_popup_chat') === 'true' ||
+    window.name === 'BOneChatWindow'
+  );
+
+  return (
+    <div className={isPopup ? "w-screen h-screen overflow-hidden flex flex-col font-sans antialiased bg-white" : "flex min-h-screen flex-col font-sans antialiased"}>
+      <Routes>
+        {/* Admin Routes */}
+        <Route path="/admin" element={
+          <AdminPrivateRoute>
+            <AdminLayout />
+          </AdminPrivateRoute>
+        }>
+          <Route index element={<AdminDashboard />} />
+          <Route path="courses" element={<AdminCourseManagement />} />
+          <Route path="courses/edit/:id" element={<AdminCourseEditor />} />
+          <Route path="instructors" element={<AdminInstructorManagement />} />
+          <Route path="reviews" element={<AdminReviewManagement />} />
+          <Route path="cms" element={<AdminCMS />} />
+          <Route path="users" element={<AdminUserManagement />} />
+          <Route path="users/:id" element={<AdminUserManagement />} />
+          <Route path="community" element={<AdminCommunityManagement />} />
+          <Route path="community/create" element={<AdminCommunityEditor />} />
+          <Route path="community/edit/:id" element={<AdminCommunityEditor />} />
+          <Route path="community/:id" element={<AdminCommunityManagement />} />
+          <Route path="sales" element={<AdminSalesManagement />} />
+          <Route path="stats" element={<AdminStatistics />} />
+          <Route path="settings" element={<AdminSystemSettings />} />
+          <Route path="support" element={<AdminSupportInquiries />} />
+          <Route path="errors" element={<AdminErrorLogs />} />
+          <Route path="font-demo" element={<AdminFontDemo />} />
+        </Route>
+
+        <Route path="/course/:id/learn" element={<LearningPlayer />} />
+
+        {/* Public Routes with Shared Layout */}
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/courses" element={<Courses />} />
+          <Route path="/special" element={<SpecialLectures />} />
+          <Route path="/beone" element={<BeOneExclusive />} />
+          <Route path="/live" element={<LivePage />} />
+          <Route path="/live/:id" element={<LivePage />} />
+          <Route path="/techtree" element={<TechTreePage />} />
+          <Route path="/lifecoaching" element={<LifeCoaching />} />
+          <Route path="/course/:id" element={<CourseDetail />} />
+          <Route path="/community" element={<CommunityPage />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/mypage" element={<MyPage />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/auth/login" element={<Login />} />
+          <Route path="/auth/register" element={<Register />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/auth/reset-password" element={<ResetPassword />} />
+          <Route path="/payment/callback" element={<PaymentCallback />} />
+          
+          {/* Support Routes */}
+          <Route path="/support/notice" element={<NoticePage />} />
+          <Route path="/support/suggestion" element={<SuggestionPage />} />
+          <Route path="/support/inquiry" element={<InquiryPage />} />
+          <Route path="/support/faq" element={<FAQPage />} />
+          <Route path="/support/apply" element={<MasterApplyPage />} />
+          
+          {/* Legal Routes */}
+          <Route path="/legal/terms" element={<TermsPage />} />
+          <Route path="/legal/privacy" element={<PrivacyPage />} />
+          
+          {/* Fallback */}
+          <Route path="*" element={<Home />} />
+        </Route>
+      </Routes>
+      <Toaster position="top-center" richColors />
+      {!isPopup && <FloatingChat />}
+    </div>
   );
 }
