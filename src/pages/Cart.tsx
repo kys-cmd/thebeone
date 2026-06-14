@@ -445,24 +445,7 @@ export default function Cart() {
                     )}
                   </div>
                 </div>
-
-                {/* Footer instructions */}
-                <div className="bg-slate-900 p-6 text-white space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-black text-purple-400">
-                    <ShieldCheck className="w-4.5 h-4.5 shrink-0" /> 수강 자격 자동 보장
-                  </div>
-                  <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
-                    선택하신 수강 신청 완료 시, 즉시 계정에 강좌에 대한 12개월 수강 권한이 자동 부여됩니다. PG 표준 암호화 결제가 적용 중입니다.
-                  </p>
-                </div>
               </Card>
-
-              <Link
-                to="/courses"
-                className="flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-purple-600 transition-colors pt-2"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" /> 계속 쇼핑하며 어카이브 구경
-              </Link>
             </aside>
 
           </div>

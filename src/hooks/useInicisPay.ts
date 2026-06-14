@@ -162,6 +162,7 @@ export function useInicisPay() {
 
       if (isMobile) {
         form.action = "https://mobile.inicis.com/smart/payment/";
+        form.target = "_top"; // Break out of developer preview iframes to prevent browser deep-link blocks
         
         const cleanPhone = (params.userPhone || "010-0000-0000").replace(/[^0-9]/g, "");
         const mobileFields: Record<string, string> = {
@@ -175,6 +176,7 @@ export function useInicisPay() {
           P_EMAIL: params.userEmail || "user@example.com",
           P_NEXT_URL: returnUrl,
           P_NOTI: hostOrigin,
+          P_CHARSET: "utf8", // Instruct KG Inicis standard smart PG that inputs are UTF-8 encoded
           P_RESERVED: "twotrs_isp=Y&block_isp=Y&twotrs_isp_noti=N"
         };
 
