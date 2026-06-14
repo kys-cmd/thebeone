@@ -130,6 +130,43 @@ async function startServer() {
     next();
   });
 
+  // ==========================================
+  // ASSET PROXY (Mask Supabase and Clean URLs)
+  // ==========================================
+  app.get("/api/assets/:bucket/*", async (req, res, next) => {
+    try {
+      const bucket = req.params.bucket;
+      const filePath = req.params[0];
+      
+      const supUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+      if (!supUrl) {
+        return res.status(500).send("Database/Supabase configuration is missing.");
+      }
+      
+      const targetUrl = `${supUrl}/storage/v1/object/public/${bucket}/${filePath}`;
+      
+      const response = await fetch(targetUrl);
+      if (!response.ok) {
+        return res.status(response.status).send("Asset not found");
+      }
+      
+      const contentType = response.headers.get("content-type");
+      const contentLength = response.headers.get("content-length");
+      const cacheControl = response.headers.get("cache-control") || "public, max-age=31536000, immutable";
+      
+      if (contentType) res.setHeader("Content-Type", contentType);
+      if (contentLength) res.setHeader("Content-Length", contentLength);
+      res.setHeader("Cache-Control", cacheControl);
+      
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      return res.send(buffer);
+    } catch (error: any) {
+      console.error("[Assets Proxy] Error:", error);
+      next(error);
+    }
+  });
+
   // Basic API verification with full diagnosis capability (Task 1 Debugger)
   app.get("/api/test", async (req, res) => {
     const diagData: any = {

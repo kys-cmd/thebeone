@@ -74,7 +74,7 @@ import { chatService } from '@/services/chatService';
 import { accessService } from '@/services/accessService';
 import { cmsService } from '@/services/cmsService';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { cn, cleanHtmlContent } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { PostEditor } from '@/components/community/PostEditor';
 import { PostList } from '@/components/community/PostList';
@@ -2321,7 +2321,7 @@ export default function CommunityPage() {
                                           <div 
                                             className="editor-content select-text text-slate-700 text-xs sm:text-sm leading-relaxed"
                                             dangerouslySetInnerHTML={{ 
-                                              __html: DOMPurify.sanitize(notice.content, {
+                                              __html: DOMPurify.sanitize(cleanHtmlContent(notice.content), {
                                                 ADD_TAGS: ['iframe', 'span', 'img', 'video', 'blockquote', 'pre', 'code', 'mark'],
                                                 ADD_ATTR: ['src', 'alt', 'style', 'class', 'href', 'target', 'rel', 'data-type', 'controls', 'height', 'width']
                                               }) 

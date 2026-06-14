@@ -600,11 +600,7 @@ export const communityService = {
       throw uploadError;
     }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('community')
-      .getPublicUrl(filePath);
-
-    return publicUrl;
+    return `/api/assets/community/${filePath}`;
   },
 
   subscribeToMessages(communityId: string, onEvent: (payload: any) => void, roomId?: string) {

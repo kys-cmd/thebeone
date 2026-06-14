@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { ChevronDown, Search, Bell, Loader2, Calendar, FileText } from 'lucide-react';
+import { ChevronDown, Search, Bell, Loader2, Calendar, FileText, Share2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cmsService } from '@/services/cmsService';
+import { cleanHtmlContent } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export default function NoticePage() {
   const [notices, setNotices] = useState<any[]>([]);
@@ -38,6 +40,22 @@ export default function NoticePage() {
 
   const toggleExpand = (id: string) => {
     setExpandedNoticeId(prev => (prev === id ? null : id));
+  };
+
+  const shareNoticeLink = (e: React.MouseEvent, noticeId: string) => {
+    e.stopPropagation();
+    const cleanOrigin = window.location.origin;
+    // Keep it as a simplified URL parameter
+    const shareUrl = `${cleanOrigin}/support/notice?id=${noticeId}`;
+    
+    navigator.clipboard.writeText(shareUrl)
+      .then(() => {
+        toast.success('공지사항 게시글 주소가 클립보드에 복사되었습니다.');
+      })
+      .catch((err) => {
+        console.error('Failed to copy URL:', err);
+        toast.error('주소 복사에 실패했습니다.');
+      });
   };
 
   const filteredNotices = notices.filter(notice => 
@@ -270,16 +288,26 @@ export default function NoticePage() {
                                       <FileText className="w-5 h-5 text-purple-500 shrink-0" />
                                       {notice.title}
                                     </h2>
-                                    <span className="text-xs text-slate-400 font-bold font-mono shrink-0">
-                                      작성일자: {notice.created_at ? new Date(notice.created_at).toLocaleString('ko-KR') : '-'}
-                                    </span>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                      <span className="text-xs text-slate-400 font-bold font-mono">
+                                        작성일자: {notice.created_at ? new Date(notice.created_at).toLocaleString('ko-KR') : '-'}
+                                      </span>
+                                      <button
+                                        onClick={(e) => shareNoticeLink(e, notice.id)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-600 hover:bg-purple-100 transition-all text-xs font-black border border-purple-200/50 cursor-pointer shadow-sm active:scale-95"
+                                        title="공지사항 주소 공유"
+                                      >
+                                        <Share2 className="w-3.5 h-3.5" />
+                                        <span>주소 공유</span>
+                                      </button>
+                                    </div>
                                   </div>
 
-                                  {/* Real editor content rendering */}
+                                  {/* Real editor content rendering with Supabase URLs masked */}
                                   {notice.content && (notice.content.includes('<p>') || notice.content.includes('<h') || notice.content.includes('<div') || notice.content.includes('<ul') || notice.content.includes('<ol') || notice.content.includes('<img') || notice.content.includes('<span') || notice.content.includes('<video')) ? (
                                     <div 
                                       className="editor-content select-text font-sans antialiased text-rendering-optimizeLegibility"
-                                      dangerouslySetInnerHTML={{ __html: notice.content }}
+                                      dangerouslySetInnerHTML={{ __html: cleanHtmlContent(notice.content) }}
                                     />
                                   ) : (
                                     <p className="whitespace-pre-wrap select-text text-sm text-slate-700 leading-relaxed font-semibold font-sans">

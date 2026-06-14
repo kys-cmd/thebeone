@@ -24,11 +24,7 @@ export const storageService = {
         throw error;
       }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(filePath);
-
-      return publicUrl;
+      return `/api/assets/${bucketName}/${filePath}`;
     } catch (error) {
       console.error('Error uploading image:', error);
       throw new Error('이미지 업로드에 실패했습니다.');
@@ -58,11 +54,7 @@ export const storageService = {
         throw error;
       }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(filePath);
-
-      return publicUrl;
+      return `/api/assets/${bucketName}/${filePath}`;
     } catch (error) {
       console.error('Error uploading video:', error);
       throw new Error('동영상 업로드에 실패했습니다.');
@@ -92,12 +84,8 @@ export const storageService = {
         throw error;
       }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(filePath);
-
       return {
-        url: publicUrl,
+        url: `/api/assets/${bucketName}/${filePath}`,
         name: file.name,
         size: file.size
       };
