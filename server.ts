@@ -87,7 +87,7 @@ async function getInicisConfig() {
     try {
       const { data, error } = await supabaseAdmin
         .from("payment_settings")
-        .select("pg_id, inicis_sign_key, is_sandbox")
+        .select("*")
         .limit(1)
         .maybeSingle();
 
@@ -95,6 +95,7 @@ async function getInicisConfig() {
         return {
           mid: data.pg_id,
           signKey: data.inicis_sign_key,
+          apiKey: data.inicis_api_key || null,
           isSandbox: data.is_sandbox !== false,
         };
       }
@@ -106,6 +107,7 @@ async function getInicisConfig() {
   return {
     mid: process.env.INICIS_MID || process.env.VITE_INICIS_MID || "INIpayTest",
     signKey: process.env.INICIS_SIGNKEY || "SU5JQ0lTX1NJR05LRVlfVEVTVF9LRVk=",
+    apiKey: process.env.INICIS_APIKEY || "ltS7C37SSTG90S7S",
     isSandbox: process.env.NODE_ENV !== "production",
   };
 }
@@ -2058,10 +2060,17 @@ async function startServer() {
           // Real Inicis API request
           const cancelUrl = config.isSandbox ? INICIS_ENDPOINTS.sandbox.cancel : INICIS_ENDPOINTS.production.cancel;
           const timestamp = getInicisKstTimestamp();
+          
+          // Determine cancellation API Key (iniAPI Key) dynamically to prevent hashData mismatch (ERR205)
+          const isSandboxFlg = config.isSandbox || config.mid === "INIpayTest";
+          const cancelKey = isSandboxFlg 
+            ? "ltS7C37SSTG90S7S" 
+            : (process.env.INICIS_APIKEY || (config as any).apiKey || (config as any).inicis_api_key || config.signKey);
+
           // PlainText = key + type + paymethod + timestamp + clientIp + mid + tid
           const type = "Refund";
           const clientIp = "127.0.0.1";
-          const plainText = config.signKey + type + paymethod + timestamp + clientIp + config.mid + tid;
+          const plainText = cancelKey + type + paymethod + timestamp + clientIp + config.mid + tid;
           const hashData = crypto.createHash("sha512").update(plainText).digest("hex");
 
           const requestParams = new URLSearchParams();
