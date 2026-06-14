@@ -177,11 +177,9 @@ export default function AdminSystemSettings() {
 
       if (error) throw error;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('public-assets')
-        .getPublicUrl(filePath);
+      const proxyUrl = `/api/assets/public-assets/${filePath}`;
 
-      setConfig(prev => prev ? { ...prev, logo_url: publicUrl } : null);
+      setConfig(prev => prev ? { ...prev, logo_url: proxyUrl } : null);
       toast.success('로고가 업로드되었습니다.');
     } catch (error: any) {
       console.error('Upload error:', error);

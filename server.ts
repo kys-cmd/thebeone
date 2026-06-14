@@ -43,12 +43,12 @@ const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
 const INICIS_ENDPOINTS = {
   sandbox: {
     stdpay: "https://stgstdpay.inicis.com/api/payAuth",
-    cancel: "https://stginiapi.inicis.com/v2/cancel",
+    cancel: "https://stginiapi.inicis.com/api/v1/refund",
     stdjs: "https://stgstdpay.inicis.com/stdjs/INIStdPay.js",
   },
   production: {
     stdpay: "https://stdpay.inicis.com/api/payAuth",
-    cancel: "https://iniapi.inicis.com/v2/cancel",
+    cancel: "https://iniapi.inicis.com/api/v1/refund",
     stdjs: "https://stdpay.inicis.com/stdjs/INIStdPay.js",
   },
 };
@@ -165,7 +165,18 @@ async function startServer() {
         return res.status(500).send("Database/Supabase configuration is missing.");
       }
       
-      const targetUrl = `${supUrl}/storage/v1/object/public/${bucket}/${filePath}`;
+      // Sanitizing base Supabase URL to prevent double slashes
+      const cleanSupUrl = supUrl.replace(/\/$/, "");
+      
+      // Safely decode and re-encode each file path segment to support spaces, Korean, and special characters
+      const safeFilePath = filePath.split('/')
+        .map(seg => encodeURIComponent(decodeURIComponent(seg)))
+        .join('/');
+      
+      // Preserve query parameters (e.g. cache busting or resizing options)
+      const queryStr = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+      
+      const targetUrl = `${cleanSupUrl}/storage/v1/object/public/${bucket}/${safeFilePath}${queryStr}`;
       
       const response = await fetch(targetUrl);
       if (!response.ok) {
@@ -361,13 +372,20 @@ async function startServer() {
   app.post("/api/inicis-return", async (req, res) => {
     console.log("[INICIS-RETURN] Received approval payload:", req.body);
 
-    const { resultCode, resultMsg, mid, orderNumber, oid, authToken, authUrl, merchantData } = req.body;
-    const finalOid = orderNumber || oid;
+    const isMobileFlow = !!(req.body.P_TID && req.body.P_REQ_URL);
+
+    let finalOid: string;
+    let authResponseData: any = null;
+    let finalMid: string;
+    let authToken = "";
+    let authUrl = "";
+    let timestamp = "";
+    let authSignature = "";
+    let clientOrigin = "";
+    let netCancelUrl = "";
+
     const config = await getInicisConfig();
-    const finalMid = mid || config.mid;
-    const signKey = config.signKey;
-    const resolvedCancelUrl = config.isSandbox ? INICIS_ENDPOINTS.sandbox.cancel : INICIS_ENDPOINTS.production.cancel;
-    const netCancelUrl = req.body.netCancelUrl || authUrl?.replace("/auth", "/netCancel") || resolvedCancelUrl;
+    finalMid = config.mid;
 
     // Application origin URL determination (Robustly prioritized dynamic request context to avoid hardcoded localhost diversion)
     const getSecurePublicUrl = (reqObj: any, md: string | null | undefined) => {
@@ -430,185 +448,331 @@ async function startServer() {
       return DEV_URL;
     };
 
-    const clientOrigin = getSecurePublicUrl(req, merchantData);
+    if (isMobileFlow) {
+      // --- MOBILE PAYMENT FLOW ---
+      const { P_STATUS, P_RMESG1, P_TID, P_REQ_URL, P_NOTI, P_OID } = req.body;
+      finalOid = P_OID;
+      clientOrigin = P_NOTI || getSecurePublicUrl(req, P_NOTI);
 
-    // A. Authentication phase validation
-    if (resultCode !== "0000" || !authToken || !authUrl) {
-      console.error(`[INICIS-RETURN] Authentication failed. Code: ${resultCode}, Msg: ${resultMsg}`);
-      
-      // Log Authentication Failure
-      await writePaymentApiLog({
-        merchant_uid: finalOid || null,
-        type: "ERROR_LOG",
-        api_url: "/api/inicis-return (Certification Phase)",
-        request_data: req.body,
-        status: "FAILED",
-        error_code: resultCode || "CERT_FAILURE",
-        error_message: resultMsg || "인증 실패"
-      });
-
-      if (supabaseAdmin) {
-        await writePaymentLogLocal(finalOid || null, "FAILED", {
-          step: "인증단계(Certification Response)",
-          resultCode,
-          resultMsg,
-          raw_payload: req.body
-        }, {
-          error_message: resultMsg || "인증 실패",
-          error_code: resultCode
+      if (P_STATUS !== "00") {
+        console.error(`[INICIS-RETURN] Mobile Auth failed. Status: ${P_STATUS}, Msg: ${P_RMESG1}`);
+        await writePaymentApiLog({
+          merchant_uid: finalOid || null,
+          type: "ERROR_LOG",
+          api_url: "/api/inicis-return (Mobile Auth Phase)",
+          request_data: req.body,
+          status: "FAILED",
+          error_code: P_STATUS || "MOBILE_AUTH_FAILURE",
+          error_message: P_RMESG1 || "모바일 인증 실패"
         });
+
+        if (supabaseAdmin) {
+          await writePaymentLogLocal(finalOid || null, "FAILED", {
+            step: "모바일인증단계(Mobile Certification)",
+            P_STATUS,
+            P_RMESG1,
+            raw_payload: req.body
+          }, {
+            error_message: P_RMESG1 || "모바일 인증 실패",
+            error_code: P_STATUS
+          });
+        }
+        return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent(P_RMESG1 || "모바일 결제 인증 실패")}&oid=${finalOid || ""}&resultCode=${P_STATUS || "UNKNOWN"}`);
       }
-      return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent(resultMsg || "인증 실패")}&oid=${finalOid || ""}&resultCode=${resultCode || "UNKNOWN"}`);
-    }
 
-    // Secure verification: Validate authUrl to prevent SSRF and mock server forgery
-    let isVerifiedDomain = false;
-    try {
-      const parsedAuthUrl = new URL(authUrl);
-      if (parsedAuthUrl.protocol === "http:" || parsedAuthUrl.protocol === "https:") {
-        isVerifiedDomain = parsedAuthUrl.hostname === "inicis.com" || parsedAuthUrl.hostname.endsWith(".inicis.com");
-      }
-    } catch (e) {
-      isVerifiedDomain = false;
-    }
+      // 1) S2S approval to P_REQ_URL
+      try {
+        const approvalForm = new URLSearchParams();
+        approvalForm.append("P_MID", finalMid);
+        approvalForm.append("P_TID", P_TID);
 
-    if (!isVerifiedDomain) {
-      console.error("[INICIS-RETURN] Unverified authUrl domain:", authUrl);
-      
-      await writePaymentApiLog({
-        merchant_uid: finalOid || null,
-        type: "ERROR_LOG",
-        api_url: "/api/inicis-return (Security Domain Check)",
-        request_data: { authUrl, resultCode, finalOid },
-        status: "FAILED",
-        error_code: "SECURITY_UNVERIFIED_GATEWAY",
-        error_message: "위변조가 의심되는 결제 게이트웨이 도메인입니다."
-      });
+        console.log(`[INICIS-RETURN] Requesting Mobile S2S Approval to URL: ${P_REQ_URL}`);
+        await writePaymentApiLog({
+          merchant_uid: finalOid || null,
+          type: "S2S_APPROVAL_REQ",
+          api_url: P_REQ_URL,
+          request_data: { P_MID: finalMid, P_TID },
+          status: "SUCCESS"
+        });
 
-      return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent("위변조가 의심되는 결제 게이트웨이 도메인입니다.")}&oid=${finalOid || ""}&resultCode=UNVERIFIED_GATEWAY`);
-    }
+        const apiResponse = await fetch(P_REQ_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: approvalForm.toString()
+        });
 
-    const timestamp = getInicisKstTimestamp();
-    const authHashTarget = `authToken=${authToken}&timestamp=${timestamp}`;
-    const authSignature = crypto.createHash("sha256").update(authHashTarget).digest("hex");
+        if (!apiResponse.ok) {
+          throw new Error(`INICIS Mobile Approval status error: ${apiResponse.status}`);
+        }
 
-    let authResponseData: any = null;
+        const resText = await apiResponse.text();
+        console.log("[INICIS-RETURN] Mobile Approval Raw response:", resText);
 
-    // C. Server-to-Server post request (Express native fetch)
-    try {
-      const formData = new URLSearchParams();
-      formData.append("mid", finalMid);
-      formData.append("authToken", authToken);
-      formData.append("timestamp", timestamp);
-      formData.append("signature", authSignature);
-      formData.append("charset", "UTF-8");
-      formData.append("format", "JSON");
+        // Parse url encoded raw response
+        const appRes: Record<string, string> = {};
+        const params = new URLSearchParams(resText);
+        for (const [key, value] of params.entries()) {
+          appRes[key] = value;
+        }
 
-      console.log(`[INICIS-RETURN] Requesting S2S Approval to URL: ${authUrl}`);
-      
-      // Log S2S Approval API Request
-      await writePaymentApiLog({
-        merchant_uid: finalOid || null,
-        type: "S2S_APPROVAL_REQ",
-        api_url: authUrl,
-        request_data: {
+        const finalStatus = appRes.P_STATUS;
+        const finalMsg = appRes.P_RMESG1 || "승인 실패";
+        const finalAmt = appRes.P_AMT;
+        const finalApprovedOid = appRes.P_OID || finalOid;
+
+        await writePaymentApiLog({
+          merchant_uid: finalApprovedOid || null,
+          type: "S2S_APPROVAL_RES",
+          api_url: P_REQ_URL,
+          request_data: { P_MID: finalMid, P_TID },
+          response_data: appRes,
+          status: finalStatus === "00" ? "SUCCESS" : "FAILED",
+          error_code: finalStatus || null,
+          error_message: finalMsg || null
+        });
+
+        if (finalStatus !== "00") {
+          if (supabaseAdmin) {
+            await writePaymentLogLocal(finalApprovedOid || null, "FAILED", {
+              step: "모바일최종승인(Mobile S2S Refusal)",
+              resultCode: finalStatus,
+              resultMsg: finalMsg,
+              raw_response: appRes
+            }, {
+              error_message: finalMsg,
+              error_code: finalStatus
+            });
+          }
+          return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent(finalMsg)}&oid=${finalApprovedOid || ""}&resultCode=${finalStatus || "UNKNOWN"}`);
+        }
+
+        // Standardize response to match down-stream expected format
+        authResponseData = {
+          resultCode: "0000",
+          resultMsg: finalMsg,
+          TotPrice: finalAmt,
+          payMethod: appRes.P_TYPE || "CARD",
+          TID: appRes.P_TID || P_TID,
           mid: finalMid,
-          authToken,
-          timestamp,
-          signature: authSignature,
-          charset: "UTF-8",
-          format: "JSON"
-        },
-        status: "SUCCESS"
-      });
+          MOID: finalApprovedOid
+        };
+        finalOid = finalApprovedOid;
 
-      const apiResponse = await fetch(authUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: formData.toString()
-      });
-
-      if (!apiResponse.ok) {
-        throw new Error(`INICIS Approval endpoint status error: ${apiResponse.status}`);
-      }
-
-      const resJsonText = await apiResponse.text();
-      console.log("[INICIS-RETURN] Response Raw String:", resJsonText);
-      authResponseData = JSON.parse(resJsonText);
-
-      // Log S2S Approval API Response
-      await writePaymentApiLog({
-        merchant_uid: finalOid || null,
-        type: "S2S_APPROVAL_RES",
-        api_url: authUrl,
-        request_data: { mid: finalMid, authToken, timestamp },
-        response_data: authResponseData,
-        status: authResponseData?.resultCode === "0000" ? "SUCCESS" : "FAILED",
-        error_code: authResponseData?.resultCode || null,
-        error_message: authResponseData?.resultMsg || null
-      });
-
-    } catch (httpErr: any) {
-      console.error("[INICIS-RETURN] HTTP Auth Failure, trigger NetCancel immediately. Error: ", httpErr);
-      
-      // Log S2S HTTP Exception
-      await writePaymentApiLog({
-        merchant_uid: finalOid || null,
-        type: "ERROR_LOG",
-        api_url: authUrl,
-        request_data: { mid: finalMid, authToken, timestamp },
-        status: "FAILED",
-        error_code: "S2S_HTTP_ERROR",
-        error_message: httpErr.message || "결제 최종 승인 호출 통신 장애",
-        response_data: { triggeredNetCancel: true, netCancelUrl }
-      });
-
-      await triggerNetCancelHelper(netCancelUrl, finalMid, authToken, timestamp, authSignature);
-      if (supabaseAdmin) {
-        await writePaymentLogLocal(finalOid || null, "FAILED", {
-          step: "최종승인(S2S API Request)",
-          error_name: httpErr.name,
-          error_message: httpErr.message,
-          stack: httpErr.stack,
-          netCancelExecuted: true
-        }, {
-          error_message: "결제 최종 승인 호출 통신 장애",
-          error_code: "S2S_HTTP_ERROR"
+      } catch (httpErr: any) {
+        console.error("[INICIS-RETURN] Mobile S2S Exception:", httpErr);
+        await writePaymentApiLog({
+          merchant_uid: finalOid || null,
+          type: "ERROR_LOG",
+          api_url: P_REQ_URL,
+          request_data: { P_MID: finalMid, P_TID },
+          status: "FAILED",
+          error_code: "MOBILE_S2S_HTTP_ERROR",
+          error_message: httpErr.message || "모바일 S2S 승인 통신 장애"
         });
+
+        if (supabaseAdmin) {
+          await writePaymentLogLocal(finalOid || null, "FAILED", {
+            step: "모바일최종승인(Mobile S2S API Request)",
+            error_name: httpErr.name,
+            error_message: httpErr.message,
+            stack: httpErr.stack
+          }, {
+            error_message: "모바일 결제 최종 승인 호출 통신 장애",
+            error_code: "MOBILE_S2S_HTTP_ERROR"
+          });
+        }
+        return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent("모바일 결제 승인 통신이 실패했습니다.")}&oid=${finalOid || ""}&resultCode=MOBILE_S2S_HTTP_ERROR`);
       }
-      return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent("결제 최종 승인 통신이 실패하여 자동 망취소 환불 처리되었습니다.")}&oid=${finalOid || ""}&resultCode=S2S_HTTP_ERROR`);
-    }
 
-    const authResultCode = authResponseData?.resultCode;
-    const authResultMsg = authResponseData?.resultMsg || "승인 실패";
+    } else {
+      // --- PC WEB STANDARD FLOW ---
+      const { resultCode, resultMsg, mid, orderNumber, oid, authToken: pcAuthToken, authUrl: pcAuthUrl, merchantData } = req.body;
+      finalOid = orderNumber || oid;
+      finalMid = mid || config.mid;
+      authToken = pcAuthToken;
+      authUrl = pcAuthUrl;
+      const signKey = config.signKey;
+      const resolvedCancelUrl = config.isSandbox ? INICIS_ENDPOINTS.sandbox.cancel : INICIS_ENDPOINTS.production.cancel;
+      netCancelUrl = req.body.netCancelUrl || authUrl?.replace("/auth", "/netCancel") || resolvedCancelUrl;
 
-    if (authResultCode !== "0000") {
-      console.error(`[INICIS-RETURN] Payment system approval rejected. Code: ${authResultCode}, Msg: ${authResultMsg}`);
-      
-      // Log Refused S2S Response
-      await writePaymentApiLog({
-        merchant_uid: finalOid || null,
-        type: "ERROR_LOG",
-        api_url: authUrl,
-        request_data: { mid: finalMid, authToken, timestamp },
-        response_data: authResponseData,
-        status: "FAILED",
-        error_code: authResultCode || "S2S_REJECTED",
-        error_message: authResultMsg
-      });
+      clientOrigin = getSecurePublicUrl(req, merchantData);
 
-      if (supabaseAdmin) {
-        await writePaymentLogLocal(finalOid || null, "FAILED", {
-          step: "이니시스 승인거절(S2S Refusal)",
-          resultCode: authResultCode,
-          resultMsg: authResultMsg,
-          raw_response: authResponseData
-        }, {
-          error_message: authResultMsg,
-          error_code: authResultCode
+      // A. Authentication phase validation
+      if (resultCode !== "0000" || !authToken || !authUrl) {
+        console.error(`[INICIS-RETURN] Authentication failed. Code: ${resultCode}, Msg: ${resultMsg}`);
+        
+        // Log Authentication Failure
+        await writePaymentApiLog({
+          merchant_uid: finalOid || null,
+          type: "ERROR_LOG",
+          api_url: "/api/inicis-return (Certification Phase)",
+          request_data: req.body,
+          status: "FAILED",
+          error_code: resultCode || "CERT_FAILURE",
+          error_message: resultMsg || "인증 실패"
         });
+
+        if (supabaseAdmin) {
+          await writePaymentLogLocal(finalOid || null, "FAILED", {
+            step: "인증단계(Certification Response)",
+            resultCode,
+            resultMsg,
+            raw_payload: req.body
+          }, {
+            error_message: resultMsg || "인증 실패",
+            error_code: resultCode
+          });
+        }
+        return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent(resultMsg || "인증 실패")}&oid=${finalOid || ""}&resultCode=${resultCode || "UNKNOWN"}`);
       }
-      return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent(authResultMsg)}&oid=${finalOid || ""}&resultCode=${authResultCode || "UNKNOWN"}`);
+
+      // Secure verification: Validate authUrl to prevent SSRF and mock server forgery
+      let isVerifiedDomain = false;
+      try {
+        const parsedAuthUrl = new URL(authUrl);
+        if (parsedAuthUrl.protocol === "http:" || parsedAuthUrl.protocol === "https:") {
+          isVerifiedDomain = parsedAuthUrl.hostname === "inicis.com" || parsedAuthUrl.hostname.endsWith(".inicis.com");
+        }
+      } catch (e) {
+        isVerifiedDomain = false;
+      }
+
+      if (!isVerifiedDomain) {
+        console.error("[INICIS-RETURN] Unverified authUrl domain:", authUrl);
+        
+        await writePaymentApiLog({
+          merchant_uid: finalOid || null,
+          type: "ERROR_LOG",
+          api_url: "/api/inicis-return (Security Domain Check)",
+          request_data: { authUrl, resultCode, finalOid },
+          status: "FAILED",
+          error_code: "SECURITY_UNVERIFIED_GATEWAY",
+          error_message: "위변조가 의심되는 결제 게이트웨이 도메인입니다."
+        });
+
+        return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent("위변조가 의심되는 결제 게이트웨이 도메인입니다.")}&oid=${finalOid || ""}&resultCode=UNVERIFIED_GATEWAY`);
+      }
+
+      timestamp = getInicisKstTimestamp();
+      const authHashTarget = `authToken=${authToken}&timestamp=${timestamp}`;
+      authSignature = crypto.createHash("sha256").update(authHashTarget).digest("hex");
+
+      // C. Server-to-Server post request (Express native fetch)
+      try {
+        const formData = new URLSearchParams();
+        formData.append("mid", finalMid);
+        formData.append("authToken", authToken);
+        formData.append("timestamp", timestamp);
+        formData.append("signature", authSignature);
+        formData.append("charset", "UTF-8");
+        formData.append("format", "JSON");
+
+        console.log(`[INICIS-RETURN] Requesting S2S Approval to URL: ${authUrl}`);
+        
+        // Log S2S Approval API Request
+        await writePaymentApiLog({
+          merchant_uid: finalOid || null,
+          type: "S2S_APPROVAL_REQ",
+          api_url: authUrl,
+          request_data: {
+            mid: finalMid,
+            authToken,
+            timestamp,
+            signature: authSignature,
+            charset: "UTF-8",
+            format: "JSON"
+          },
+          status: "SUCCESS"
+        });
+
+        const apiResponse = await fetch(authUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: formData.toString()
+        });
+
+        if (!apiResponse.ok) {
+          throw new Error(`INICIS Approval endpoint status error: ${apiResponse.status}`);
+        }
+
+        const resJsonText = await apiResponse.text();
+        console.log("[INICIS-RETURN] Response Raw String:", resJsonText);
+        authResponseData = JSON.parse(resJsonText);
+
+        // Log S2S Approval API Response
+        await writePaymentApiLog({
+          merchant_uid: finalOid || null,
+          type: "S2S_APPROVAL_RES",
+          api_url: authUrl,
+          request_data: { mid: finalMid, authToken, timestamp },
+          response_data: authResponseData,
+          status: authResponseData?.resultCode === "0000" ? "SUCCESS" : "FAILED",
+          error_code: authResponseData?.resultCode || null,
+          error_message: authResponseData?.resultMsg || null
+        });
+
+      } catch (httpErr: any) {
+        console.error("[INICIS-RETURN] HTTP Auth Failure, trigger NetCancel immediately. Error: ", httpErr);
+        
+        // Log S2S HTTP Exception
+        await writePaymentApiLog({
+          merchant_uid: finalOid || null,
+          type: "ERROR_LOG",
+          api_url: authUrl,
+          request_data: { mid: finalMid, authToken, timestamp },
+          status: "FAILED",
+          error_code: "S2S_HTTP_ERROR",
+          error_message: httpErr.message || "결제 최종 승인 호출 통신 장애",
+          response_data: { triggeredNetCancel: true, netCancelUrl }
+        });
+
+        await triggerNetCancelHelper(netCancelUrl, finalMid, authToken, timestamp, authSignature);
+        if (supabaseAdmin) {
+          await writePaymentLogLocal(finalOid || null, "FAILED", {
+            step: "최종승인(S2S API Request)",
+            error_name: httpErr.name,
+            error_message: httpErr.message,
+            stack: httpErr.stack,
+            netCancelExecuted: true
+          }, {
+            error_message: "결제 최종 승인 호출 통신 장애",
+            error_code: "S2S_HTTP_ERROR"
+          });
+        }
+        return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent("결제 최종 승인 통신이 실패하여 자동 망취소 환불 처리되었습니다.")}&oid=${finalOid || ""}&resultCode=S2S_HTTP_ERROR`);
+      }
+
+      const authResultCode = authResponseData?.resultCode;
+      const authResultMsg = authResponseData?.resultMsg || "승인 실패";
+
+      if (authResultCode !== "0000") {
+        console.error(`[INICIS-RETURN] Payment system approval rejected. Code: ${authResultCode}, Msg: ${authResultMsg}`);
+        
+        // Log Refused S2S Response
+        await writePaymentApiLog({
+          merchant_uid: finalOid || null,
+          type: "ERROR_LOG",
+          api_url: authUrl,
+          request_data: { mid: finalMid, authToken, timestamp },
+          response_data: authResponseData,
+          status: "FAILED",
+          error_code: authResultCode || "S2S_REJECTED",
+          error_message: authResultMsg
+        });
+
+        if (supabaseAdmin) {
+          await writePaymentLogLocal(finalOid || null, "FAILED", {
+            step: "이니시스 승인거절(S2S Refusal)",
+            resultCode: authResultCode,
+            resultMsg: authResultMsg,
+            raw_response: authResponseData
+          }, {
+            error_message: authResultMsg,
+            error_code: authResultCode
+          });
+        }
+        return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent(authResultMsg)}&oid=${finalOid || ""}&resultCode=${authResultCode || "UNKNOWN"}`);
+      }
     }
 
     // D. Database update & Enrollments insertion

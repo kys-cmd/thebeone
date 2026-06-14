@@ -48,12 +48,12 @@ async function isAdminUser(userId: string) {
 const INICIS_ENDPOINTS = {
   sandbox: {
     stdpay: "https://stgstdpay.inicis.com/api/payAuth",
-    cancel: "https://stginiapi.inicis.com/v2/cancel",
+    cancel: "https://stginiapi.inicis.com/api/v1/refund",
     stdjs: "https://stgstdpay.inicis.com/stdjs/INIStdPay.js",
   },
   production: {
     stdpay: "https://stdpay.inicis.com/api/payAuth",
-    cancel: "https://iniapi.inicis.com/v2/cancel",
+    cancel: "https://iniapi.inicis.com/api/v1/refund",
     stdjs: "https://stdpay.inicis.com/stdjs/INIStdPay.js",
   },
 };

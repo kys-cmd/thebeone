@@ -25,7 +25,29 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    const targetUrl = `${supUrl}/storage/v1/object/public/${bucket}/${filePath}`;
+    // Sanitizing base Supabase URL to prevent double slashes
+    const cleanSupUrl = supUrl.replace(/\/$/, "");
+
+    // Safely decode and re-encode each file path segment to support spaces, Korean, and special characters
+    const safeFilePath = filePath.split('/')
+      .map(seg => encodeURIComponent(decodeURIComponent(seg)))
+      .join('/');
+
+    // Preserve query parameters (e.g. cache busting or resizing options)
+    const queryParams = event.queryStringParameters;
+    let queryStr = "";
+    if (queryParams && Object.keys(queryParams).length > 0) {
+      const sp = new URLSearchParams();
+      for (const [key, val] of Object.entries(queryParams)) {
+        if (val !== undefined && val !== null) {
+          sp.append(key, val);
+        }
+      }
+      const qs = sp.toString();
+      if (qs) queryStr = `?${qs}`;
+    }
+
+    const targetUrl = `${cleanSupUrl}/storage/v1/object/public/${bucket}/${safeFilePath}${queryStr}`;
     console.log("[Assets Proxy] Redirecting to:", targetUrl);
 
     const response = await fetch(targetUrl);

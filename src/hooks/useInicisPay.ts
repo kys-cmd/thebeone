@@ -158,6 +158,42 @@ export function useInicisPay() {
       form.method = "POST";
       form.acceptCharset = "UTF-8";
 
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+      if (isMobile) {
+        form.action = "https://mobile.inicis.com/smart/payment/";
+        
+        const cleanPhone = (params.userPhone || "010-0000-0000").replace(/[^0-9]/g, "");
+        const mobileFields: Record<string, string> = {
+          P_INI_PAYMENT: "CARD",
+          P_MID: mid,
+          P_OID: oid,
+          P_AMT: params.price.toString(),
+          P_GOODS: params.courseName,
+          P_UNAME: params.userName || "구매자",
+          P_MOBILE: cleanPhone,
+          P_EMAIL: params.userEmail || "user@example.com",
+          P_NEXT_URL: returnUrl,
+          P_NOTI: hostOrigin,
+          P_RESERVED: "twotrs_isp=Y&block_isp=Y&twotrs_isp_noti=N"
+        };
+
+        Object.entries(mobileFields).forEach(([key, value]) => {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = key;
+          input.value = value;
+          form.appendChild(input);
+        });
+
+        formContainer.appendChild(form);
+        document.body.appendChild(formContainer);
+
+        console.log("[useInicisPay] Submitting Mobile payment form, redirecting to: https://mobile.inicis.com/smart/payment/");
+        form.submit();
+        return;
+      }
+
       // 결제창 노출 방식 파라미터 구성
       const formFields: Record<string, string> = {
         version: "1.0",

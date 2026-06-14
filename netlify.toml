@@ -48,7 +48,7 @@
 
 [[redirects]]
   from = "/api/assets/*"
-  to = "/.netlify/functions/assets"
+  to = "/.netlify/functions/assets/:splat"
   status = 200
   force = true
 
