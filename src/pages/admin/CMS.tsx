@@ -264,7 +264,9 @@ export default function AdminCMS() {
               <p className="text-purple-100 max-w-2xl font-medium leading-relaxed">
                 메인 페이지와 카테고리별 상단 배너를 설정합니다. <br/>
                 배너 타입에 따라 <strong>롤링 배너</strong>, <strong>상세 페이지 레이아웃</strong> 등 패스트캠퍼스 스타일의 세련된 디자인이 자동 적용됩니다. <br/>
-                <span className="text-white/80 text-xs mt-2 inline-block bg-white/10 px-2 py-1 rounded">권장 배너 사이즈: 1920 x 450 px</span>
+                <span className="text-white text-xs mt-2 inline-block bg-white/20 px-3 py-1 rounded-full font-black animate-pulse">
+                  최적화된 이미지 사이즈: 가로 1920px × 세로 450px (고해상도 와이드 규격)
+                </span>
               </p>
             </div>
             <Palette className="absolute right-[-20px] bottom-[-20px] w-64 h-64 text-white/10" />
@@ -336,7 +338,12 @@ export default function AdminCMS() {
                           <img src={banner.image} alt={banner.title} className="w-full h-full object-cover transition-transform duration-500 group-hover/img:scale-105" />
                         )}
                         {/* Media Edit Actions */}
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/img:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                          <div className="text-center mb-1">
+                            <p className="text-white text-[11px] font-black tracking-wider bg-purple-600/90 px-3 py-1 rounded-full inline-block shadow-lg">
+                              최적화 크기: 1920 × 450 px
+                            </p>
+                          </div>
                           <div className="flex flex-wrap items-center justify-center gap-2 px-4">
                             <Label htmlFor={`banner-img-${banner.id}`} className="cursor-pointer">
                               <div className="bg-white text-black h-9 px-4 rounded-full flex items-center justify-center gap-2 text-[11px] font-bold shadow-2xl hover:bg-gray-100 transition-colors">
@@ -402,7 +409,10 @@ export default function AdminCMS() {
                         <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center shadow-sm mb-4">
                           <ImageIcon className="w-10 h-10 text-gray-200" />
                         </div>
-                        <p className="text-sm text-gray-400 font-bold mb-4">배너 미디어가 등록되지 않았습니다. <br/> <span className="text-[10px] text-gray-300">권장 사이즈: 1920 x 450 px</span></p>
+                        <p className="text-sm text-gray-600 font-bold mb-1">배너 미디어가 등록되지 않았습니다.</p>
+                        <p className="text-xs text-purple-600 font-extrabold mb-4 bg-purple-50 px-4 py-1.5 rounded-full border border-purple-100">
+                          최적화 이미지 규격: 가로 1920px × 세로 450px
+                        </p>
                         <div className="flex flex-col items-center gap-6 w-full max-w-md px-6">
                           <div className="flex gap-3">
                             <Label htmlFor={`banner-img-${banner.id}`} className="cursor-pointer">
