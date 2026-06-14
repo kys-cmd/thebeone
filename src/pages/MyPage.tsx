@@ -304,13 +304,24 @@ export default function MyPage() {
                   </div>
                 </div>
                 <div className="p-8 pt-0 flex gap-2">
-                  <Button 
-                    size="lg" 
-                    className="flex-1 h-14 rounded-2xl font-black bg-[#1C8436] hover:bg-[#156329] text-white font-sans transition-all"
-                    onClick={() => navigate(`/course/${course.id}/learn`)}
-                  >
-                    강의실 입장
-                  </Button>
+                  {course.category === 'beone_exclusive_offline' ? (
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="flex-1 h-14 rounded-2xl font-black border-gray-100 hover:bg-yellow-50 hover:text-yellow-600 hover:border-yellow-200 text-gray-700 font-sans transition-all"
+                      onClick={() => handleOpenReview(course)}
+                    >
+                      후기 작성하기
+                    </Button>
+                  ) : (
+                    <Button 
+                      size="lg" 
+                      className="flex-1 h-14 rounded-2xl font-black bg-[#1C8436] hover:bg-[#156329] text-white font-sans transition-all"
+                      onClick={() => navigate(`/course/${course.id}/learn`)}
+                    >
+                      강의실 입장
+                    </Button>
+                  )}
                 </div>
               </Card>
             ))
@@ -438,7 +449,7 @@ export default function MyPage() {
                              <Button 
                                size="lg" 
                                variant="outline" 
-                               className="flex-1 h-14 rounded-2xl font-black bg-purple-600 hover:bg-purple-700 text-white font-sans transition-all"
+                               className={`flex-1 h-14 rounded-2xl font-black bg-purple-600 hover:bg-purple-700 text-white font-sans transition-all ${(course.category === 'special_offline' || course.category === 'beone_exclusive_offline') ? 'hidden' : ''}`}
                                onClick={() => navigate(`/course/${course.id}/learn`)}
                              >
                                강의실 입장
@@ -519,13 +530,15 @@ export default function MyPage() {
                             </div>
                           </div>
                           <div className="p-8 flex gap-2">
-                            <Button 
-                              size="lg" 
-                              className="flex-1 h-14 rounded-2xl font-black bg-purple-600 hover:bg-purple-700 text-white font-sans"
-                              onClick={() => navigate(`/course/${course.id}/learn`)}
-                            >
-                              강의실 입장
-                            </Button>
+                            {!(course.category === 'special_offline' || course.category === 'beone_exclusive_offline') && (
+                              <Button 
+                                size="lg" 
+                                className="flex-1 h-14 rounded-2xl font-black bg-purple-600 hover:bg-purple-700 text-white font-sans"
+                                onClick={() => navigate(`/course/${course.id}/learn`)}
+                              >
+                                강의실 입장
+                              </Button>
+                            )}
                             <Button
                               size="lg"
                               variant="outline"

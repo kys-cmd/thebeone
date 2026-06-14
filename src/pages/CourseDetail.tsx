@@ -350,6 +350,13 @@ export default function CourseDetail() {
                           </div>
                         );
                       } else {
+                        if (isOffline) {
+                          return (
+                            <div className="flex-1 p-5 bg-green-50 text-green-700 rounded-2xl border border-green-200 text-center font-black text-[15px]">
+                              현장 강좌 신청완료 (오프라인 강의)
+                            </div>
+                          );
+                        }
                         return (
                           <Button 
                             size="lg" 
@@ -386,6 +393,13 @@ export default function CourseDetail() {
                         );
                       } else {
                         if (isEnrolled) {
+                          if (isOffline) {
+                            return (
+                              <div className="flex-1 p-5 bg-green-50 text-green-700 rounded-2xl border border-green-200 text-center font-black text-[15px]">
+                                현장 강좌 신청완료 (오프라인 강의)
+                              </div>
+                            );
+                          }
                           return (
                             <Button 
                               size="lg" 
@@ -424,6 +438,13 @@ export default function CourseDetail() {
 
                     // Fallback to original flow for non-grade-restricted courses
                     if (isEnrolled) {
+                      if (isOffline) {
+                        return (
+                          <div className="flex-1 p-5 bg-green-50 text-green-700 rounded-2xl border border-green-200 text-center font-black text-[15px]">
+                            현장 강좌 신청완료 (오프라인 강의)
+                          </div>
+                        );
+                      }
                       return (
                         <Button 
                           size="lg" 
@@ -821,19 +842,19 @@ export default function CourseDetail() {
         </div>
         <div className="flex-1">
           {isEnrolled ? (
-            <Button 
-              size="lg" 
-              className="w-full h-14 bg-green-600 text-white font-black rounded-2xl"
-              onClick={() => {
-                if (isOffline) {
-                  toast.success('오프라인 특강 등록이 성공적으로 확보되었습니다. 현장에서 뵙겠습니다!');
-                } else {
-                  navigate(`/course/${course.id}/learn`);
-                }
-              }}
-            >
-              {isOffline ? "현장 강좌 신청완료" : "이어학습"}
-            </Button>
+            isOffline ? (
+              <div className="w-full h-14 bg-green-50 text-green-700 border border-green-200 rounded-2xl flex items-center justify-center font-black text-sm">
+                현장 강좌 신청완료 (오프라인 강의)
+              </div>
+            ) : (
+              <Button 
+                size="lg" 
+                className="w-full h-14 bg-green-600 text-white font-black rounded-2xl"
+                onClick={() => navigate(`/course/${course.id}/learn`)}
+              >
+                이어학습
+              </Button>
+            )
           ) : isSoldOut ? (
             <Button 
               size="lg" 
