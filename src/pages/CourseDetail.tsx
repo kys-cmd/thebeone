@@ -323,7 +323,72 @@ export default function CourseDetail() {
 
                 <div className="flex gap-3">
                   {(() => {
-                    const requiredGrade = course.min_member_grade || ((course.category === 'beone_exclusive_online' || course.category === 'beone_exclusive_offline') ? 'beone_member' : null);
+                    const isBeOneCourse = course.category === 'beone_exclusive' || 
+                                           course.category === 'beone_exclusive_online' || 
+                                           course.category === 'beone_exclusive_offline' ||
+                                           course.min_member_grade === 'beone_member' ||
+                                           course.min_member_grade === 'bione_member';
+
+                    if (isBeOneCourse) {
+                      const ROLE_RANK: Record<string, number> = {
+                        'user': 0,
+                        'regular_member': 1,
+                        'paid_member': 2,
+                        'beone_member': 3,
+                        'bione_member': 3,
+                        'admin': 100,
+                        'super_admin': 100
+                      };
+                      const userRank = user ? (ROLE_RANK[user.role || 'user'] || 0) : 0;
+                      const isGradeAuthorized = userRank >= 3 || (user && (user.role === 'admin' || user.role === 'super_admin'));
+
+                      if (!isGradeAuthorized) {
+                        return (
+                          <div className="flex-1 p-5 bg-purple-50 text-purple-700 rounded-2xl border border-purple-200 text-center font-black text-[15px] leading-snug tracking-tight">
+                            비원아카데미 회원으로 가입하시면 이용하실 수 있습니다.
+                          </div>
+                        );
+                      } else {
+                        if (isEnrolled) {
+                          return (
+                            <Button 
+                              size="lg" 
+                              className="flex-1 h-16 bg-green-600 hover:bg-green-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-green-200"
+                              onClick={() => navigate(`/course/${course.id}/learn`)}
+                            >
+                              강의실 입장하기
+                            </Button>
+                          );
+                        } else {
+                          return (
+                            <Button 
+                              size="lg" 
+                              className="flex-1 h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200"
+                              onClick={async () => {
+                                if (!user) {
+                                  toast.error('로그인이 필요합니다.');
+                                  navigate('/auth/login');
+                                  return;
+                                }
+                                try {
+                                  await courseService.enrollCourse(user.id, course.id);
+                                  toast.success('내 강의실에 성공적으로 등록되었습니다!');
+                                  setIsEnrolled(true);
+                                  navigate(`/course/${course.id}/learn`);
+                                } catch (err: any) {
+                                  console.error('Enrollment Error:', err);
+                                  toast.error(`내 강의실 등록 실패: ${err.message || '알 수 없는 오류'}`);
+                                }
+                              }}
+                            >
+                              내강의실에 등록하기
+                            </Button>
+                          );
+                        }
+                      }
+                    }
+
+                    const requiredGrade = course.min_member_grade;
                     
                     if (requiredGrade) {
                       const ROLE_RANK: Record<string, number> = {
@@ -346,15 +411,40 @@ export default function CourseDetail() {
                           </div>
                         );
                       } else {
-                        return (
-                          <Button 
-                            size="lg" 
-                            className="flex-1 h-16 bg-green-600 hover:bg-green-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-green-200"
-                            onClick={() => navigate(`/course/${course.id}/learn`)}
-                          >
-                            강의 이어학습하기
-                          </Button>
-                        );
+                        if (isEnrolled) {
+                          return (
+                            <Button 
+                              size="lg" 
+                              className="flex-1 h-16 bg-green-600 hover:bg-green-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-green-200"
+                              onClick={() => navigate(`/course/${course.id}/learn`)}
+                            >
+                              강의 이어학습하기
+                            </Button>
+                          );
+                        } else {
+                          return (
+                            <Button 
+                              size="lg" 
+                              className="flex-1 h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200"
+                              onClick={async () => {
+                                if (!user) {
+                                  toast.error('로그인이 필요합니다.');
+                                  navigate('/auth/login');
+                                  return;
+                                }
+                                try {
+                                  await courseService.enrollCourse(user.id, course.id);
+                                  toast.success('수강 등록이 완료되었습니다!');
+                                  setIsEnrolled(true);
+                                } catch (err: any) {
+                                  toast.error('등록에 실패했습니다.');
+                                }
+                              }}
+                            >
+                              내강의실에 등록하기
+                            </Button>
+                          );
+                        }
                       }
                     }
 

@@ -391,9 +391,13 @@ export default function LearningPlayer() {
 
         const isAdmin = user.role === 'super_admin' || user.role === 'admin';
         if (!isAdmin) {
-          // Check grade restriction
-          const requiredGrade = data.min_member_grade || ((data.category === 'beone_exclusive_online' || data.category === 'beone_exclusive_offline') ? 'beone_member' : null);
-          if (requiredGrade) {
+          const isBeOneCourse = data.category === 'beone_exclusive' || 
+                                 data.category === 'beone_exclusive_online' || 
+                                 data.category === 'beone_exclusive_offline' ||
+                                 data.min_member_grade === 'beone_member' ||
+                                 data.min_member_grade === 'bione_member';
+
+          if (isBeOneCourse) {
             const ROLE_RANK: Record<string, number> = {
               'user': 0,
               'regular_member': 1,
@@ -404,18 +408,46 @@ export default function LearningPlayer() {
               'super_admin': 100
             };
             const userRank = ROLE_RANK[user.role || 'user'] || 0;
-            const requiredRank = ROLE_RANK[requiredGrade] || 0;
-            if (userRank < requiredRank) {
+            if (userRank < 3) {
               toast.error('비원아카데미 회원으로 가입하시면 이용하실 수 있습니다.');
               navigate(`/course/${id}`);
               return;
             }
-          } else {
+
+            // check enrollment for BeOne exclusive courses
             const isEnrolled = await courseService.checkEnrollment(user.id, id!);
             if (!isEnrolled) {
-              toast.error('수강 권한이 없습니다.');
+              toast.error('내 강의실에 등록되지 않은 강의입니다. [내강의실에 등록하기] 버튼을 눌러 등록해주세요.');
               navigate(`/course/${id}`);
               return;
+            }
+          } else {
+            // Check general grade or enrollment restrictions
+            const requiredGrade = data.min_member_grade;
+            if (requiredGrade) {
+              const ROLE_RANK: Record<string, number> = {
+                'user': 0,
+                'regular_member': 1,
+                'paid_member': 2,
+                'beone_member': 3,
+                'bione_member': 3,
+                'admin': 100,
+                'super_admin': 100
+              };
+              const userRank = ROLE_RANK[user.role || 'user'] || 0;
+              const requiredRank = ROLE_RANK[requiredGrade] || 0;
+              if (userRank < requiredRank) {
+                toast.error('해당 회원가입 등급을 획득하시면 수강이 가능한 강의입니다.');
+                navigate(`/course/${id}`);
+                return;
+              }
+            } else {
+              const isEnrolled = await courseService.checkEnrollment(user.id, id!);
+              if (!isEnrolled) {
+                toast.error('수강 권한이 없습니다.');
+                navigate(`/course/${id}`);
+                return;
+              }
             }
           }
         }
