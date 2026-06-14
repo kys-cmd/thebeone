@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-white pt-32 pb-20">
+    <div className="min-h-screen bg-white pt-[50px] pb-20">
       <div className="container mx-auto px-4 max-w-4xl">
         <h1 className="text-4xl font-black text-gray-900 tracking-tighter mb-12">이용약관</h1>
         <article className="prose prose-gray max-w-none space-y-10 text-gray-600 font-medium">

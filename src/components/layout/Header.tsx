@@ -228,26 +228,10 @@ export default function Header() {
               <Link to="/courses" className="hover:text-purple-600 transition-colors">정규강의</Link>
               <Link to="/special" className="hover:text-purple-600 transition-colors">특강</Link>
               
-              {/* 비원커뮤니티회원전용 & 비원Live 드롭다운 */}
-              <DropdownMenu>
-                <DropdownMenuTrigger className="hover:text-purple-600 transition-colors flex items-center gap-1 outline-none cursor-pointer">
-                  <span>비원커뮤니티회원전용</span>
-                  <ChevronDown className="w-4 h-4 text-gray-400" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="p-2 w-48 rounded-xl shadow-xl border border-slate-100 bg-white mt-2">
-                  <DropdownMenuItem className="focus:bg-purple-50 rounded-lg cursor-pointer">
-                    <Link to="/beone" className="w-full h-full block py-1.5 text-sm font-bold text-gray-700 hover:text-purple-600">
-                      비원커뮤니티회원전용 메인
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="focus:bg-purple-50 rounded-lg cursor-pointer">
-                    <Link to="/live" className="w-full h-full block py-1.5 text-sm font-bold text-gray-700 hover:text-purple-600 flex items-center justify-between">
-                      <span>비원Live</span>
-                      <span className="flex h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-                    </Link>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Link to="/live" className="hover:text-purple-600 transition-colors flex items-center gap-1">
+                <span>비원Live</span>
+                <span className="flex h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+              </Link>
 
               <Link to="/lifecoaching" className="hover:text-purple-600 transition-colors">라이프코칭</Link>
               <Link to="/techtree" className="hover:text-purple-600 transition-colors">자본주의 테크트리</Link>
@@ -463,14 +447,10 @@ export default function Header() {
                         <Link to="/special" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
                           <Star className="w-5 h-5 text-purple-600" /> 특강
                         </Link>
-                        <div className="rounded-xl border border-slate-100 bg-slate-50/30 overflow-hidden flex flex-col">
-                          <Link to="/beone" className="flex items-center gap-3 p-4 hover:bg-purple-50 transition-colors font-bold text-gray-700 border-b border-dashed border-slate-100">
-                            <Badge className="bg-purple-100 text-purple-600 border-none scale-90">B1</Badge> 비원커뮤니티회원전용 메인
-                          </Link>
-                          <Link to="/live" className="flex items-center gap-3 p-4 pl-10 hover:bg-purple-50 transition-colors font-bold text-gray-700">
-                            <div className="w-2 h-2 rounded-full bg-red-600 animate-pulse" /> 비원Live
-                          </Link>
-                        </div>
+                        <Link to="/live" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
+                          <span className="flex h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                          <span>비원Live</span>
+                        </Link>
                         <Link to="/lifecoaching" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
                           <User className="w-5 h-5 text-purple-600" /> 라이프코칭
                         </Link>

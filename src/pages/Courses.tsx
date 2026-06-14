@@ -90,7 +90,7 @@ export default function Courses() {
   return (
     <div className="min-h-screen bg-white">
       {/* Course Area */}
-      <section className="py-12 md:py-20 bg-gray-50/50">
+      <section className="pt-[50px] pb-12 md:pb-20 bg-gray-50/50">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between mb-10">
             <h2 className="text-3xl font-black text-gray-900 tracking-tighter">전체 강의 목록</h2>

@@ -72,7 +72,7 @@ export default function SpecialLectures() {
 
   return (
     <div className="min-h-screen bg-white pb-32">
-      <div className="container mx-auto px-4 space-y-32 py-12 md:py-20">
+      <div className="container mx-auto px-4 space-y-32 pt-[50px] pb-12 md:pb-20">
         {/* Online Section */}
         <section className="space-y-12">
           <div className="flex items-end justify-between border-b-4 border-purple-600 pb-6">

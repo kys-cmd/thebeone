@@ -73,7 +73,7 @@ export default function MasterApplyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] pt-32 pb-20">
+    <div className="min-h-screen bg-[#f8fafc] pt-[50px] pb-20">
       <div className="container mx-auto px-4 max-w-7xl text-left">
         <div className="space-y-16">
           <div className="space-y-6 text-center">

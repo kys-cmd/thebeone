@@ -207,10 +207,44 @@ export default function MyPage() {
     }
   };
 
+  const [beoneCourses, setBeoneCourses] = useState<Course[]>([]);
+  const [beoneLoading, setBeoneLoading] = useState(false);
+
+  const ROLE_RANK: Record<string, number> = {
+    'user': 0,
+    'regular_member': 1,
+    'paid_member': 2,
+    'beone_member': 3,
+    'bione_member': 3,
+    'admin': 100,
+    'super_admin': 100
+  };
+  const userRank = user ? (ROLE_RANK[user.role || 'user'] || 0) : 0;
+  const isBeOneMember = userRank >= 3 || (user && (user.role === 'admin' || user.role === 'super_admin'));
+
+  const fetchBeoneCourses = async () => {
+    try {
+      setBeoneLoading(true);
+      const data = await courseService.getCourses();
+      const filtered = data.filter(c => c.category === 'beone_exclusive' || c.category === 'beone_exclusive_online');
+      setBeoneCourses(filtered);
+    } catch (error) {
+      console.error('[MyPage Fetch BeOne Exclusive error]:', error);
+    } finally {
+      setBeoneLoading(false);
+    }
+  };
+
   React.useEffect(() => {
     if (user) {
       fetchMyCourses();
       fetchMileageAndPayments();
+      
+      const rank = ROLE_RANK[user.role || 'user'] || 0;
+      const isBeOne = rank >= 3 || user.role === 'admin' || user.role === 'super_admin';
+      if (isBeOne) {
+        fetchBeoneCourses();
+      }
     }
   }, [user]);
 
@@ -227,8 +261,67 @@ export default function MyPage() {
     }
   };
 
+  const renderBeOneSection = () => {
+    if (!isBeOneMember) return null;
+    return (
+      <div className="space-y-6 pt-10 border-t border-slate-200">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl animate-pulse">🔑</span>
+            <div>
+              <h3 className="text-2xl font-black tracking-tighter text-gray-900">비원커뮤니티 회원 전용 강의</h3>
+            </div>
+          </div>
+          <Badge className="bg-[#1C8436] hover:bg-[#156329] text-white border-none px-4 py-1.5 font-black text-xs font-sans shrink-0">
+            비원아카데미 회원 혜택
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {beoneLoading ? (
+            <div className="col-span-full text-center py-10 text-gray-400 font-bold font-sans">강의 정보를 불러오고 있습니다...</div>
+          ) : beoneCourses.length === 0 ? (
+            <div className="col-span-full bg-white p-12 rounded-[40px] text-center border-2 border-dashed border-gray-100 py-16">
+              <p className="text-gray-400 font-bold">진행 중인 비원커뮤니티회원전용 강의가 없습니다.</p>
+            </div>
+          ) : (
+            beoneCourses.map((course) => (
+              <Card key={course.id} className="overflow-hidden border-none shadow-sm rounded-[40px] group hover:shadow-2xl transition-all bg-white flex flex-col justify-between">
+                <div>
+                  <div className="aspect-[16/9] bg-gray-100 relative">
+                    <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
+                    <div className="absolute top-4 left-4">
+                      <Badge className="bg-[#1C8436] text-white border-none font-bold font-sans">
+                        비원커뮤니티회원전용
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="p-8 space-y-6">
+                    <div className="space-y-2">
+                      <h4 className="text-lg font-black text-gray-900 line-clamp-1">{course.title}</h4>
+                      <p className="text-sm font-bold text-gray-400">회원: {course.instructor}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-8 pt-0 flex gap-2">
+                  <Button 
+                    size="lg" 
+                    className="flex-1 h-14 rounded-2xl font-black bg-[#1C8436] hover:bg-[#156329] text-white font-sans transition-all"
+                    onClick={() => navigate(`/course/${course.id}/learn`)}
+                  >
+                    강의실 입장
+                  </Button>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 pt-20 md:pt-32 pb-20">
+    <div className="min-h-screen bg-gray-50 pt-[50px] md:pt-[50px] pb-20">
       <div className="container mx-auto px-4">
         <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 items-start">
           
@@ -371,69 +464,83 @@ export default function MyPage() {
             )
             }
 
+            {activeMenu === 'dashboard' && renderBeOneSection()}
             {activeMenu === 'courses' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {loading ? (
-                  <div className="col-span-full text-center py-20 text-gray-400 font-bold">강의 정보를 불러오고 있습니다...</div>
-                ) : myCourses.length === 0 ? (
-                  <div className="col-span-full bg-white p-20 rounded-[40px] text-center border-2 border-dashed border-gray-100 space-y-6">
-                    <BookOpen className="w-16 h-16 text-gray-200 mx-auto" />
-                    <div>
-                      <p className="text-xl font-black text-gray-900">아직 수강 중인 강의가 없습니다.</p>
-                      <p className="text-gray-400 font-bold mt-1">비원아카데미의 프리미엄 강의들을 만나보세요!</p>
+              <div className="space-y-10">
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">🎓</span>
+                      <h3 className="text-2xl font-black tracking-tighter text-gray-900">구독 중인 내 강의</h3>
                     </div>
-                    <Button 
-                      className="bg-purple-600 hover:bg-purple-700 text-white font-black px-8 h-14 rounded-2xl"
-                      onClick={() => navigate('/courses')}
-                    >
-                      강의 둘러보기
-                    </Button>
+                    <Badge className="bg-purple-100 text-purple-600 border-none px-4 py-1.5 font-black text-xs font-sans">총 {myCourses.length}개</Badge>
                   </div>
-                ) : (
-                  myCourses.map((course) => (
-                    <Card key={course.id} className="overflow-hidden border-none shadow-sm rounded-[40px] group hover:shadow-2xl transition-all bg-white flex flex-col justify-between">
-                      <div>
-                        <div className="aspect-[16/9] bg-gray-100 relative">
-                           <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
-                           <div className="absolute top-4 left-4">
-                             <Badge className="bg-white/80 backdrop-blur-md text-gray-900 border-none font-bold">
-                               {course.category === 'regular' ? '정규강의' : 
-                                course.category === 'special_online' ? '온라인 특강' :
-                                course.category === 'special_offline' ? '오프라인 특강' :
-                                course.category === 'special' ? '특강' : 
-                                course.category === 'beone_exclusive_online' ? '온라인 비원커뮤니티회원전용' :
-                                course.category === 'beone_exclusive_offline' ? '오프라인 비원커뮤니티회원전용' :
-                                course.category === 'beone_exclusive' ? '비원커뮤니티회원전용' : '비원아카데미 Live'}
-                             </Badge>
-                           </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {loading ? (
+                      <div className="col-span-full text-center py-20 text-gray-400 font-bold">강의 정보를 불러오고 있습니다...</div>
+                    ) : myCourses.length === 0 ? (
+                      <div className="col-span-full bg-white p-20 rounded-[40px] text-center border-2 border-dashed border-gray-100 space-y-6">
+                        <BookOpen className="w-16 h-16 text-gray-200 mx-auto" />
+                        <div>
+                          <p className="text-xl font-black text-gray-900">아직 수강 중인 강의가 없습니다.</p>
+                          <p className="text-gray-400 font-bold mt-1">비원아카데미의 프리미엄 강의들을 만나보세요!</p>
                         </div>
-                        <div className="p-8 pb-0 space-y-6">
-                           <div className="space-y-2">
-                              <h4 className="text-lg font-black text-gray-900 line-clamp-1">{course.title}</h4>
-                              <p className="text-sm font-bold text-gray-400">강사: {course.instructor}</p>
-                           </div>
-                        </div>
-                      </div>
-                      <div className="p-8 flex gap-2">
                         <Button 
-                          size="lg" 
-                          className="flex-1 h-14 rounded-2xl font-black bg-purple-600 hover:bg-purple-700 text-white font-sans"
-                          onClick={() => navigate(`/course/${course.id}/learn`)}
+                          className="bg-purple-600 hover:bg-purple-700 text-white font-black px-8 h-14 rounded-2xl"
+                          onClick={() => navigate('/courses')}
                         >
-                          강의실 입장
-                        </Button>
-                        <Button
-                          size="lg"
-                          variant="outline"
-                          className="flex-1 h-14 rounded-2xl font-black border-gray-100 hover:bg-yellow-50 hover:text-yellow-600 hover:border-yellow-200 text-gray-700 font-sans"
-                          onClick={() => handleOpenReview(course)}
-                        >
-                          후기 작성하기
+                          강의 둘러보기
                         </Button>
                       </div>
-                    </Card>
-                  ))
-                )}
+                    ) : (
+                      myCourses.map((course) => (
+                        <Card key={course.id} className="overflow-hidden border-none shadow-sm rounded-[40px] group hover:shadow-2xl transition-all bg-white flex flex-col justify-between">
+                          <div>
+                            <div className="aspect-[16/9] bg-gray-100 relative">
+                               <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
+                               <div className="absolute top-4 left-4">
+                                 <Badge className="bg-white/80 backdrop-blur-md text-gray-900 border-none font-bold">
+                                   {course.category === 'regular' ? '정규강의' : 
+                                    course.category === 'special_online' ? '온라인 특강' :
+                                    course.category === 'special_offline' ? '오프라인 특강' :
+                                    course.category === 'special' ? '특강' : 
+                                    course.category === 'beone_exclusive_online' ? '온라인 비원커뮤니티회원전용' :
+                                    course.category === 'beone_exclusive_offline' ? '오프라인 비원커뮤니티회원전용' :
+                                    course.category === 'beone_exclusive' ? '비원커뮤니티회원전용' : '비원아카데미 Live'}
+                                 </Badge>
+                               </div>
+                            </div>
+                            <div className="p-8 pb-0 space-y-6">
+                               <div className="space-y-2">
+                                  <h4 className="text-lg font-black text-gray-900 line-clamp-1">{course.title}</h4>
+                                  <p className="text-sm font-bold text-gray-400">강사: {course.instructor}</p>
+                               </div>
+                            </div>
+                          </div>
+                          <div className="p-8 flex gap-2">
+                            <Button 
+                              size="lg" 
+                              className="flex-1 h-14 rounded-2xl font-black bg-purple-600 hover:bg-purple-700 text-white font-sans"
+                              onClick={() => navigate(`/course/${course.id}/learn`)}
+                            >
+                              강의실 입장
+                            </Button>
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="flex-1 h-14 rounded-2xl font-black border-gray-100 hover:bg-yellow-50 hover:text-yellow-600 hover:border-yellow-200 text-gray-700 font-sans"
+                              onClick={() => handleOpenReview(course)}
+                            >
+                              후기 작성하기
+                            </Button>
+                          </div>
+                        </Card>
+                      ))
+                    )}
+                  </div>
+                </div>
+                {renderBeOneSection()}
               </div>
             )}
 

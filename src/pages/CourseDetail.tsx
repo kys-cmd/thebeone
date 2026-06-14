@@ -349,42 +349,15 @@ export default function CourseDetail() {
                           </div>
                         );
                       } else {
-                        if (isEnrolled) {
-                          return (
-                            <Button 
-                              size="lg" 
-                              className="flex-1 h-16 bg-green-600 hover:bg-green-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-green-200"
-                              onClick={() => navigate(`/course/${course.id}/learn`)}
-                            >
-                              강의실 입장하기
-                            </Button>
-                          );
-                        } else {
-                          return (
-                            <Button 
-                              size="lg" 
-                              className="flex-1 h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200"
-                              onClick={async () => {
-                                if (!user) {
-                                  toast.error('로그인이 필요합니다.');
-                                  navigate('/auth/login');
-                                  return;
-                                }
-                                try {
-                                  await courseService.enrollCourse(user.id, course.id);
-                                  toast.success('내 강의실에 성공적으로 등록되었습니다!');
-                                  setIsEnrolled(true);
-                                  navigate(`/course/${course.id}/learn`);
-                                } catch (err: any) {
-                                  console.error('Enrollment Error:', err);
-                                  toast.error(`내 강의실 등록 실패: ${err.message || '알 수 없는 오류'}`);
-                                }
-                              }}
-                            >
-                              내강의실에 등록하기
-                            </Button>
-                          );
-                        }
+                        return (
+                          <Button 
+                            size="lg" 
+                            className="flex-1 h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200"
+                            onClick={() => navigate(`/course/${course.id}/learn`)}
+                          >
+                            강의실 입장하기
+                          </Button>
+                        );
                       }
                     }
 

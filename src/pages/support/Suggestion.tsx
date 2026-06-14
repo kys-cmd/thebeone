@@ -64,7 +64,7 @@ export default function SuggestionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] pt-32 pb-20">
+    <div className="min-h-screen bg-[#f8fafc] pt-[50px] pb-20">
       <div className="container mx-auto px-4 max-w-7xl text-left">
         <div className="space-y-12">
           <div className="space-y-4 text-center">

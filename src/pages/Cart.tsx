@@ -175,7 +175,7 @@ export default function Cart() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-32 pb-20">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-[50px] pb-20">
         <Card className="p-12 max-w-md w-full text-center space-y-6 rounded-[32px] shadow-sm border border-gray-100">
           <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mx-auto">
             <ShoppingCart className="w-8 h-8" />
@@ -195,7 +195,7 @@ export default function Cart() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-32 pb-20 font-sans">
+    <div className="min-h-screen bg-gray-50 pt-[50px] pb-20 font-sans">
       <div className="container mx-auto px-4 max-w-6xl">
         {/* Title */}
         <div className="flex items-center justify-between mb-8">

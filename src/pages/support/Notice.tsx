@@ -64,7 +64,7 @@ export default function NoticePage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] pt-32 pb-20">
+    <div className="min-h-screen bg-[#f8fafc] pt-[50px] pb-20">
       {/* RichText Editor Rendering CSS Enhancements */}
       <style dangerouslySetInnerHTML={{ __html: `
         .editor-content, .editor-content p, .editor-content li {

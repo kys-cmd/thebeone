@@ -1908,7 +1908,7 @@ export default function CommunityPage() {
   const mobileDisplayCommunities = myJoinedCommunities.length > 0 ? myJoinedCommunities : allCommunitiesReady.slice(0, 7);
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] pt-5 md:pt-32 pb-20 md:pb-32 overflow-x-hidden font-sans">
+    <div className="min-h-screen bg-[#f8fafc] pt-[50px] md:pt-[50px] pb-20 md:pb-32 overflow-x-hidden font-sans">
       <div className="container mx-auto px-4">
         
         {/* ==========================================================
