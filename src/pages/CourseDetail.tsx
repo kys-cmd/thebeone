@@ -246,7 +246,7 @@ export default function CourseDetail() {
                   <p className="opacity-50 text-xs font-bold uppercase tracking-widest">Duration</p>
                   <p className="text-xl font-black">
                     {course.is_duration_based ? (
-                      `신청일로부터 ${course.duration_days}일`
+                      `수강시작일로부터 ${course.duration_days}일`
                     ) : course.start_date && course.end_date ? (
                       `${new Date(course.start_date).toLocaleDateString()} ~ ${new Date(course.end_date).toLocaleDateString()}`
                     ) : (
