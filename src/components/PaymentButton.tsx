@@ -17,7 +17,7 @@ interface PaymentButtonProps {
     email: string;
     name: string;
     phone?: string;
-  };
+  } | null;
 }
 
 export const PaymentButton: React.FC<PaymentButtonProps> = ({ lecture, user }) => {

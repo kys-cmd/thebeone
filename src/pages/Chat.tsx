@@ -1530,7 +1530,7 @@ export default function ChatPage() {
         {/* ===================================
             1. LEFT WORKSPACE SIDEBAR (Eggplant/Slate Black on Desktop, Beautiful Native Chat List on Mobile)
             =================================== */}
-        <div className={`${activeRoom ? 'hidden md:flex' : 'flex'} w-full md:w-72 flex-col shrink-0 border-r border-[#2D1D34] overflow-hidden bg-[#1F1523]`}>
+        <div className={`${activeRoom ? 'hidden md:flex' : 'flex'} w-full md:w-72 flex-col shrink-0 border-r border-slate-200/60 overflow-hidden bg-white`}>
           
           {/* MOBILE VIEW LIST (White Theme, matching Kakao/Telegram reference image) */}
           <div className="flex md:hidden w-full h-full bg-white flex-col">
@@ -1637,163 +1637,125 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {/* DESKTOP VIEW LIST (Eggplant Dark Theme Workspace) */}
-          <div className="hidden md:flex w-full h-full bg-[#1F1523] text-white flex-col">
+          {/* DESKTOP VIEW LIST (White Theme Unified Chat List) */}
+          <div className="hidden md:flex w-full h-full bg-white text-slate-800 flex-col">
             {/* Header */}
-            <div className="p-5 border-b border-[#2D1D34] flex items-center justify-between shrink-0 bg-[#160E1A]">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/80">
               <div className="flex items-center gap-2.5 text-left">
-                <div className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center shadow-lg">
+                <div className="w-9 h-9 rounded-xl bg-purple-600 flex items-center justify-center shadow-md">
                   <Sparkles className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="font-extrabold text-base tracking-tight leading-none text-white">Beone Chat</h2>
-                  <span className="text-xs font-bold text-purple-300 block mt-1 leading-none">비원아카데미 채팅</span>
+                  <h2 className="font-black text-base tracking-tight leading-none text-slate-900">Beone Chat</h2>
+                  <span className="text-[11px] font-black text-purple-600 block mt-1 leading-none">실시간 메신저</span>
                 </div>
               </div>
-              <div className="relative group">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 block ring-4 ring-emerald-500/20" title="서버 정상 연결 중" />
-              </div>
+              <button 
+                onClick={() => { setCreateType('public'); setIsCreateModalOpen(true); }}
+                className="p-1.5 hover:bg-slate-200/60 rounded-lg text-slate-500 hover:text-slate-900 transition-colors"
+                title="새로운 소통방 만들기"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
             </div>
 
-            {/* Categories Grid Scroll Area */}
-            <div className="flex-grow overflow-y-auto px-2 py-3 space-y-6 text-left">
-              {/* 1. PUBLIC CHANNELS */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between px-3 pb-1">
-                  <span className="text-xs font-black tracking-wider text-purple-300/60 uppercase">📢 공개 소통방 ({publicRooms.length})</span>
-                  <button 
-                     onClick={() => { setCreateType('public'); setIsCreateModalOpen(true); }}
-                     className="p-1 hover:bg-white/10 rounded-md text-purple-300 hover:text-white transition-all"
-                     title="공개 채널 생성"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="space-y-0.5">
-                  {publicRooms.map(room => {
-                    const isActive = activeRoom?.id === room.id;
-                    const isCurJoined = room.isJoined;
-                    return (
-                      <div 
-                        key={room.id}
-                        onClick={() => setSearchParams({ room: room.id })}
-                        className={`group flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold cursor-pointer transition-all ${
-                          isActive 
-                            ? 'bg-purple-600 text-white font-extrabold shadow' 
-                            : 'text-purple-100/85 hover:bg-white/5 hover:text-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          <Hash className={`w-4 h-4 ${isActive ? 'text-white' : 'text-purple-300/40'}`} />
-                          <span className="truncate">{getRoomDisplayName(room)}</span>
-                        </div>
-                        
-                        {/* 상태 뱃지 */}
-                        {!isCurJoined ? (
-                          <span className="text-xs font-bold bg-white/10 text-purple-200 px-2 py-0.5 rounded-md group-hover:bg-purple-500 group-hover:text-white transition-all scale-95 uppercase">미참여</span>
-                        ) : (
-                          <span className="text-xs font-bold text-purple-300/50">{room.memberCount || 1}명</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {publicRooms.length === 0 && (
-                    <span className="text-xs text-purple-300/30 pl-3 block py-1">조건에 만족하는 공개 채널이 없습니다.</span>
-                  )}
-                </div>
-              </div>
+            {/* Unified Scroll Area */}
+            <div className="flex-grow overflow-y-auto divide-y divide-slate-100/50 text-left bg-white">
+              {(() => {
+                const sortedDesktopRooms = [...rooms].sort((a, b) => {
+                  const aLast = lastMessagesMap[a.id]?.created_at || a.created_at;
+                  const bLast = lastMessagesMap[b.id]?.created_at || b.created_at;
+                  return new Date(bLast).getTime() - new Date(aLast).getTime();
+                });
 
-              {/* 2. PRIVATE GROUPS */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between px-3 pb-1">
-                  <span className="text-xs font-black tracking-wider text-purple-300/60 uppercase">🔒 비공개 소통방 ({privateRooms.length})</span>
-                  <button 
-                    onClick={() => { setCreateType('private'); setIsCreateModalOpen(true); }}
-                    className="p-1 hover:bg-white/10 rounded-md text-purple-300 hover:text-white transition-all"
-                    title="비공개 협업방 생성"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="space-y-0.5">
-                  {privateRooms.map(room => {
-                    const isActive = activeRoom?.id === room.id;
-                    return (
-                      <div 
-                        key={room.id}
-                        onClick={() => setSearchParams({ room: room.id })}
-                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold cursor-pointer transition-all ${
-                          isActive 
-                          ? 'bg-purple-600 text-white font-extrabold shadow' 
-                          : 'text-purple-100/85 hover:bg-white/5 hover:text-white'
-                        }`}
+                if (sortedDesktopRooms.length === 0) {
+                  return (
+                    <div className="text-center py-20 px-4">
+                      <p className="text-sm text-slate-400 font-bold">참여 가능한 소통방이 존재하지 않습니다.</p>
+                      <Button 
+                        onClick={() => { setCreateType('public'); setIsCreateModalOpen(true); }}
+                        className="mt-4 bg-purple-600 hover:bg-purple-700 font-black rounded-xl text-xs px-4 py-2"
                       >
-                        <div className="flex items-center gap-2 truncate">
-                          <Lock className={`w-4 h-4 ${isActive ? 'text-white' : 'text-purple-300/40'}`} />
-                          <span className="truncate">{getRoomDisplayName(room)}</span>
-                        </div>
-                        <span className="text-xs font-bold text-purple-300/50">{room.memberCount || 1}명</span>
-                      </div>
-                    );
-                  })}
-                  {privateRooms.length === 0 && (
-                    <span className="text-xs text-purple-300/30 pl-3 block py-1">소속된 비공개방이 없습니다.</span>
-                  )}
-                </div>
-              </div>
+                        신규 소통방 생성
+                      </Button>
+                    </div>
+                  );
+                }
 
-              {/* 3. DIRECT MESSAGES */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between px-3 pb-1">
-                  <span className="text-xs font-black tracking-wider text-purple-300/60 uppercase">👤 1:1 대화방 ({dmRooms.length})</span>
-                  <button 
-                    onClick={() => { setCreateType('dm'); setIsCreateModalOpen(true); }}
-                    className="p-1 hover:bg-white/10 rounded-md text-purple-300 hover:text-white transition-all"
-                    title="1:1 소통 매칭"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="space-y-0.5">
-                  {dmRooms.map(room => {
-                    const isActive = activeRoom?.id === room.id;
-                    return (
-                      <div 
-                        key={room.id}
-                        onClick={() => setSearchParams({ room: room.id })}
-                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold cursor-pointer transition-all ${
-                          isActive 
-                          ? 'bg-purple-600 text-white font-extrabold shadow' 
-                          : 'text-purple-100/85 hover:bg-white/5 hover:text-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          <Users className={`w-4 h-4 ${isActive ? 'text-white' : 'text-purple-300/40'}`} />
-                          <span className="truncate">{getRoomDisplayName(room)}</span>
+                return sortedDesktopRooms.map(room => {
+                  const isActive = activeRoom?.id === room.id;
+                  const lastMsg = lastMessagesMap[room.id];
+                  const lastMsgText = lastMsg ? lastMsg.message : (room.description || '대화 기록이 아직 없습니다.');
+                  const lastMsgTime = lastMsg ? formatTimeKorean(lastMsg.created_at) : formatTimeKorean(room.created_at);
+                  const lastMsgNickname = lastMsg ? lastMsg.nickname : '';
+
+                  return (
+                    <div 
+                      key={room.id}
+                      onClick={() => setSearchParams({ room: room.id })}
+                      className={`flex items-start gap-3 px-4 py-4 cursor-pointer transition-all text-left border-b border-slate-100/40 ${
+                        isActive 
+                          ? 'bg-purple-50/70 hover:bg-purple-50/90' 
+                          : 'hover:bg-slate-50/65 bg-white'
+                      }`}
+                    >
+                      {/* 아바타 */}
+                      <div className="shrink-0 mt-0.5">
+                        {getRoomAvatar(room)}
+                      </div>
+
+                      {/* 정보 영역 */}
+                      <div className="min-w-0 flex-grow">
+                        {/* 타이틀과 시간 */}
+                        <div className="flex items-center justify-between gap-1">
+                          <span className={`font-extrabold text-[14px] truncate leading-tight ${isActive ? 'text-purple-950 font-black' : 'text-slate-900'}`}>
+                            {getRoomDisplayName(room)}
+                            <span className={`text-xs ml-1 font-bold ${isActive ? 'text-purple-600' : 'text-slate-400'}`}>
+                              ({room.memberCount || 1})
+                            </span>
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                            {lastMsgTime}
+                          </span>
+                        </div>
+
+                        {/* 최신 대화내용 - 2줄 표시 */}
+                        <p className="text-[12.5px] text-slate-500 font-medium leading-relaxed mt-1 line-clamp-2 overflow-hidden break-all">
+                          {lastMsgNickname ? `${lastMsgNickname} : ` : ''}{lastMsgText}
+                        </p>
+
+                        {/* 배지/타입 표시 */}
+                        <div className="flex gap-1.5 mt-1.5">
+                          <span className={`text-[9.5px] px-1.5 py-0.5 rounded font-bold uppercase tracking-tight ${
+                            room.room_type === 'private' 
+                              ? 'bg-amber-50 text-amber-750 border border-amber-205' 
+                              : room.room_type === 'dm' 
+                                ? 'bg-emerald-50 text-emerald-750 border border-emerald-205' 
+                                : 'bg-purple-50/50 text-purple-750 border border-purple-205'
+                          }`}>
+                            {room.room_type === 'private' ? '비공개' : room.room_type === 'dm' ? '1:1' : '공개'}
+                          </span>
                         </div>
                       </div>
-                    );
-                  })}
-                  {dmRooms.length === 0 && (
-                    <span className="text-xs text-purple-300/30 pl-3 block py-1">1:1 소통 전력이 없습니다.</span>
-                  )}
-                </div>
-              </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
 
             {/* Compact User bottom card */}
-            <div className="p-4 bg-[#140D17] border-t border-[#2D1D34] shrink-0 text-left flex items-center justify-between gap-2.5">
+            <div className="p-4 bg-slate-50/80 border-t border-slate-100 shrink-0 text-left flex items-center justify-between gap-2.5">
               <div className="flex items-center gap-2.5 min-w-0">
-                <Avatar className="w-10 h-10 border border-purple-500/20">
+                <Avatar className="w-10 h-10 border border-purple-100">
                   <AvatarImage src={user.avatar_url || undefined} />
                   <AvatarFallback className="bg-purple-600 text-white font-black text-sm">{(user.nickname || user.name || 'U')[0]}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 leading-tight">
-                  <h4 className="font-extrabold text-sm text-slate-100 truncate">{user.nickname || user.name || '본인'}</h4>
-                  <p className="text-xs text-slate-400 font-bold tracking-tight truncate mt-0.5">접속 상태: ONLINE</p>
+                  <h4 className="font-extrabold text-sm text-slate-800 truncate">{user.nickname || user.name || '본인'}</h4>
+                  <p className="text-[11px] text-slate-400 font-bold tracking-tight truncate mt-0.5">접속 상태: ONLINE</p>
                 </div>
               </div>
-              <Link to="/" className="p-1.5 hover:bg-white/5 rounded-lg text-purple-300 hover:text-white transition-colors" title="웹사이트 나가기">
+              <Link to="/" className="p-1.5 hover:bg-slate-200/50 rounded-lg text-slate-500 hover:text-slate-900 transition-colors" title="웹사이트 나가기">
                 <LogOut className="w-4.5 h-4.5" />
               </Link>
             </div>
@@ -2482,7 +2444,7 @@ export default function ChatPage() {
               </div>
               <div className="space-y-2 max-w-sm">
                 <h3 className="text-lg font-black tracking-tight text-gray-950">
-                  {rooms.length > 0 ? '대화를 선택해 주세요' : '개설된 소통 채팅방이 없습니다'}
+                  {rooms.length > 0 ? '오른쪽 채팅방 리스트를 클릭하면 대화내용이 보입니다' : '개설된 소통 채팅방이 없습니다'}
                 </h3>
                 <p className="text-xs text-slate-400 font-semibold leading-relaxed">
                   {rooms.length > 0 

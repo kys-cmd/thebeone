@@ -153,9 +153,7 @@ export default function CourseDetail() {
       }
     }
     
-    if (user) {
-      loadCourse();
-    }
+    loadCourse();
 
     const handleScroll = () => {
       if (tabsRef.current) {
@@ -166,34 +164,6 @@ export default function CourseDetail() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, [id, user]);
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4 pt-24">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-white p-8 md:p-12 rounded-[40px] shadow-2xl text-center max-w-lg w-full space-y-8 border border-gray-100"
-        >
-          <div className="w-24 h-24 bg-purple-50 rounded-full flex items-center justify-center mx-auto ring-8 ring-purple-50/50">
-            <Lock className="w-12 h-12 text-purple-600" />
-          </div>
-          <div className="space-y-4">
-            <h2 className="text-3xl font-black text-gray-900 tracking-tighter">로그인이 필요합니다</h2>
-            <p className="text-gray-500 font-bold leading-relaxed break-keep">
-              강의 상세 정보와 커리큘럼은 비원아카데미 회원만 확인할 수 있습니다.<br/>
-              회원가입 후 비원아카데미만의 특별한 인사이트를 만나보세요!
-            </p>
-          </div>
-          <div className="flex flex-col gap-3 pt-4">
-            <Link to="/auth/login" className={cn(buttonVariants({ size: 'lg' }), "bg-purple-600 hover:bg-purple-700 h-14 rounded-2xl text-lg font-black shadow-lg shadow-purple-200")}>
-              로그인하러 가기
-            </Link>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div></div>;
   if (!course) return <div className="min-h-screen flex items-center justify-center font-bold">강의를 찾을 수 없습니다.</div>;
@@ -496,11 +466,11 @@ export default function CourseDetail() {
                             title: course.title,
                             price: course.discount_price || course.price || 0
                           }}
-                          user={{
-                            id: user?.id || '',
-                            email: user?.email || '',
-                            name: user?.name || user?.email?.split('@')[0] || '수강생'
-                          }}
+                          user={user ? {
+                            id: user.id,
+                            email: user.email || '',
+                            name: user.name || user.email?.split('@')[0] || '수강생'
+                          } : null}
                         />
                       );
                     }
