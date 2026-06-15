@@ -169,6 +169,19 @@ export default function ChatPage() {
   const [availableStudents, setAvailableStudents] = useState<any[]>([]);
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   
+  // 비공개방 및 1:1 채팅 추가 상태
+  const [createRoomPassword, setCreateRoomPassword] = useState('');
+  const [unlockedRooms, setUnlockedRooms] = useState<string[]>([]);
+  const [isPasswordPromptOpen, setIsPasswordPromptOpen] = useState(false);
+  const [roomPasswordInput, setRoomPasswordInput] = useState('');
+  const [pendingRoomToEnter, setPendingRoomToEnter] = useState<any | null>(null);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+
+  // 초대 및 가입 승낙 모달 상태
+  const [isInviteConfirmOpen, setIsInviteConfirmOpen] = useState(false);
+  const [pendingInviteRoom, setPendingInviteRoom] = useState<any | null>(null);
+  const [pendingInviteType, setPendingInviteType] = useState<string | null>(null);
+  
   // 커뮤니티 목록 및 초대 모달 추가 상태
   const [communitiesMap, setCommunitiesMap] = useState<Record<string, any>>({});
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -559,6 +572,158 @@ export default function ChatPage() {
       };
     }
   }, [user, selectedRoomId]);
+
+  // 2-1. 초대 및 가입 승낙 로직 연동
+  useEffect(() => {
+    const inviteId = searchParams.get('invite');
+    const inviteType = searchParams.get('type') || 'private';
+    
+    if (inviteId && user) {
+      const loadInviteRoom = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('chat_rooms')
+            .select('*')
+            .eq('id', inviteId)
+            .maybeSingle();
+          if (!error && data) {
+            setPendingInviteRoom(data);
+            setPendingInviteType(inviteType);
+            setIsInviteConfirmOpen(true);
+          } else {
+            console.error("Invite room fetch failed", error);
+            toast.error("해당 초대방 정보가 존재하지 않거나 만료되었습니다.");
+            const copy = new URLSearchParams(searchParams);
+            copy.delete('invite');
+            copy.delete('type');
+            setSearchParams(copy);
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      };
+      loadInviteRoom();
+    }
+  }, [searchParams, user]);
+
+  const handleAcceptInvite = async () => {
+    if (!pendingInviteRoom || !user) return;
+    
+    try {
+      const { data: alreadyMember, error: checkErr } = await supabase
+        .from('chat_room_members')
+        .select('*')
+        .eq('room_id', pendingInviteRoom.id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (checkErr) throw checkErr;
+
+      if (!alreadyMember) {
+        const { error: insertErr } = await supabase
+          .from('chat_room_members')
+          .insert([{
+            room_id: pendingInviteRoom.id,
+            user_id: user.id
+          }]);
+        if (insertErr) throw insertErr;
+      }
+
+      try {
+        const notifs = await notificationService.getNotificationsForUser(user.id);
+        const matchNotif = notifs.find(n => !n.isRead && n.link?.includes(`invite=${pendingInviteRoom.id}`));
+        if (matchNotif) {
+          await notificationService.markAsRead(matchNotif.id, user.id);
+        }
+      } catch (e) {
+        console.warn("Failed to mark invite notification as read", e);
+      }
+
+      toast.success(`'${pendingInviteRoom.room_name || '초대방'}' 초대를 승낙하여 가입되었습니다.`);
+      setIsInviteConfirmOpen(false);
+      
+      const copy = new URLSearchParams(searchParams);
+      copy.set('room', pendingInviteRoom.id);
+      copy.delete('invite');
+      copy.delete('type');
+      setSearchParams(copy);
+      
+      await fetchAllRooms();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`초대 승낙 중 오류가 발생했습니다: ${err.message || '알 수 없음'}`);
+    }
+  };
+
+  const handleDeclineInvite = async () => {
+    if (!pendingInviteRoom || !user) return;
+    
+    try {
+      try {
+        const notifs = await notificationService.getNotificationsForUser(user.id);
+        const matchNotif = notifs.find(n => !n.isRead && n.link?.includes(`invite=${pendingInviteRoom.id}`));
+        if (matchNotif) {
+          await notificationService.markAsRead(matchNotif.id, user.id);
+        }
+      } catch (e) {
+        console.warn("Failed to mark decline notification as read", e);
+      }
+      
+      toast.success("초대를 거절하였습니다.");
+      setIsInviteConfirmOpen(false);
+      setPendingInviteRoom(null);
+      
+      const copy = new URLSearchParams(searchParams);
+      copy.delete('invite');
+      copy.delete('type');
+      setSearchParams(copy);
+    } catch (err: any) {
+      console.error(err);
+    }
+  };
+
+  const handleVerifyPassword = () => {
+    const target = pendingRoomToEnter || activeRoom;
+    if (!target) return;
+    
+    const passwordPrefix = 'PASSWORD:';
+    const cleanPassword = target.description?.replace(passwordPrefix, '').trim();
+    
+    if (roomPasswordInput.trim() === cleanPassword) {
+      setUnlockedRooms(prev => [...prev, target.id]);
+      setSearchParams({ room: target.id, popup: isPopup ? 'true' : 'false' });
+      setIsPasswordPromptOpen(false);
+      setPendingRoomToEnter(null);
+      setRoomPasswordInput('');
+      toast.success('비밀번호가 일치하여 비공개 방에 입장했습니다.');
+    } else {
+      toast.error('비밀번호가 올바르지 않습니다.');
+    }
+  };
+
+  const handleRoomClick = (room: any) => {
+    const isPrivate = room.room_type === 'private';
+    const isUnlocked = unlockedRooms.includes(room.id) || room.created_by === user?.id;
+
+    if (isPrivate && !isUnlocked) {
+      const passwordPrefix = 'PASSWORD:';
+      const hasPassword = room.description && room.description.startsWith(passwordPrefix);
+      if (hasPassword) {
+        setPendingRoomToEnter(room);
+        setRoomPasswordInput('');
+        setIsPasswordPromptOpen(true);
+        if (isMobileListOpen) {
+          setIsMobileListOpen(false);
+        }
+        return;
+      }
+    }
+
+    setSearchParams({ room: room.id, popup: isPopup ? 'true' : 'false' });
+    if (isMobileListOpen) {
+      setIsMobileListOpen(false);
+    }
+  };
 
   // 3. 현재 활성화 된 방 변경 시 멤버, 대화내역 로드
   useEffect(() => {
@@ -1193,6 +1358,17 @@ export default function ChatPage() {
     try {
       setIsCreatingRoom(true);
       let finalRoomName = createRoomName.trim();
+      let roomDescription = null;
+
+      if (createType === 'private') {
+        if (!createRoomPassword.trim()) {
+          toast.error('비공개방의 비밀번호를 설정해 주세요.');
+          setIsCreatingRoom(false);
+          return;
+        }
+        roomDescription = `PASSWORD:${createRoomPassword.trim()}`;
+      }
+
       if (createType === 'dm') {
         if (!createRoomTargetId) {
           toast.error('1:1 대화 상대를 지정해 주세요.');
@@ -1203,13 +1379,16 @@ export default function ChatPage() {
         finalRoomName = `${student?.nickname || student?.name || '익명'} 님과의 1:1 대화`;
       }
 
-      // insert chat_room - 데이터베이스 컬럼(room_name, community_id, created_at)에 맞춘 단일하고 완벽한 인서트문
+      // insert chat_room - 데이터베이스 컬럼(room_name, community_id, created_at, room_type, description, created_by)에 맞춰 등록
       const { data: created, error: roomErr } = await supabase
         .from('chat_rooms')
         .insert([{
           room_name: finalRoomName,
           community_id: null,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          room_type: createType,
+          description: roomDescription,
+          created_by: user.id
         }])
         .select()
         .single();
@@ -1219,27 +1398,49 @@ export default function ChatPage() {
         throw roomErr;
       }
 
-      // insert members
+      // insert members - 비공개방 및 1:1 채팅의 경우, 초대받은 사람이 승낙해야 들어오므로 방 생성 시점엔 개설자(본인)만 멤버로 추가합니다.
       const insertMembers = [{ room_id: created.id, user_id: user.id }];
-      if (createType === 'dm' && createRoomTargetId) {
-        insertMembers.push({ room_id: created.id, user_id: createRoomTargetId });
-      } else if (createType === 'private' && createRoomTargetId) {
-        insertMembers.push({ room_id: created.id, user_id: createRoomTargetId });
-      }
-
       const { error: memberErr } = await supabase
         .from('chat_room_members')
         .insert(insertMembers);
 
       if (memberErr) throw memberErr;
 
-      toast.success('새로운 Slack형 채팅방이 개설되었습니다.');
+      // 초대 상대방이 지정되어 있다면 리얼타임 알림 발송
+      if ((createType === 'private' || createType === 'dm') && createRoomTargetId) {
+        const creatorName = user.nickname || user.name || '본인';
+        let notifTitle = '';
+        let notifMessage = '';
+        
+        if (createType === 'private') {
+          notifTitle = "🔒 비공개 방 초대";
+          notifMessage = `${creatorName}님이 '${finalRoomName}' 비공개 채팅방에 보낸 초대장입니다. 승낙하면 함께 참여합니다.`;
+        } else {
+          notifTitle = "💬 1:1 채팅 요청";
+          notifMessage = `${creatorName}님이 1:1 채팅을 신청했습니다. 승낙하면 대화를 즐기실 수 있습니다.`;
+        }
+
+        await notificationService.createNotification(
+          createRoomTargetId,
+          notifTitle,
+          notifMessage,
+          'chat',
+          `/chat?invite=${created.id}&type=${createType}`
+        );
+
+        toast.success(`${createType === 'private' ? '비공개방 초대' : '1:1 채팅 요청'} 알림 메시지를 전송하였습니다. 상대방이 승낙해 참여할 때까지 대기합니다!`);
+      } else {
+        toast.success('새로운 공개 채팅방이 개설되었습니다.');
+      }
+
       setIsCreateModalOpen(false);
       setCreateRoomName('');
+      setCreateRoomPassword('');
       setCreateRoomTargetId('');
+      setMemberSearchQuery(''); // 검색어 리셋
 
-      // 즉시 전환
-      setSearchParams({ room: created.id });
+      // 개설자니까 즉시 본인한테 활성화 전환
+      setSearchParams({ room: created.id, popup: isPopup ? 'true' : 'false' });
     } catch (err: any) {
       console.error(err);
       toast.error('소통방 개설 도중 오류가 발생했습니다.');
@@ -1524,8 +1725,8 @@ export default function ChatPage() {
   };
 
   return (
-    <div className={isPopup ? "w-screen h-screen bg-white flex flex-col overflow-hidden font-sans" : `font-sans flex flex-col min-h-screen bg-[#F8F9FA] ${activeRoom ? 'h-screen w-screen md:w-auto md:h-auto pt-0 pb-0 px-0 md:pt-20 md:pb-4 md:px-4 overflow-hidden' : 'pt-5 md:pt-20 pb-4 px-4'}`}>
-      <div className={isPopup ? "w-full h-full bg-white flex border-none shadow-none rounded-none" : `w-full bg-white flex ${activeRoom ? 'h-screen md:h-[78vh] max-w-7xl mx-auto rounded-none border-none shadow-none md:rounded-[32px] md:border border-slate-200/50 md:shadow-2xl' : 'max-w-7xl mx-auto h-[78vh] rounded-none border-none shadow-none md:rounded-[32px] md:border border-slate-200/50 md:shadow-2xl'}`}>
+    <div className={isPopup ? "w-screen h-screen bg-slate-50 flex items-center justify-center overflow-hidden font-sans" : `font-sans flex flex-col min-h-screen bg-[#F8F9FA] ${activeRoom ? 'h-screen w-screen md:w-auto md:h-auto pt-0 pb-0 px-0 md:pt-20 md:pb-4 md:px-4 overflow-hidden' : 'pt-5 md:pt-20 pb-4 px-4'}`}>
+      <div className={isPopup ? "w-full max-w-[1000px] h-full bg-white flex border-l border-r border-slate-205 shadow-2xl overflow-hidden" : `w-full bg-white flex ${activeRoom ? 'h-screen md:h-[78vh] max-w-7xl mx-auto rounded-none border-none shadow-none md:rounded-[32px] md:border border-slate-200/50 md:shadow-2xl' : 'max-w-7xl mx-auto h-[78vh] rounded-none border-none shadow-none md:rounded-[32px] md:border border-slate-200/50 md:shadow-2xl'}`}>
         
         {/* ===================================
             1. LEFT WORKSPACE SIDEBAR (Eggplant/Slate Black on Desktop, Beautiful Native Chat List on Mobile)
@@ -1581,7 +1782,7 @@ export default function ChatPage() {
                   return (
                     <div 
                       key={room.id}
-                      onClick={() => setSearchParams({ room: room.id })}
+                      onClick={() => handleRoomClick(room)}
                       className="flex items-center gap-3.5 py-4 cursor-pointer active:bg-slate-50 hover:bg-slate-50/50 transition-all text-left border-none"
                     >
                       {/* Circle Avatar */}
@@ -1646,8 +1847,7 @@ export default function ChatPage() {
                   <Sparkles className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="font-black text-base tracking-tight leading-none text-slate-900">Beone Chat</h2>
-                  <span className="text-[11px] font-black text-purple-600 block mt-1 leading-none">실시간 메신저</span>
+                  <h2 className="font-black text-lg tracking-tight leading-none text-slate-900">채팅</h2>
                 </div>
               </div>
               <button 
@@ -1692,7 +1892,7 @@ export default function ChatPage() {
                   return (
                     <div 
                       key={room.id}
-                      onClick={() => setSearchParams({ room: room.id })}
+                      onClick={() => handleRoomClick(room)}
                       className={`flex items-start gap-3 px-4 py-4 cursor-pointer transition-all text-left border-b border-slate-100/40 ${
                         isActive 
                           ? 'bg-purple-50/70 hover:bg-purple-50/90' 
@@ -2555,8 +2755,7 @@ export default function ChatPage() {
                     <Sparkles className="w-4.5 h-4.5 text-white" />
                   </div>
                   <div>
-                    <h2 className="font-extrabold text-sm tracking-tight leading-none text-white">Beone Chat</h2>
-                    <span className="text-[9px] font-bold text-purple-300 block mt-1 leading-none">비원아카데미 채팅 목록</span>
+                    <h2 className="font-black text-base tracking-tight leading-none text-white">채팅</h2>
                   </div>
                 </div>
                 <Button
@@ -2590,8 +2789,7 @@ export default function ChatPage() {
                         <div 
                           key={room.id}
                           onClick={() => {
-                            setSearchParams({ room: room.id });
-                            setIsMobileListOpen(false);
+                            handleRoomClick(room);
                           }}
                           className={`group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all ${
                             isActive 
@@ -2631,8 +2829,7 @@ export default function ChatPage() {
                         <div 
                           key={room.id}
                           onClick={() => {
-                            setSearchParams({ room: room.id });
-                            setIsMobileListOpen(false);
+                            handleRoomClick(room);
                           }}
                           className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all ${
                             isActive 
@@ -2672,8 +2869,7 @@ export default function ChatPage() {
                         <div 
                           key={room.id}
                           onClick={() => {
-                            setSearchParams({ room: room.id });
-                            setIsMobileListOpen(false);
+                            handleRoomClick(room);
                           }}
                           className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all ${
                             isActive 
@@ -2772,108 +2968,142 @@ export default function ChatPage() {
       {/* ===================================
           SLACK WORKSPACE NEW ROOM DIALOG
           =================================== */}
+      {/* ===================================
+          SLACK WORKSPACE NEW ROOM DIALOG
+          =================================== */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="rounded-[32px] sm:max-w-md p-8 text-left">
-          <DialogHeader className="space-y-3 text-left">
-            <DialogTitle className="text-xl font-black tracking-tight flex items-center gap-2.5">
-              <div className="w-9 h-9 bg-purple-100 rounded-xl flex items-center justify-center">
-                <MessageSquare className="w-5 h-5 text-purple-600" />
+        <DialogContent className="rounded-[32px] sm:max-w-md p-8 text-left bg-white border border-slate-100 shadow-2xl">
+          <DialogHeader className="space-y-3.5 text-left">
+            <DialogTitle className="text-[22px] font-black tracking-tight flex items-center gap-2.5 text-slate-800">
+              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center shrink-0">
+                <MessageSquare className="w-5.5 h-5.5 text-purple-600" />
               </div>
               채팅방 개설하기
             </DialogTitle>
-            <DialogDescription className="text-xs font-semibold text-gray-400">
-              실시간 라운지에 올라갈 카테고리별 채팅방을 개설합니다.
+            <DialogDescription className="text-sm font-semibold text-gray-500 leading-normal">
+              카테고리별 채팅방을 개설합니다.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleModalCreateRoom} className="space-y-5.5 pt-2">
+          <form onSubmit={handleModalCreateRoom} className="space-y-6 pt-2">
             {/* Type grid */}
-            <div className="space-y-2">
-              <Label className="text-xs font-black text-gray-400 tracking-wider">채팅방 성격 정의</Label>
+            <div className="space-y-2.5">
+              <Label className="text-sm font-black text-gray-500 tracking-wider">채팅방 카테고리</Label>
               <div className="grid grid-cols-3 gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/50">
                 <button
                   type="button"
                   onClick={() => { setCreateType('public'); setCreateRoomTargetId(''); }}
-                  className={`py-2 px-1 text-[10px] font-black rounded-xl transition-all ${
+                  className={`py-2.5 px-1 text-xs font-black rounded-xl transition-all ${
                     createType === 'public' ? 'bg-purple-600 text-white shadow' : 'text-slate-500 hover:text-purple-600 hover:bg-white'
                   }`}
                 >
-                  공개 채팅방
+                  공개방
                 </button>
                 <button
                   type="button"
                   onClick={() => { setCreateType('private'); setCreateRoomTargetId(''); }}
-                  className={`py-2 px-1 text-[10px] font-black rounded-xl transition-all ${
+                  className={`py-2.5 px-1 text-xs font-black rounded-xl transition-all ${
                     createType === 'private' ? 'bg-purple-600 text-white shadow' : 'text-slate-500 hover:text-purple-600 hover:bg-white'
                   }`}
                 >
-                  비공개 그룹
+                  비공개방
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCreateType('dm')}
-                  className={`py-2 px-1 text-[10px] font-black rounded-xl transition-all ${
-                    createType === 'dm' ? 'bg-purple-600 text-white shadow' : 'text-slate-500 hover:text-purple-600 hover:bg-white'
+                  onClick={() => { setCreateType('dm'); setCreateRoomTargetId(''); }}
+                  className={`py-2.5 px-1 text-xs font-black rounded-xl transition-all ${
+                    createType === 'dm' ? 'bg-purple-650 text-white shadow' : 'text-slate-500 hover:text-purple-650 hover:bg-white'
                   }`}
                 >
-                  1:1 DM
+                  1:1 채팅
                 </button>
               </div>
             </div>
 
             {/* Room Name */}
             {createType !== 'dm' && (
-              <div className="space-y-2">
-                <Label className="text-xs font-black text-gray-400 tracking-wider">소통방 명칭</Label>
+              <div className="space-y-2.5">
+                <Label className="text-sm font-black text-gray-500 tracking-wider">채팅방 명칭</Label>
                 <Input
                   value={createRoomName}
                   onChange={(e) => setCreateRoomName(e.target.value)}
                   placeholder="예: 과제 피드백방, 공모전 준비 스터디..."
-                  className="h-11.5 rounded-xl text-xs font-bold border-slate-200"
+                  className="h-12 rounded-xl text-sm font-bold border-slate-250 focus-visible:ring-purple-600 animate-none"
                 />
               </div>
             )}
 
-            {/* Target Select for Private/DM */}
-            {createType === 'dm' && (
-              <div className="space-y-2">
-                <Label className="text-xs font-black text-gray-400 tracking-wider">대화할 상대 선택 (1:1)</Label>
-                <select
-                  value={createRoomTargetId}
-                  onChange={(e) => setCreateRoomTargetId(e.target.value)}
-                  className="w-full h-11 px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-purple-605"
-                >
-                  <option value="">대화할 수강생을 선택하세요</option>
-                  {availableStudents.map(student => (
-                    <option key={student.id} value={student.id}>
-                      {student.nickname || student.name} ({student.email})
-                    </option>
-                  ))}
-                </select>
+            {/* Private Room Password */}
+            {createType === 'private' && (
+              <div className="space-y-2.5">
+                <Label className="text-sm font-black text-gray-500 tracking-wider">비밀번호 입력 (접근 보안)</Label>
+                <Input
+                  type="password"
+                  value={createRoomPassword}
+                  onChange={(e) => setCreateRoomPassword(e.target.value)}
+                  placeholder="입장 시 요구할 비밀번호를 기입해 주세요"
+                  className="h-12 rounded-xl text-sm font-bold border-slate-250 focus-visible:ring-purple-600"
+                />
               </div>
             )}
 
-            {createType === 'private' && (
-              <div className="space-y-2">
-                <Label className="text-xs font-black text-gray-400 tracking-wider">첫 초대 멤버 매칭 (선택)</Label>
-                <select
-                  value={createRoomTargetId}
-                  onChange={(e) => setCreateRoomTargetId(e.target.value)}
-                  className="w-full h-11 px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-purple-605"
-                >
-                  <option value="">같이 입장시킬 멤버를 선택해 주세요</option>
-                  {availableStudents.map(student => (
-                    <option key={student.id} value={student.id}>
-                      {student.nickname || student.name} ({student.email})
-                    </option>
-                  ))}
-                </select>
+            {/* Target search for private & 1:1 */}
+            {(createType === 'dm' || createType === 'private') && (
+              <div className="space-y-2.5">
+                <Label className="text-sm font-black text-gray-500 tracking-wider">
+                  {createType === 'dm' ? '대화 상대 검색 (필수)' : '첫 초대 대상 검색 (선택)'}
+                </Label>
+                <Input
+                  type="text"
+                  placeholder="닉네임, 이름, 이메일로 검색하세요"
+                  value={memberSearchQuery}
+                  onChange={(e) => setMemberSearchQuery(e.target.value)}
+                  className="h-12 rounded-xl text-sm font-bold border-slate-250 focus-visible:ring-purple-600"
+                />
+                
+                <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-2xl bg-slate-50/55 p-1.5 space-y-1">
+                  {availableStudents.filter(student => {
+                    const term = memberSearchQuery.toLowerCase();
+                    const name = (student.name || '').toLowerCase();
+                    const nickname = (student.nickname || '').toLowerCase();
+                    const email = (student.email || '').toLowerCase();
+                    return name.includes(term) || nickname.includes(term) || email.includes(term);
+                  }).length === 0 ? (
+                    <p className="text-xs text-slate-400 py-6 text-center font-bold">검색 결과가 없습니다.</p>
+                  ) : (
+                    availableStudents.filter(student => {
+                      const term = memberSearchQuery.toLowerCase();
+                      const name = (student.name || '').toLowerCase();
+                      const nickname = (student.nickname || '').toLowerCase();
+                      const email = (student.email || '').toLowerCase();
+                      return name.includes(term) || nickname.includes(term) || email.includes(term);
+                    }).map(student => {
+                      const isSelected = createRoomTargetId === student.id;
+                      return (
+                        <button
+                          key={student.id}
+                          type="button"
+                          onClick={() => setCreateRoomTargetId(student.id)}
+                          className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-between transition-all ${
+                            isSelected ? 'bg-purple-600 text-white shadow-md' : 'text-slate-700 hover:bg-white hover:shadow-sm'
+                          }`}
+                        >
+                          <div className="flex flex-col text-left">
+                            <span className="font-bold">{student.nickname || student.name}</span>
+                            <span className={`text-[10px] ${isSelected ? 'text-white/70' : 'text-slate-400'}`}>{student.email}</span>
+                          </div>
+                          {isSelected && <span className="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full font-black">선택됨</span>}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             )}
 
             <Button
               type="submit"
-              className="w-full h-11.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black mt-3.5 shadow-md shadow-purple-50"
+              className="w-full h-12.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-black mt-3.5 shadow-md shadow-purple-50 border-none transition-all"
             >
               성공적으로 채팅방 개설하기
             </Button>
@@ -2961,6 +3191,123 @@ export default function ChatPage() {
             >
               예, 완전히 삭제합니다
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===================================
+          INVITATION ACCEPTANCE DIALOG
+          =================================== */}
+      <Dialog open={isInviteConfirmOpen} onOpenChange={(open) => {
+        if (!open) {
+          handleDeclineInvite();
+        }
+      }}>
+        <DialogContent className="rounded-[24px] sm:max-w-md p-6 text-left bg-white border border-slate-150 shadow-2xl">
+          <DialogHeader className="space-y-3 text-left">
+            <DialogTitle className="text-lg font-black tracking-tight flex items-center gap-2.5 text-slate-800">
+              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                <Users className="w-5.5 h-5.5 text-purple-600" />
+              </div>
+              채팅방 초대 확인
+            </DialogTitle>
+            <DialogDescription className="text-xs font-semibold text-gray-500 leading-relaxed">
+              수강생님께 도착한 채팅방 초대 상태를 확인하고 가입을 결정해 주세요.
+            </DialogDescription>
+          </DialogHeader>
+
+          {pendingInviteRoom && (
+            <div className="bg-slate-50 p-4.5 rounded-2xl border border-slate-100/90 space-y-3 text-left mt-2">
+              <div>
+                <span className="text-[10px] font-black text-slate-400 block tracking-wide uppercase">초대된 채팅방 이름</span>
+                <span className="text-sm font-black text-slate-800">{pendingInviteRoom.room_name || "소통방"}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-slate-400 block tracking-wide uppercase">채팅방 카테고리:</span>
+                <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 border-none px-2 rounded-full font-bold text-[10px] leading-tight shrink-0">
+                  {pendingInviteType === 'private' ? '🔒 비공개 방' : '💬 1:1 채팅'}
+                </Badge>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3 mt-6">
+            <Button
+              onClick={handleDeclineInvite}
+              variant="outline"
+              className="flex-1 h-11 rounded-xl border border-slate-205 text-xs font-bold text-slate-500 hover:bg-slate-50"
+            >
+              거절하기
+            </Button>
+            <Button
+              onClick={handleAcceptInvite}
+              className="flex-1 h-11 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black shadow-md shadow-purple-50"
+            >
+              승낙 및 참여하기
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===================================
+          PASSWORD PROMPT DIALOG
+          =================================== */}
+      <Dialog open={isPasswordPromptOpen} onOpenChange={(open) => {
+        setIsPasswordPromptOpen(open);
+        if (!open) {
+          setPendingRoomToEnter(null);
+          setRoomPasswordInput('');
+        }
+      }}>
+        <DialogContent className="rounded-[24px] sm:max-w-md p-6 text-left bg-white border border-slate-150 shadow-2xl">
+          <DialogHeader className="space-y-3 text-left">
+            <DialogTitle className="text-lg font-black tracking-tight flex items-center gap-2.5 text-slate-800">
+              <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                <Lock className="w-5 h-5 text-amber-600" />
+              </div>
+              비공개 채팅방 비밀번호 입력
+            </DialogTitle>
+            <DialogDescription className="text-xs font-semibold text-slate-400 leading-normal">
+              이 채팅방은 비밀번호 인증이 완료되어야 본문을 볼 수 있는 비공개 채널입니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1.5 text-left">
+            <div className="space-y-2">
+              <Label className="text-xs font-black text-gray-500 tracking-wider">채팅방 비밀번호</Label>
+              <Input
+                type="password"
+                placeholder="지정된 비밀번호를 입력해 주세요"
+                value={roomPasswordInput}
+                onChange={(e) => setRoomPasswordInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleVerifyPassword();
+                  }
+                }}
+                className="h-11 rounded-xl text-center text-sm font-bold border-slate-200 focus-visible:ring-purple-600"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                onClick={() => {
+                  setIsPasswordPromptOpen(false);
+                  setPendingRoomToEnter(null);
+                  setRoomPasswordInput('');
+                }}
+                variant="outline"
+                className="flex-1 h-11 rounded-xl border border-slate-200 text-xs font-bold text-slate-500 hover:bg-slate-50"
+              >
+                취소
+              </Button>
+              <Button
+                onClick={handleVerifyPassword}
+                className="flex-1 h-11 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black shadow-md shadow-purple-50"
+              >
+                비밀번호 검증 및 입장
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -316,6 +316,11 @@ export default function CommunityPage() {
   const [selectedDetailPost, setSelectedDetailPost] = useState<any | null>(null);
 
   const handlePostClick = (post: any) => {
+    if (!user) {
+      toast.info('로그인이 필요한 서비스입니다.');
+      navigate('/auth/login');
+      return;
+    }
     if (activeMenu === 'home-latest' || activeMenu === 'home-popular') {
       if (post.community_id) {
         handleMenuClick(post.community_id);
@@ -681,6 +686,11 @@ export default function CommunityPage() {
   useEffect(() => {
     const dCheck = async () => {
       if (communityIdFromQuery && allCommunitiesReady.length > 0) {
+        if (!user) {
+          toast.info('로그인이 필요한 서비스입니다.');
+          navigate('/auth/login');
+          return;
+        }
         const selected = allCommunitiesReady.find((c: any) => c.id === communityIdFromQuery);
         if (selected) {
           try {
@@ -844,11 +854,17 @@ export default function CommunityPage() {
 
   // Combined menu router coordinator for 3-column interaction
   const handleMenuClick = async (menuKey: string) => {
-    setActiveMenu(menuKey);
     if (menuKey.startsWith('home') || menuKey === 'notice' || menuKey === 'schedule') {
+      setActiveMenu(menuKey);
       setSelectedCommunity(null);
       setSearchParams({});
     } else {
+      if (!user) {
+        toast.info('로그인이 필요한 서비스입니다.');
+        navigate('/auth/login');
+        return;
+      }
+      setActiveMenu(menuKey);
       const targetComm = allCommunitiesReady.find((c: any) => c.id === menuKey);
       if (targetComm) {
         try {
@@ -1136,7 +1152,7 @@ export default function CommunityPage() {
   const inviteIdFromUrl = searchParams.get('invite');
   const invitedComm = inviteIdFromUrl && allCommunitiesReady.find((c: any) => c.id === inviteIdFromUrl);
 
-  if (!user && !loading) {
+  if (!user && !loading && inviteIdFromUrl) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
         <motion.div 
@@ -1703,7 +1719,8 @@ export default function CommunityPage() {
 
   const handleToggleLike = async (postId: string) => {
     if (!user) {
-      toast.error('로그인이 필요합니다.');
+      toast.info('로그인이 필요한 서비스입니다.');
+      navigate('/auth/login');
       return;
     }
     
@@ -1782,7 +1799,8 @@ export default function CommunityPage() {
 
   const handleAddComment = async (postId: string, content: string) => {
     if (!user) {
-      toast.error('로그인이 필요합니다.');
+      toast.info('로그인이 필요한 서비스입니다.');
+      navigate('/auth/login');
       return;
     }
     if (!content.trim()) return;
@@ -1803,7 +1821,8 @@ export default function CommunityPage() {
 
   const handleJoinAttendance = async (postId: string) => {
     if (!user) {
-      toast.error('로그인이 필요합니다.');
+      toast.info('로그인이 필요한 서비스입니다.');
+      navigate('/auth/login');
       return;
     }
     try {
@@ -1826,7 +1845,8 @@ export default function CommunityPage() {
 
   const handleVotePoll = async (postId: string, optionIndex: number) => {
     if (!user) {
-      toast.error('로그인이 필요합니다.');
+      toast.info('로그인이 필요한 서비스입니다.');
+      navigate('/auth/login');
       return;
     }
     try {
@@ -2305,7 +2325,7 @@ export default function CommunityPage() {
                     ...sections.beone_exclusive_online,
                     ...sections.beone_exclusive_offline
                   ].length === 0 ? (
-                    <span className="text-xs text-slate-400 font-medium px-2.5 block py-1 font-bold">참여 중인 강의방이 없습니다.</span>
+                    <span className="text-xs text-slate-400 font-medium px-2.5 block py-1 font-bold">참여 중인 커뮤니티가 없습니다</span>
                   ) : (
                     [
                       ...sections.course,
@@ -2338,7 +2358,7 @@ export default function CommunityPage() {
                 </h4>
                 <div className="ml-3 border-l border-slate-100 pl-3 space-y-1 max-h-40 overflow-y-auto pr-1 no-scrollbar">
                   {!sections.season || sections.season.length === 0 ? (
-                    <span className="text-xs text-slate-400 font-medium px-2.5 block py-1 font-bold">참여 중인 챌린지가 없습니다.</span>
+                    <span className="text-xs text-slate-400 font-medium px-2.5 block py-1 font-bold">참여 중인 커뮤니티가 없습니다</span>
                   ) : (
                     sections.season.map((comm) => (
                       <button
@@ -2365,7 +2385,7 @@ export default function CommunityPage() {
                 </h4>
                 <div className="ml-3 border-l border-slate-100 pl-3 space-y-1 max-h-48 overflow-y-auto pr-1 no-scrollbar">
                   {!sections.board || sections.board.length === 0 ? (
-                    <span className="text-xs text-slate-400 font-medium px-2.5 block py-1 font-bold">활성화된 커뮤니티방이 없습니다.</span>
+                    <span className="text-xs text-slate-400 font-medium px-2.5 block py-1 font-bold">참여 중인 커뮤니티가 없습니다</span>
                   ) : (
                     sections.board.map((comm) => (
                       <button
@@ -2392,7 +2412,7 @@ export default function CommunityPage() {
                 </h4>
                 <div className="ml-3 border-l border-slate-100 pl-3 space-y-1 max-h-40 overflow-y-auto pr-1 no-scrollbar">
                   {!sections.other || sections.other.length === 0 ? (
-                    <span className="text-xs text-slate-400 font-medium px-2.5 block py-1 font-bold">가입된 모임이 없습니다.</span>
+                    <span className="text-xs text-slate-400 font-medium px-2.5 block py-1 font-bold">참여 중인 커뮤니티가 없습니다</span>
                   ) : (
                     sections.other.map((comm) => (
                       <button
@@ -3072,7 +3092,14 @@ export default function CommunityPage() {
                               </div>
                             ) : (
                               <div 
-                                onClick={() => setIsPostEditorExpanded(true)}
+                                onClick={() => {
+                                  if (!user) {
+                                    toast.info('로그인이 필요한 서비스입니다.');
+                                    navigate('/auth/login');
+                                    return;
+                                  }
+                                  setIsPostEditorExpanded(true);
+                                }}
                                 className="bg-white rounded-2xl border border-slate-100 p-4.5 shadow-xs hover:border-purple-300 hover:shadow-sm transition-all cursor-pointer flex items-center justify-between gap-4 select-none animate-fade-in"
                               >
                                 <div className="flex items-center gap-3.5 flex-1 min-w-0">
