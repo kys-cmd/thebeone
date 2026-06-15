@@ -140,45 +140,30 @@ export default function MobileBottomNav() {
               </Link>
 
               <Link 
-                to="/beone" 
-                onClick={() => setActiveSheet(null)}
-                className={`p-4 rounded-2xl border text-left flex flex-col justify-between h-28 transition-all ${
-                  location.pathname === '/beone' 
-                    ? 'border-purple-200 bg-purple-50/40 text-purple-900 shadow-sm' 
-                    : 'border-slate-100 bg-slate-50/50 hover:bg-slate-50 text-slate-800'
-                }`}
-              >
-                <div className="w-9 h-9 rounded-xl bg-teal-100 flex items-center justify-center text-teal-600">
-                  <Award className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-black text-[14px]">비원커뮤니티회원전용</h4>
-                  <p className="text-[10px] text-slate-400 font-bold mt-0.5">멤버 전용 프리미엄</p>
-                </div>
-              </Link>
-
-              <Link 
                 to="/live" 
                 onClick={() => setActiveSheet(null)}
-                className={`p-4 rounded-2xl border text-left flex flex-col justify-between h-28 transition-all ${
+                className={`col-span-2 p-4 rounded-2xl border text-left flex items-center justify-between h-20 transition-all ${
                   location.pathname === '/live' 
                     ? 'border-purple-200 bg-purple-50/40 text-purple-900 shadow-sm' 
                     : 'border-slate-100 bg-slate-50/50 hover:bg-slate-50 text-slate-800'
                 }`}
               >
-                <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center text-red-600 relative">
-                  <Tv className="w-5 h-5" />
-                  <span className="absolute top-1 right-1 flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                  </span>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center text-red-600 relative shrink-0">
+                    <Tv className="w-5 h-5" />
+                    <span className="absolute top-1 right-1 flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                    </span>
+                  </div>
+                  <div>
+                    <h4 className="font-black text-[14px] flex items-center gap-1">
+                      비원Live
+                    </h4>
+                    <p className="text-[10px] text-slate-400 font-bold mt-0.5">실시간 스트리밍</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-black text-[14px] flex items-center gap-1">
-                    비원Live
-                  </h4>
-                  <p className="text-[10px] text-slate-400 font-bold mt-0.5">실시간 스트리밍</p>
-                </div>
+                <ChevronRight className="w-5 h-5 text-slate-400" />
               </Link>
             </div>
           </motion.div>

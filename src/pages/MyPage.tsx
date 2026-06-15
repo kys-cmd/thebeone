@@ -252,7 +252,31 @@ export default function MyPage() {
     try {
       setLoading(true);
       const data = await courseService.getMyCourses(user!.id);
-      setMyCourses(data);
+      
+      const rank = ROLE_RANK[user!.role || 'user'] || 0;
+      const isBeOne = rank >= 3 || user!.role === 'admin' || user!.role === 'super_admin';
+      
+      let merged = [...data];
+      if (isBeOne) {
+        try {
+          const allCourses = await courseService.getCourses();
+          const beOneExclusives = allCourses.filter(
+            c => c.category === 'beone_exclusive' || 
+                 c.category === 'beone_exclusive_online' || 
+                 c.category === 'beone_exclusive_offline'
+          );
+          
+          beOneExclusives.forEach(course => {
+            if (!merged.some(mc => mc.id === course.id)) {
+              merged.push(course);
+            }
+          });
+        } catch (beOneErr) {
+          console.error('[MyPage merge BeOne exclusive lectures error]:', beOneErr);
+        }
+      }
+      
+      setMyCourses(merged);
     } catch (error) {
       console.error(error);
       toast.error('내 강의 정보를 불러오는데 실패했습니다.');
