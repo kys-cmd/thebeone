@@ -34,7 +34,7 @@ export default function DynamicCourseRenderer({ blocks }: DynamicCourseRendererP
           {block.type === 'video' && block.content && (
             <div className="aspect-video w-full md:rounded-2xl rounded-none overflow-hidden shadow-xl bg-black">
               <iframe
-                src={getVimeoEmbedUrl(block.content)}
+                src={getVimeoEmbedUrl(block.content, { autoplay: 1, muted: 1 })}
                 className="w-full h-full animate-fade-in"
                 allow="autoplay; fullscreen; picture-in-picture; encrypted-media; gyroscope; accelerometer; clipboard-write; web-share"
                 referrerPolicy="strict-origin-when-cross-origin"
