@@ -210,6 +210,10 @@ export function useInicisPay() {
         currency: "WON",
         merchantData: hostOrigin, // Robustly preserve the actual browser origin domain for S2S callback redirect matching
         
+        // UTF-8 Charset explicitly enforced to prevent broken Korean characters (e.g., ??誘명??) in emails and PG screens
+        charset: "UTF-8",
+        g_charset: "utf-8",
+
         // 구매 정보 전송
         goodname: params.courseName,
         buyername: params.userName || "구매자",
@@ -223,7 +227,7 @@ export function useInicisPay() {
 
         // UI 설정 옵션 (PC는 iframe 레이어 팝업 형태로 부릅니다)
         payViewType: "overlay", // 최신 브라우저 오버레이 인터페이스
-        acceptmethod: "HPP(1):below1000:center:va_receipt" // 이니시스 고급 필드 설정
+        acceptmethod: "HPP(1):below1000:center:va_receipt:g_charset(utf-8)" // 이니시스 고급 필드 설정 (g_charset(utf-8) 추가)
       };
 
       // Form Element 필드들 주입

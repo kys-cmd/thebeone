@@ -86,7 +86,9 @@ export const useInicis = () => {
         use_chkfake: 'Y',
         closeUrl: `${window.location.origin}/payment/close`,
         payViewType: 'overlay',
-        acceptmethod: 'HPP(1):below1000:centerView(Y):popview(Y)',
+        charset: 'UTF-8',
+        g_charset: 'utf-8',
+        acceptmethod: 'HPP(1):below1000:centerView(Y):popview(Y):g_charset(utf-8)',
       };
 
       Object.entries(fields).forEach(([name, value]) => {
