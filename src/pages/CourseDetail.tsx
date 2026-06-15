@@ -517,7 +517,7 @@ export default function CourseDetail() {
           
           {/* Dynamic Design from Admin CMS */}
           {course.layout && course.layout.blocks.length > 0 ? (
-            <section id="intro" className="space-y-10">
+            <section id="intro" className="space-y-10 max-w-[1000px] w-full mx-auto md:px-4 px-0">
               <DynamicCourseRenderer blocks={course.layout.blocks} />
             </section>
           ) : (

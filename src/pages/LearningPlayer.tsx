@@ -414,12 +414,14 @@ export default function LearningPlayer() {
               return;
             }
 
-            // check enrollment for BeOne exclusive courses
+            // check enrollment for BeOne exclusive courses, silently register if not enrolled
             const isEnrolled = await courseService.checkEnrollment(user.id, id!);
             if (!isEnrolled) {
-              toast.error('내 강의실에 등록되지 않은 강의입니다. [내강의실에 등록하기] 버튼을 눌러 등록해주세요.');
-              navigate(`/course/${id}`);
-              return;
+              try {
+                await courseService.enrollCourse(user.id, id!);
+              } catch (err) {
+                console.error('Silent enrollment for BeOne exclusive course failed:', err);
+              }
             }
           } else {
             // Check general grade or enrollment restrictions

@@ -1,6 +1,7 @@
 import { Handler } from "@netlify/functions";
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
+import iconv from "iconv-lite";
 
 // Initialize Supabase Client
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
@@ -9,14 +10,42 @@ const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
   ? createClient(supabaseUrl, supabaseServiceRoleKey) 
   : null;
 
-/**
- * URL QueryString 이나 Form-URLEncoded 된 문자열을 Key-Value 오브젝트로 파싱합니다.
- */
-function parseUrlEncoded(bodyStr: string): Record<string, string> {
+function decodePercentBytes(str: string): string {
+  const normalized = str.replace(/\+/g, " ");
+  const bytes: number[] = [];
+  for (let i = 0; i < normalized.length; i++) {
+    if (normalized[i] === "%" && i + 2 < normalized.length) {
+      const hex = normalized.substring(i + 1, i + 3);
+      bytes.push(parseInt(hex, 16));
+      i += 2;
+    } else {
+      bytes.push(normalized.charCodeAt(i));
+    }
+  }
+  const buffer = Buffer.from(bytes);
+  
+  const utf8Decoded = iconv.decode(buffer, "utf-8");
+  if (!utf8Decoded.includes("\uFFFD") && !utf8Decoded.includes("??") && !utf8Decoded.includes("")) {
+    return utf8Decoded;
+  }
+  
+  try {
+    return iconv.decode(buffer, "euc-kr");
+  } catch (e) {
+    return utf8Decoded;
+  }
+}
+
+function decodeBuffer(buf: Buffer): Record<string, string> {
   const result: Record<string, string> = {};
-  const params = new URLSearchParams(bodyStr);
-  for (const [key, val] of params.entries()) {
-    result[key] = val;
+  const bodyStr = buf.toString("ascii");
+  const pairs = bodyStr.split("&");
+  for (const pair of pairs) {
+    const eqIdx = pair.indexOf("=");
+    if (eqIdx === -1) continue;
+    const keyRaw = pair.substring(0, eqIdx);
+    const valRaw = pair.substring(eqIdx + 1);
+    result[decodePercentBytes(keyRaw)] = decodePercentBytes(valRaw);
   }
   return result;
 }
@@ -30,15 +59,14 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  // Raw body 파싱
-  let decodedBody = "";
+  // Raw body parsing including safe Base64 decoding and robust dual-charset url-decoding
+  let inicisData: Record<string, string> = {};
   if (event.body) {
-    decodedBody = event.isBase64Encoded 
-      ? Buffer.from(event.body, "base64").toString("utf-8")
-      : event.body;
+    const bodyBuffer = event.isBase64Encoded
+      ? Buffer.from(event.body, "base64")
+      : Buffer.from(event.body, "utf-8");
+    inicisData = decodeBuffer(bodyBuffer);
   }
-
-  const inicisData = parseUrlEncoded(decodedBody);
   console.log("[INICIS-RETURN] 인증 시도 결과 수신 데이터:", inicisData);
 
   const isMobileFlow = !!(inicisData.P_TID && inicisData.P_REQ_URL);
@@ -154,14 +182,9 @@ export const handler: Handler = async (event) => {
         throw new Error(`이니시스 모바일 승인 HTTP 단절: 상태코드 ${response.status}`);
       }
 
-      const resText = await response.text();
-      console.log("[INICIS-RETURN] Mobile Approval Raw response:", resText);
-
-      const appRes: Record<string, string> = {};
-      const params = new URLSearchParams(resText);
-      for (const [key, value] of params.entries()) {
-        appRes[key] = value;
-      }
+      const resBuffer = Buffer.from(await response.arrayBuffer());
+      const appRes = decodeBuffer(resBuffer);
+      console.log("[INICIS-RETURN] Mobile Approval Decoded response:", appRes);
 
       const finalStatus = appRes.P_STATUS;
       const finalMsg = appRes.P_RMESG1 || "승인 실패";

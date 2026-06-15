@@ -9,6 +9,7 @@ import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import cors from "cors";
 import nodemailer from "nodemailer";
+import iconv from "iconv-lite";
 
 // In-memory OTP Cache for password resets
 interface OTPRecord {
@@ -119,9 +120,72 @@ async function startServer() {
   const parser = new Parser();
   
   app.use(cors());
-  // Use body-parser for payment notifications
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  // Use body-parser with raw body capture for safe character encoding decoding
+  app.use(express.json({
+    verify: (req: any, res, buf) => {
+      req.rawBody = buf;
+    }
+  }));
+  app.use(express.urlencoded({ 
+    extended: true,
+    verify: (req: any, res, buf) => {
+      req.rawBody = buf;
+    }
+  }));
+
+  // Robust URL encoded body decoder handling both UTF-8 and EUC-KR charsets
+  function decodePercentBytes(str: string): string {
+    const normalized = str.replace(/\+/g, " ");
+    const bytes: number[] = [];
+    for (let i = 0; i < normalized.length; i++) {
+      if (normalized[i] === "%" && i + 2 < normalized.length) {
+        const hex = normalized.substring(i + 1, i + 3);
+        bytes.push(parseInt(hex, 16));
+        i += 2;
+      } else {
+        bytes.push(normalized.charCodeAt(i));
+      }
+    }
+    const buffer = Buffer.from(bytes);
+    
+    // Try UTF-8 decoding
+    const utf8Decoded = iconv.decode(buffer, "utf-8");
+    if (!utf8Decoded.includes("\uFFFD") && !utf8Decoded.includes("??") && !utf8Decoded.includes("")) {
+      return utf8Decoded;
+    }
+    
+    // Fallback to EUC-KR decoding
+    try {
+      return iconv.decode(buffer, "euc-kr");
+    } catch (e) {
+      return utf8Decoded;
+    }
+  }
+
+  function decodeBuffer(buf: Buffer): Record<string, string> {
+    const result: Record<string, string> = {};
+    const bodyStr = buf.toString("ascii");
+    const pairs = bodyStr.split("&");
+    for (const pair of pairs) {
+      const eqIdx = pair.indexOf("=");
+      if (eqIdx === -1) continue;
+      const keyRaw = pair.substring(0, eqIdx);
+      const valRaw = pair.substring(eqIdx + 1);
+      result[decodePercentBytes(keyRaw)] = decodePercentBytes(valRaw);
+    }
+    return result;
+  }
+
+  function getDecodedBody(req: any): Record<string, string> {
+    if (req.rawBody && Buffer.isBuffer(req.rawBody) && req.rawBody.length > 0) {
+      try {
+        return decodeBuffer(req.rawBody);
+      } catch (err) {
+        console.error("[DECODER] Raw body decoding failed:", err);
+      }
+    }
+    return req.body || {};
+  }
 
   // A helper to verify if requesting user is an administrator
   async function adminCheck(authHeader?: string): Promise<boolean> {
@@ -373,7 +437,9 @@ async function startServer() {
 
   // 2. Auth URL Postback & S2S Payment Approval + NetCancel Rollback (Express PORT)
   app.post("/api/inicis-return", async (req, res) => {
-    console.log("[INICIS-RETURN] Received approval payload:", req.body);
+    const decodedBody = getDecodedBody(req);
+    console.log("[INICIS-RETURN] Received approval payload (Raw):", req.body, "(Decoded):", decodedBody);
+    req.body = decodedBody;
 
     const isMobileFlow = !!(req.body.P_TID && req.body.P_REQ_URL);
 
@@ -508,15 +574,9 @@ async function startServer() {
           throw new Error(`INICIS Mobile Approval status error: ${apiResponse.status}`);
         }
 
-        const resText = await apiResponse.text();
-        console.log("[INICIS-RETURN] Mobile Approval Raw response:", resText);
-
-        // Parse url encoded raw response
-        const appRes: Record<string, string> = {};
-        const params = new URLSearchParams(resText);
-        for (const [key, value] of params.entries()) {
-          appRes[key] = value;
-        }
+        const resBuffer = Buffer.from(await apiResponse.arrayBuffer());
+        const appRes = decodeBuffer(resBuffer);
+        console.log("[INICIS-RETURN] Mobile Approval Decoded response:", appRes);
 
         const finalStatus = appRes.P_STATUS;
         const finalMsg = appRes.P_RMESG1 || "승인 실패";
@@ -3755,7 +3815,9 @@ async function startServer() {
   // 이니시스는 결제 완료 후 이 URL로 백채널 통보를 보냅니다.
   app.post("/api/payment/inicis/notify", async (req, res) => {
     try {
-      console.log("Inicis Notify Received:", req.body);
+      const decodedBody = getDecodedBody(req);
+      console.log("Inicis Notify Received (Raw):", req.body, "(Decoded):", decodedBody);
+      req.body = decodedBody;
       const { P_STATUS, P_TID, P_MID, P_AMT, P_OID, P_RMESG1 } = req.body;
 
       // 1. 로그 저장
@@ -3786,7 +3848,9 @@ async function startServer() {
   // 브라우저가 사용자 결제 완료 후 POST로 이 주소로 들어옵니다.
   app.post("/api/payment/inicis/callback", async (req, res) => {
     try {
-      console.log("Inicis Callback Received:", req.body);
+      const decodedBody = getDecodedBody(req);
+      console.log("Inicis Callback Received (Raw):", req.body, "(Decoded):", decodedBody);
+      req.body = decodedBody;
       const { authToken, authUrl, merchantData } = req.body;
 
       if (!authToken || !authUrl) {
