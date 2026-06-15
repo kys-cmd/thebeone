@@ -157,9 +157,9 @@ export default function AdminCMS() {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    // Check file size (e.g., 5MB for images)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('이미지 파일은 5MB 이하만 가능합니다.');
+    // Check file size limit (50MB high cap, since client-side handles compression and scaling)
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('이미지 파일은 50MB 이하만 가능합니다.');
       return;
     }
 
