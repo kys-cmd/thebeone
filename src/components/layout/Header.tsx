@@ -236,6 +236,7 @@ export default function Header() {
               <Link to="/lifecoaching" className="hover:text-purple-600 transition-colors">라이프코칭</Link>
               <Link to="/techtree" className="hover:text-purple-600 transition-colors">자본주의 테크트리</Link>
               <Link to="/community" className="hover:text-purple-600 transition-colors">커뮤니티</Link>
+              <Link to="/support/inquiry" className="hover:text-purple-600 transition-colors">1:1 문의</Link>
               {user && (
                 <Link to="/mypage?tab=classroom" className="text-purple-600 hover:text-purple-700 font-extrabold transition-colors flex items-center gap-1">
                   <span>내 강의실</span>
@@ -459,6 +460,9 @@ export default function Header() {
                         </Link>
                         <Link to="/community" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
                           <MessageSquare className="w-5 h-5 text-purple-600" /> 커뮤니티
+                        </Link>
+                        <Link to="/support/inquiry" className="flex items-center gap-3 p-4 rounded-xl hover:bg-purple-50 transition-colors font-bold text-gray-700">
+                          <MessageSquare className="w-5 h-5 text-purple-600" /> 1:1 문의
                         </Link>
                       </nav>
                     </div>

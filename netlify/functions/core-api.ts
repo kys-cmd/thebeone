@@ -358,7 +358,7 @@ export const handler: Handler = async (event, context) => {
     // 8.45 USER: 1:1 문의글 제출 (support/inquiry)
     // =========================================================================
     if (action === "submit-inquiry") {
-      const { category, email, title, message } = body;
+      const { category, email, userName, userId, title, message } = body;
       if (!category || !email || !title || !message) {
         return {
           statusCode: 400,
@@ -367,12 +367,23 @@ export const handler: Handler = async (event, context) => {
         };
       }
 
+      const authorUserId = requestingUser?.id || userId || null;
+      const authorName = userName || (requestingUser ? (requestingUser.user_metadata?.name || requestingUser.email) : "익명");
+
       const { data: inquiry, error: insertErr } = await supabaseAdmin
         .from("support_contents")
         .insert([{
           type: "inquiry",
           title: title,
-          content: JSON.stringify({ category, email, message }),
+          content: JSON.stringify({ 
+            category, 
+            email, 
+            userName: authorName, 
+            userId: authorUserId, 
+            message,
+            reply: null,
+            replied_at: null
+          }),
           active: true,
           is_deleted: false,
           created_at: new Date().toISOString(),

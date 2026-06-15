@@ -221,6 +221,56 @@ export const cmsService = {
     }
   },
 
+  async replyToInquiry(inquiryId: string, replyMessage: string, userId: string | null, inquiryTitle: string): Promise<void> {
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('support_contents')
+        .select('*')
+        .eq('id', inquiryId)
+        .single();
+      
+      if (fetchErr || !data) {
+        throw new Error(fetchErr?.message || '문의글을 찾을 수 없습니다.');
+      }
+
+      let parsedContent: any = {};
+      try {
+        parsedContent = JSON.parse(data.content);
+      } catch (e) {
+        parsedContent = { message: data.content };
+      }
+
+      parsedContent.reply = replyMessage;
+      parsedContent.replied_at = new Date().toISOString();
+
+      const { error: updateErr } = await supabase
+        .from('support_contents')
+        .update({
+          content: JSON.stringify(parsedContent),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', inquiryId);
+
+      if (updateErr) {
+        throw updateErr;
+      }
+
+      if (userId) {
+        const { notificationService } = await import('./notificationService');
+        await notificationService.createNotification(
+          userId,
+          `문의 답변: ${inquiryTitle}`,
+          `상세내용: ${replyMessage.substring(0, 50)}${replyMessage.length > 50 ? '...' : ''}`,
+          'admin_message',
+          '/mypage?tab=support'
+        );
+      }
+    } catch (err: any) {
+      console.error('[CMS] replyToInquiry Error:', err);
+      throw new Error(`답변 저장 및 알림 처리 실패: ${err.message}`);
+    }
+  },
+
   // Config
   async getSiteConfig(): Promise<SiteConfig> {
     const defaultConfig: SiteConfig = {

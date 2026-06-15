@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -6,18 +6,29 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { MessageCircle, FileUp, ShieldCheck, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/store/useAuthStore';
+import { supabase } from '@/lib/supabase';
 
 export default function InquiryPage() {
+  const { user } = useAuthStore();
   const [category, setCategory] = useState('사이트 오류');
   const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (user) {
+      setEmail(user.email || '');
+      setName(user.name || user.nickname || '');
+    }
+  }, [user]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!category || !email.trim() || !title.trim() || !message.trim()) {
+    if (!category || !email.trim() || !name.trim() || !title.trim() || !message.trim()) {
       toast.error('모든 빈칸은 필수 입력 사항입니다. 다시 확인해 주세요.');
       return;
     }
@@ -31,15 +42,22 @@ export default function InquiryPage() {
 
     setIsSubmitting(true);
     try {
+      // Get active session token for backend authentication
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
       const response = await fetch('/api/core-api', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           action: 'submit-inquiry',
           category,
           email,
+          userName: name,
+          userId: user?.id || null,
           title,
           message
         })
@@ -48,8 +66,7 @@ export default function InquiryPage() {
       const result = await response.json();
       if (result.status === 'success') {
         toast.success(result.message);
-        // 입력 박스 리셋
-        setEmail('');
+        // 입력 박스 리셋 (사용자 기본 정보는 유지하고 제목, 본문만 리셋)
         setTitle('');
         setMessage('');
         setCategory('사이트 오류');
@@ -81,13 +98,13 @@ export default function InquiryPage() {
 
           <form onSubmit={handleSubmit} className="bg-white p-10 rounded-[48px] border border-gray-100 shadow-2xl space-y-8 max-w-3xl mx-auto w-full">
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-black text-gray-900 ml-1">문의 유형 <span className="text-red-500">*</span></label>
                   <select 
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="w-full h-14 bg-gray-50 border-none rounded-2xl font-bold px-6 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full h-14 bg-gray-50 border-none rounded-2xl font-bold px-6 focus:ring-2 focus:ring-blue-500 outline-none text-gray-700"
                     required
                   >
                     <option value="사이트 오류">사이트 오류</option>
@@ -97,6 +114,17 @@ export default function InquiryPage() {
                     <option value="계정/정보">계정/정보</option>
                     <option value="기타">기타</option>
                   </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-black text-gray-900 ml-1">작성자 명 <span className="text-red-500">*</span></label>
+                  <Input 
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="이름 또는 닉네임" 
+                    className="h-14 bg-gray-50 border-none rounded-2xl font-bold px-6 focus-visible:ring-2 focus-visible:ring-blue-500" 
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-black text-gray-900 ml-1">이메일 <span className="text-red-500">*</span></label>

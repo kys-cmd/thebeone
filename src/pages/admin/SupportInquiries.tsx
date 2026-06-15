@@ -36,6 +36,10 @@ export default function SupportInquiries() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('전체');
 
+  // 1:1 문의 답변 관련 로컬 상태
+  const [replyInquiryId, setReplyInquiryId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
+
   // Form State for editing / creating notices or faqs
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -52,6 +56,27 @@ export default function SupportInquiries() {
   const [scheduleTime, setScheduleTime] = useState('');
   const [scheduleCategory, setScheduleCategory] = useState('정규 강의');
   const [scheduleColor, setScheduleColor] = useState('purple');
+
+  const handleSendReply = async (inquiryId: string, userId: string | null, inquiryTitle: string) => {
+    if (!replyText.trim()) {
+      toast.error('답변 내용을 정확하게 기재해 주세요.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await cmsService.replyToInquiry(inquiryId, replyText, userId, inquiryTitle);
+      toast.success('답변 작성 완료 및 실시간 알림이 성공적으로 전송되었습니다! 😊');
+      setReplyInquiryId(null);
+      setReplyText('');
+      loadTabContents(activeTab);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`답변 작성 중 오류가 발생했습니다: ${err.message || err}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Load support contents based on tab
   const loadTabContents = async (tab: string) => {
@@ -131,7 +156,6 @@ export default function SupportInquiries() {
         setFaqCategory(parsed.category || '강의');
       } catch (e) {
         setFormContent(item.content || '');
-        setFaqCategory('기타');
       }
     } else if (activeTab === 'schedules') {
       try {
@@ -221,7 +245,6 @@ export default function SupportInquiries() {
     
     // Category match for Inquiry tab
     if (activeTab === 'inquiries') {
-      let parsed = { category: '기타' };
       try {
         if (item.content?.startsWith('{')) parsed = JSON.parse(item.content);
       } catch (e) { }
@@ -557,16 +580,15 @@ export default function SupportInquiries() {
             )}
           </div>
         ) : (
-          <div className="mt-8 space-y-6">
-            {/* Filter and Search Box */}
-            <div className="bg-white p-4 border border-slate-100 shadow-sm rounded-2xl flex flex-col md:flex-row items-center gap-3">
-              <div className="relative flex-1 w-full">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input 
+          <div className="space-y-6 mt-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-3.5 w-4 h-4 text-gray-400" />
+                <Input
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="통합 키워드 검색..."
-                  className="pl-10 h-11 bg-slate-50/50 border-slate-100 rounded-xl font-bold text-sm"
+                  placeholder="제목이나 본문 키워드로 통합 검색..."
+                  className="pl-11 h-11 bg-slate-50/50 border border-slate-100 rounded-xl font-bold"
                 />
               </div>
 
@@ -611,17 +633,27 @@ export default function SupportInquiries() {
                     {filteredData.map((item) => {
                       // Custom Rendering configurations based on Active tab
                       if (activeTab === 'inquiries') {
-                        let parsed = { category: '기타', email: '익명', message: item.content || '' };
+                        let parsed = { 
+                          email: '익명', 
+                          userName: '익명회원', 
+                          userId: null, 
+                          message: item.content || '',
+                          reply: null,
+                          replied_at: null
+                        };
                         try {
-                          if (item.content?.startsWith('{')) parsed = JSON.parse(item.content);
+                          if (item.content?.startsWith('{')) {
+                            parsed = { ...parsed, ...JSON.parse(item.content) };
+                          }
                         } catch (e) {}
 
                         return (
-                          <div key={item.id} className="p-6 border rounded-2xl hover:border-purple-200 hover:bg-purple-50/5 transition-all space-y-3 relative text-left">
-                            <div className="flex items-center justify-between border-b pb-3">
-                              <div className="flex items-center gap-2">
+                          <div key={item.id} className="p-6 border rounded-2xl hover:border-purple-200 hover:bg-purple-50/5 transition-all space-y-4 relative text-left">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between border-b pb-3 gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <Badge className="bg-purple-600 text-white font-bold">{parsed.category}</Badge>
-                                <span className="font-bold text-xs text-purple-600 font-mono">{parsed.email}</span>
+                                <span className="font-extrabold text-sm text-slate-800">{parsed.userName}</span>
+                                <span className="font-bold text-xs text-purple-600 font-mono">({parsed.email})</span>
                                 <span className="text-[10px] text-gray-400 border-l pl-2 font-bold font-mono">
                                   {new Date(item.created_at).toLocaleString()}
                                 </span>
@@ -630,8 +662,78 @@ export default function SupportInquiries() {
                                 <Trash2 className="w-4 h-4 mr-1" /> 삭제
                               </Button>
                             </div>
-                            <h4 className="font-extrabold text-slate-900 text-base">{item.title}</h4>
-                            <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl whitespace-pre-wrap">{parsed.message}</p>
+                            
+                            <div>
+                              <h4 className="font-black text-slate-900 text-base mb-1.5">{item.title}</h4>
+                              <div className="text-sm text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl whitespace-pre-wrap">
+                                {parsed.message}
+                              </div>
+                            </div>
+
+                            {/* Existing Reply UI */}
+                            {parsed.reply ? (
+                              <div className="bg-purple-50/50 border border-purple-100 p-4 rounded-xl space-y-1.5">
+                                <div className="flex items-center justify-between border-b border-purple-150 pb-1.5">
+                                  <span className="font-bold text-xs text-purple-700">관리자 답변 발송 완료</span>
+                                  <span className="text-[10px] text-slate-400 font-bold font-mono">
+                                    {parsed.replied_at ? new Date(parsed.replied_at).toLocaleString() : ''}
+                                  </span>
+                                </div>
+                                <div className="text-sm font-semibold text-slate-800 whitespace-pre-wrap leading-relaxed">
+                                  {parsed.reply}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="bg-amber-50 text-amber-800 px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 max-w-fit">
+                                <Clock className="w-3.5 h-3.5 animate-pulse" /> 답변 대기 중
+                              </div>
+                            )}
+
+                            {/* Reply Form Toggle */}
+                            {replyInquiryId === item.id ? (
+                              <div className="space-y-3 pt-3 border-t border-slate-100 animate-fade-in">
+                                <label className="text-xs font-black text-slate-800 ml-1 block">답변 내용 기재</label>
+                                <Textarea 
+                                  value={replyText}
+                                  onChange={(e) => setReplyText(e.target.value)}
+                                  placeholder="회원님에게 즉각적으로 알림 방송과 이메일리 답변 서비스로 전개됩니다. 상세히 기재해 주세요."
+                                  className="min-h-[120px] bg-white border-purple-200 focus-visible:ring-purple-500 rounded-xl"
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="font-bold h-9 text-slate-500 hover:bg-slate-100"
+                                    onClick={() => { setReplyInquiryId(null); setReplyText(''); }}
+                                  >
+                                    취소
+                                  </Button>
+                                  <Button 
+                                    size="sm" 
+                                    className="bg-purple-600 hover:bg-purple-700 text-white font-black h-9 gap-1.5 shadow-md shadow-purple-100 rounded-lg"
+                                    onClick={() => handleSendReply(item.id, parsed.userId, item.title)}
+                                  >
+                                    <CheckCircle className="w-4 h-4" />
+                                    답변 작성 완료
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex justify-end pt-2">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="border-purple-200 text-purple-700 hover:bg-purple-50 font-black h-9 gap-1.5 rounded-xl"
+                                  onClick={() => {
+                                    setReplyInquiryId(item.id);
+                                    setReplyText(parsed.reply || '');
+                                  }}
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                  {parsed.reply ? '답변 상세 수정' : '답변 작성하기'}
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         );
                       }
