@@ -245,6 +245,7 @@ export default function SupportInquiries() {
     
     // Category match for Inquiry tab
     if (activeTab === 'inquiries') {
+      let parsed: any = {};
       try {
         if (item.content?.startsWith('{')) parsed = JSON.parse(item.content);
       } catch (e) { }
@@ -633,7 +634,8 @@ export default function SupportInquiries() {
                     {filteredData.map((item) => {
                       // Custom Rendering configurations based on Active tab
                       if (activeTab === 'inquiries') {
-                        let parsed = { 
+                        let parsed: any = { 
+                          category: '일반문의',
                           email: '익명', 
                           userName: '익명회원', 
                           userId: null, 

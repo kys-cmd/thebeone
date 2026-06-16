@@ -971,7 +971,24 @@ async function startServer() {
         }
 
         try {
-          await supabaseAdmin.from("profiles").update({ role: "paid_member" }).eq("id", userId);
+          const { data: currentProfile } = await supabaseAdmin
+            .from("profiles")
+            .select("role")
+            .eq("id", userId)
+            .maybeSingle();
+
+          const currentRole = currentProfile?.role || "user";
+          const isBeOneOrHigher = currentRole === "beone_member" || 
+                                  currentRole === "bione_member" || 
+                                  currentRole === "admin" || 
+                                  currentRole === "super_admin";
+
+          if (!isBeOneOrHigher) {
+            await supabaseAdmin.from("profiles").update({ role: "paid_member" }).eq("id", userId);
+            console.log(`[INICIS-RETURN] Upgraded user ${userId} to paid_member`);
+          } else {
+            console.log(`[INICIS-RETURN] User ${userId} is already ${currentRole}. Retaining role.`);
+          }
         } catch (pErr) {
           console.warn("[INICIS-RETURN] profile status update bypass:", pErr);
         }

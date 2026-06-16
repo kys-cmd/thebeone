@@ -397,7 +397,24 @@ export const handler: Handler = async (event) => {
       }
 
       try {
-        await supabaseAdmin.from("profiles").update({ role: "paid_member" }).eq("id", userId);
+        const { data: currentProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("role")
+          .eq("id", userId)
+          .maybeSingle();
+
+        const currentRole = currentProfile?.role || "user";
+        const isBeOneOrHigher = currentRole === "beone_member" || 
+                                currentRole === "bione_member" || 
+                                currentRole === "admin" || 
+                                currentRole === "super_admin";
+
+        if (!isBeOneOrHigher) {
+          await supabaseAdmin.from("profiles").update({ role: "paid_member" }).eq("id", userId);
+          console.log(`[PAYMENT-CALLBACK] Upgraded user ${userId} to paid_member`);
+        } else {
+          console.log(`[PAYMENT-CALLBACK] User ${userId} is already ${currentRole}. Retaining role.`);
+        }
       } catch (pErr: any) {
         console.warn("[PAYMENT-CALLBACK] Profile upgrade warning:", pErr.message);
       }
