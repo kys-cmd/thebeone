@@ -231,7 +231,12 @@ export default function AdminSalesManagement() {
     setIsLoading(true);
     try {
       const data = await purchaseService.getAllOrders(200);
-      setOrders(data || []);
+      // Filter out unpaid/uncompleted records completely
+      const completedOnly = (data || []).filter((o: any) => {
+        const s = (o.status || '').toUpperCase();
+        return s === 'PAID' || s === 'COMPLETED';
+      });
+      setOrders(completedOnly);
     } catch (error: any) {
       console.error('Error fetching orders:', error);
       const isMissingTable = error.message?.includes('relation') && error.message?.includes('does not exist');
@@ -252,18 +257,7 @@ export default function AdminSalesManagement() {
       order.profile?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.course?.title?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    // 이니시스 PAID / COMPLETED 와 FAILED에 맞도록 정밀화 필터 매핑
-    const statusVal = (order.status || '').toUpperCase();
-    let matchesStatus = true;
-    if (statusFilter === 'completed') {
-      matchesStatus = statusVal === 'PAID' || statusVal === 'COMPLETED';
-    } else if (statusFilter === 'pending') {
-      matchesStatus = statusVal === 'PENDING' || statusVal === '' || statusVal === 'DEFAULT';
-    } else if (statusFilter === 'failed') {
-      matchesStatus = statusVal === 'FAILED' || statusVal === 'CANCELLED';
-    }
-    
-    return matchesSearch && matchesStatus;
+    return !!matchesSearch;
   });
 
   const getOrderStatusBadge = (status: string) => {
@@ -393,16 +387,10 @@ export default function AdminSalesManagement() {
               />
             </div>
             <div className="flex gap-2">
-              <select 
-                value={statusFilter}
-                onChange={(e: any) => setStatusFilter(e.target.value)}
-                className="h-14 px-6 rounded-2xl bg-gray-50 border-gray-100 font-black text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all appearance-none min-w-[140px] text-center"
-              >
-                <option value="all">전체 상태</option>
-                <option value="completed">결제완료</option>
-                <option value="pending">결제대기</option>
-                <option value="failed">결제실패</option>
-              </select>
+              <div className="h-14 px-6 rounded-2xl bg-green-50 border border-green-100 flex items-center justify-center font-black text-sm text-green-700 min-w-[140px] gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-600 animate-pulse" />
+                결제완료 내역만 표기됨
+              </div>
               <Button variant="outline" className="h-14 px-6 rounded-2xl border-gray-100 font-black gap-2">
                  <Filter className="w-4 h-4" />
                  상세 필터
@@ -448,10 +436,15 @@ export default function AdminSalesManagement() {
                     const successLog = order.logs.find((l: any) => l.status === 'SUCCESS') || order.logs[0];
                     if (successLog && successLog.raw_response) {
                       try {
-                        const parsed = JSON.parse(successLog.raw_response);
+                        const rawRes = successLog.raw_response;
+                        const parsed = typeof rawRes === 'string' ? JSON.parse(rawRes) : rawRes;
                         const rawObj = parsed.details || parsed;
-                        tid = rawObj.tid || rawObj.TID || rawObj.AuthTID || rawObj.payment_tid || '-';
-                        applNum = rawObj.applNum || rawObj.applNo || rawObj.AuthCode || rawObj.applCode || '-';
+                        
+                        // Extract Transaction ID (TID)
+                        tid = rawObj.tid || rawObj.TID || rawObj.AuthTID || rawObj.payment_tid || rawObj.P_TID || '-';
+                        
+                        // Extract Approval Number (승인번호)
+                        applNum = rawObj.applNum || rawObj.applNo || rawObj.AuthCode || rawObj.applCode || rawObj.P_AUTH_NO || rawObj.appl_num || '-';
                       } catch (e) {
                         // ignore parsing error
                       }

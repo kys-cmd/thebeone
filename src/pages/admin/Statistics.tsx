@@ -46,8 +46,13 @@ export default function AdminStatistics() {
     fetchOrders();
   }, []);
 
-  const totalRevenue = orders.reduce((sum, order) => sum + (order.amount || 0), 0);
-  const totalCount = orders.length;
+  const completedOrders = orders.filter(o => {
+    const s = (o.status || '').toUpperCase();
+    return s === 'PAID' || s === 'COMPLETED';
+  });
+
+  const totalRevenue = completedOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
+  const totalCount = completedOrders.length;
   
   // Calculate monthly revenue trend (last 6 months)
   const last6Months = eachMonthOfInterval({
@@ -57,7 +62,7 @@ export default function AdminStatistics() {
 
   const revenueData = last6Months.map(month => {
     const monthStr = format(month, 'M월');
-    const monthlyTotal = orders
+    const monthlyTotal = completedOrders
       .filter(o => {
         const orderDate = new Date(o.created_at);
         return orderDate.getMonth() === month.getMonth() && orderDate.getFullYear() === month.getFullYear();
@@ -69,7 +74,7 @@ export default function AdminStatistics() {
   // Calculate weekly sales distribution
   const days = ['일', '월', '화', '수', '목', '금', '토'];
   const dailySales = days.map((day, index) => {
-    const dayCount = orders.filter(o => new Date(o.created_at).getDay() === index).length;
+    const dayCount = completedOrders.filter(o => new Date(o.created_at).getDay() === index).length;
     return { name: day, sales: dayCount };
   });
 
@@ -127,7 +132,7 @@ export default function AdminStatistics() {
             <div className="p-2 bg-orange-50 rounded-lg text-orange-600"><Users className="w-4 h-4" /></div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-gray-900 tracking-tighter">{Array.from(new Set(orders.map(o => o.user_id))).length}명</div>
+            <div className="text-2xl font-black text-gray-900 tracking-tighter">{Array.from(new Set(completedOrders.map(o => o.user_id))).length}명</div>
             <p className="text-[10px] text-gray-400 flex items-center gap-1 mt-1 font-bold">
               <Activity className="w-3 h-3 text-orange-500" />
               중복 제외 구매자 수

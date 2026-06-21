@@ -617,7 +617,10 @@ async function startServer() {
           payMethod: appRes.P_TYPE || "CARD",
           TID: appRes.P_TID || P_TID,
           mid: finalMid,
-          MOID: finalApprovedOid
+          MOID: finalApprovedOid,
+          applNum: appRes.P_AUTH_NO || appRes.P_AUTH_NUM || "",
+          applNo: appRes.P_AUTH_NO || appRes.P_AUTH_NUM || "",
+          P_AUTH_NO: appRes.P_AUTH_NO || appRes.P_AUTH_NUM || ""
         };
         finalOid = finalApprovedOid;
 

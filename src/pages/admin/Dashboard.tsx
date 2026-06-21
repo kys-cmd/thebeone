@@ -61,11 +61,16 @@ export default function AdminDashboard() {
     fetchData();
   }, []);
 
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.amount || 0), 0);
-  const totalCount = orders.length;
+  const completedOrders = orders.filter(o => {
+    const s = (o.status || '').toUpperCase();
+    return s === 'PAID' || s === 'COMPLETED';
+  });
+
+  const totalRevenue = completedOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
+  const totalCount = completedOrders.length;
   
   // Calculate today's revenue
-  const todayRevenue = orders
+  const todayRevenue = completedOrders
     .filter(o => isSameDay(new Date(o.created_at), startOfToday()))
     .reduce((sum, o) => sum + (o.amount || 0), 0);
     
@@ -74,7 +79,7 @@ export default function AdminDashboard() {
   // Prepare weekly chart data based on actual orders
   const days = ['일', '월', '화', '수', '목', '금', '토'];
   const chartData = days.map((day, index) => {
-    const daySales = orders
+    const daySales = completedOrders
       .filter(o => new Date(o.created_at).getDay() === index)
       .reduce((sum, o) => sum + (o.amount || 0), 0);
     return { day, sales: daySales / 10000 }; // Display in 10k units
@@ -174,7 +179,7 @@ export default function AdminDashboard() {
          <Card className="p-10 rounded-[48px] border-none shadow-sm space-y-8 divide-y divide-gray-50">
             <div className="flex items-center justify-between pb-2">
               <h3 className="text-2xl font-black tracking-tighter text-gray-900">최근 결제</h3>
-              <Badge className="bg-purple-100 text-purple-600 border-none font-bold">New {Math.min(orders.length, 5)}</Badge>
+              <Badge className="bg-purple-100 text-purple-600 border-none font-bold">New {Math.min(completedOrders.length, 5)}</Badge>
             </div>
             <div className="space-y-6 pt-8">
                {isLoading ? (
@@ -182,8 +187,8 @@ export default function AdminDashboard() {
                    <Loader2 className="w-8 h-8 animate-spin" />
                    <p className="text-xs font-bold">데이터를 불러오는 중...</p>
                  </div>
-               ) : orders.length > 0 ? (
-                 orders.slice(0, 5).map((order, idx) => (
+               ) : completedOrders.length > 0 ? (
+                 completedOrders.slice(0, 5).map((order, idx) => (
                     <div key={order.id || idx} className="flex items-center gap-4 group cursor-pointer" onClick={() => navigate('/admin/sales')}>
                        <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 group-hover:bg-purple-100 group-hover:text-purple-600 transition-colors">
                           <CreditCard className="w-5 h-5" />
