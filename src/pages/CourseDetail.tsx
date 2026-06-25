@@ -169,7 +169,8 @@ export default function CourseDetail() {
   if (!course) return <div className="min-h-screen flex items-center justify-center font-bold">강의를 찾을 수 없습니다.</div>;
 
   const isOffline = course.category === 'special_offline' || course.category === 'beone_exclusive_offline';
-  const isSoldOut = course.is_force_closed || (
+  const hasRegEnded = course.reg_end_date ? new Date() > new Date(course.reg_end_date) : false;
+  const isSoldOut = course.is_force_closed || hasRegEnded || (
                      isOffline && 
                      course.max_capacity !== null && 
                      course.max_capacity !== undefined && 
@@ -204,7 +205,7 @@ export default function CourseDetail() {
               <div className="flex items-center gap-3">
                 {isSoldOut ? (
                   <Badge className="bg-gray-500 text-white font-black border-none px-4 py-1.5 text-sm">
-                    모집 마감
+                    {hasRegEnded ? "접수 마감" : "모집 마감"}
                   </Badge>
                 ) : (course.category === 'special_offline' || course.category === 'beone_exclusive_offline') && course.max_capacity ? (
                   <Badge className="bg-red-600 text-white font-black border-none px-4 py-1.5 text-sm">
@@ -431,7 +432,7 @@ export default function CourseDetail() {
                           disabled
                           className="flex-1 h-16 bg-gray-200 text-gray-500 font-black text-xl rounded-2xl cursor-not-allowed"
                         >
-                          {isOffline ? "마감 되었습니다" : "모집이 마감되었습니다"}
+                          {hasRegEnded ? "본 강의는 접수 마감 되었습니다" : isOffline ? "마감 되었습니다" : "모집이 마감되었습니다"}
                         </Button>
                       );
                     } else if (course.is_free) {
@@ -807,7 +808,7 @@ export default function CourseDetail() {
         <div>
           <p className="text-2xl font-black">{(course.discount_price || course.price || 0).toLocaleString()}원</p>
           <p className={cn("text-xs font-bold", isSoldOut ? "text-gray-400" : "text-slate-500")}>
-            {isSoldOut ? "모집 마감" : isOffline && course.max_capacity ? `모집 인원 ${course.max_capacity}명` : "마감 임박!"}
+            {isSoldOut ? (hasRegEnded ? "접수 마감" : "모집 마감") : isOffline && course.max_capacity ? `모집 인원 ${course.max_capacity}명` : "마감 임박!"}
           </p>
         </div>
         <div className="flex-1">
@@ -831,7 +832,7 @@ export default function CourseDetail() {
               disabled
               className="w-full h-14 bg-gray-200 text-gray-500 font-black rounded-2xl"
             >
-              {isOffline ? "마감 되었습니다" : "마감됨"}
+              {hasRegEnded ? "본 강의는 접수 마감 되었습니다" : isOffline ? "마감 되었습니다" : "마감됨"}
             </Button>
           ) : !user ? (
             <Button 

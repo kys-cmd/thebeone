@@ -216,7 +216,7 @@ export default function AdminCourseManagement() {
                         <div className="flex flex-wrap items-center gap-6 mt-4">
                           <div className="flex items-center gap-1.5 text-sm text-gray-600">
                             <Users className="w-4 h-4" />
-                            {course.enrolledCount ?? 0}명 수강 중
+                            {course.enrolledCount ?? 0}명 결제 완료
                           </div>
                           <div className="flex items-center gap-1.5 text-sm text-gray-600">
                             <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />

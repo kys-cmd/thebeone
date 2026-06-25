@@ -112,7 +112,8 @@ export default function SpecialLectures() {
 }
 
 function CourseCard({ course, type }: { course: Course, type: 'online' | 'offline' }) {
-  const isSoldOut = course.is_force_closed || (course.max_capacity && (course.enrolled_count || 0) >= course.max_capacity);
+  const hasRegEnded = course.reg_end_date ? new Date() > new Date(course.reg_end_date) : false;
+  const isSoldOut = course.is_force_closed || hasRegEnded || (course.max_capacity && (course.enrolled_count || 0) >= course.max_capacity);
 
   return (
     <Link to={`/course/${course.id}`} className="group flex flex-col gap-4">
@@ -141,7 +142,7 @@ function CourseCard({ course, type }: { course: Course, type: 'online' | 'offlin
             "absolute top-4 right-4 text-white font-black text-[10px] px-2 py-0.5 rounded-full shadow-lg flex items-center",
             isSoldOut ? "bg-gray-500" : "bg-red-600"
           )}>
-            {isSoldOut ? "모집 마감" : course.max_capacity ? `모집 인원 ${course.max_capacity}명` : "신청 가능"}
+            {isSoldOut ? (hasRegEnded ? "접수 마감" : "모집 마감") : course.max_capacity ? `모집 인원 ${course.max_capacity}명` : "신청 가능"}
           </div>
         )}
       </div>
