@@ -17,7 +17,8 @@ import {
   Star,
   BarChart,
   AlertTriangle,
-  Type
+  Type,
+  GraduationCap
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +30,7 @@ const ADMIN_MENUS = [
   { icon: <BookOpen className="w-5 h-5" />, label: '강의 관리', path: '/admin/courses' },
   { icon: <Users className="w-5 h-5" />, label: '강사 관리', path: '/admin/instructors' },
   { icon: <Users className="w-5 h-5" />, label: '회원 관리', path: '/admin/users' },
+  { icon: <GraduationCap className="w-5 h-5" />, label: '수강생 관리', path: '/admin/students' },
   { icon: <Star className="w-5 h-5" />, label: '수강 후기 관리', path: '/admin/reviews' },
   { icon: <CreditCard className="w-5 h-5" />, label: '매출 관리', path: '/admin/sales' },
   { icon: <BarChart className="w-5 h-5" />, label: '매출 분석', path: '/admin/stats' },

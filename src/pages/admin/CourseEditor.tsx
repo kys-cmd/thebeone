@@ -100,6 +100,32 @@ const fetchVimeoDuration = async (vimeoId: string): Promise<string> => {
   }
 };
 
+const toLocalDatetimeString = (isoString?: string | null) => {
+  if (!isoString) return "";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    const mm = pad(d.getMonth() + 1);
+    const dd = pad(d.getDate());
+    const hh = pad(d.getHours());
+    const min = pad(d.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+  } catch (e) {
+    return "";
+  }
+};
+
+const fromLocalDatetimeString = (value: string) => {
+  if (!value) return new Date().toISOString();
+  try {
+    return new Date(value).toISOString();
+  } catch (e) {
+    return new Date().toISOString();
+  }
+};
+
 export default function AdminCourseEditor() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -208,6 +234,15 @@ export default function AdminCourseEditor() {
   const [isUnenrollConfirmOpen, setIsUnenrollConfirmOpen] = useState(false);
   const [studentToUnenroll, setStudentToUnenroll] = useState<{ userId: string; studentName: string } | null>(null);
   const [isUnenrollingProgress, setIsUnenrollingProgress] = useState(false);
+
+  // --- Bulk Enrolled Student Expiry States ---
+  const [selectedEnrolledStudentIds, setSelectedEnrolledStudentIds] = useState<string[]>([]);
+  const [isBulkExpiryModalOpen, setIsBulkExpiryModalOpen] = useState(false);
+  const [bulkExpiryDate, setBulkExpiryDate] = useState<string>(
+    new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0]
+  );
+  const [bulkExpiryInfinite, setBulkExpiryInfinite] = useState<boolean>(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState<boolean>(false);
 
   // --- Schema Mismatch Error States ---
   const [missingSchemaError, setMissingSchemaError] = useState<{
@@ -365,6 +400,28 @@ export default function AdminCourseEditor() {
     } catch (error: any) {
       console.error('Update expiry error:', error);
       toast.error(`만료일 수정 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
+    }
+  };
+
+  const handleUpdateBulkExpiry = async () => {
+    if (!id || id === 'new' || selectedEnrolledStudentIds.length === 0) return;
+    setIsBulkUpdating(true);
+    try {
+      const expiresAt = bulkExpiryInfinite ? null : new Date(bulkExpiryDate).toISOString();
+      await Promise.all(
+        selectedEnrolledStudentIds.map(userId =>
+          courseService.updateEnrollmentExpiry(userId, id, expiresAt)
+        )
+      );
+      toast.success('선택한 수강생들의 수강 만료일이 성공적으로 수정되었습니다.');
+      setIsBulkExpiryModalOpen(false);
+      setSelectedEnrolledStudentIds([]);
+      await loadEnrolledStudents();
+    } catch (error: any) {
+      console.error('Update bulk expiry error:', error);
+      toast.error(`일괄 수정 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
+    } finally {
+      setIsBulkUpdating(false);
     }
   };
 
@@ -1524,12 +1581,12 @@ export default function AdminCourseEditor() {
                         <div className="space-y-1">
                           <p className="text-[10px] text-gray-400 px-1">접수 시작일</p>
                           <Input
-                            type="date"
-                            value={courseInfo.reg_start_date.split("T")[0]}
+                            type="datetime-local"
+                            value={toLocalDatetimeString(courseInfo.reg_start_date)}
                             onChange={(e) =>
                               setCourseInfo({
                                 ...courseInfo,
-                                reg_start_date: new Date(e.target.value).toISOString(),
+                                reg_start_date: fromLocalDatetimeString(e.target.value),
                               })
                             }
                           />
@@ -1537,12 +1594,12 @@ export default function AdminCourseEditor() {
                         <div className="space-y-1">
                           <p className="text-[10px] text-gray-400 px-1">접수 마감일</p>
                           <Input
-                            type="date"
-                            value={courseInfo.reg_end_date.split("T")[0]}
+                            type="datetime-local"
+                            value={toLocalDatetimeString(courseInfo.reg_end_date)}
                             onChange={(e) =>
                               setCourseInfo({
                                 ...courseInfo,
-                                reg_end_date: new Date(e.target.value).toISOString(),
+                                reg_end_date: fromLocalDatetimeString(e.target.value),
                               })
                             }
                           />
@@ -1564,21 +1621,42 @@ export default function AdminCourseEditor() {
                       </div>
 
                       {courseInfo.is_duration_based ? (
-                        <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 flex items-center justify-between gap-6">
-                          <div className="space-y-1">
-                            <p className="font-bold text-blue-900">기간제 수강 설정</p>
-                            <p className="text-sm text-blue-700">결제(승인)일로부터 설정된 일수만큼 수강이 가능합니다.</p>
+                        <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 flex flex-col gap-6">
+                          <div className="flex items-center justify-between gap-6">
+                            <div className="space-y-1">
+                              <p className="font-bold text-blue-900">기간제 수강 설정</p>
+                              <p className="text-sm text-blue-700">결제(승인)일로부터 설정된 일수만큼 수강이 가능합니다.</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Label className="shrink-0 font-bold">수강 가능 일수:</Label>
+                              <div className="flex items-center gap-2">
+                                <Input 
+                                  type="number"
+                                  className="w-24 bg-white font-bold"
+                                  value={courseInfo.duration_days || ""}
+                                  onChange={(e) => setCourseInfo({...courseInfo, duration_days: Number(e.target.value)})}
+                                />
+                                <span className="font-bold">일</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <Label className="shrink-0 font-bold">수강 가능 일수:</Label>
+
+                          <div className="flex items-center justify-between gap-6 pt-4 border-t border-blue-100">
+                            <div className="space-y-1">
+                              <p className="font-bold text-blue-900">만료 시간 설정</p>
+                              <p className="text-xs text-blue-700 font-medium">수강 종료일의 해당 시간에 수강이 만료됩니다. (기본값: 23:59)</p>
+                            </div>
                             <div className="flex items-center gap-2">
-                              <Input 
-                                type="number"
-                                className="w-24 bg-white font-bold"
-                                value={courseInfo.duration_days || ""}
-                                onChange={(e) => setCourseInfo({...courseInfo, duration_days: Number(e.target.value)})}
+                              <Input
+                                type="time"
+                                className="w-32 bg-white font-bold"
+                                value={layout?.duration_end_time || "23:59"}
+                                onChange={(e) => setLayout({
+                                  ...layout,
+                                  blocks: layout?.blocks || [],
+                                  duration_end_time: e.target.value || "23:59"
+                                })}
                               />
-                              <span className="font-bold">일</span>
                             </div>
                           </div>
                         </div>
@@ -1587,12 +1665,12 @@ export default function AdminCourseEditor() {
                           <div className="space-y-1">
                             <p className="text-[10px] text-gray-400 px-1">수강 시작일</p>
                             <Input
-                              type="date"
-                              value={courseInfo.start_date.split("T")[0]}
+                              type="datetime-local"
+                              value={toLocalDatetimeString(courseInfo.start_date)}
                               onChange={(e) =>
                                 setCourseInfo({
                                   ...courseInfo,
-                                  start_date: new Date(e.target.value).toISOString(),
+                                  start_date: fromLocalDatetimeString(e.target.value),
                                 })
                               }
                             />
@@ -1600,12 +1678,12 @@ export default function AdminCourseEditor() {
                           <div className="space-y-1">
                             <p className="text-[10px] text-gray-400 px-1">수강 종료일</p>
                             <Input
-                              type="date"
-                              value={courseInfo.end_date.split("T")[0]}
+                              type="datetime-local"
+                              value={toLocalDatetimeString(courseInfo.end_date)}
                               onChange={(e) =>
                                 setCourseInfo({
                                   ...courseInfo,
-                                  end_date: new Date(e.target.value).toISOString(),
+                                  end_date: fromLocalDatetimeString(e.target.value),
                                 })
                               }
                             />
@@ -1662,29 +1740,90 @@ export default function AdminCourseEditor() {
                             <p className="text-sm text-gray-400 mt-1">우측 상단의 '수강생 추가하기' 버튼을 눌러 회원을 등록해 보세요.</p>
                           </div>
                         ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead className="bg-gray-50/50 border-b border-gray-100">
-                                <tr>
-                                  <th className="px-6 py-4 text-left font-bold text-gray-600">이름 (닉네임)</th>
-                                  <th className="px-6 py-4 text-left font-bold text-gray-600">이메일</th>
-                                  <th className="px-6 py-4 text-left font-bold text-gray-600">휴대폰 번호</th>
-                                  <th className="px-6 py-4 text-left font-bold text-gray-600">수강 등록일</th>
-                                  <th className="px-6 py-4 text-left font-bold text-gray-600">수강 만료일</th>
-                                  <th className="px-6 py-4 text-right font-bold text-gray-600">관리</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-100 bg-white">
-                                {enrolledStudents.map((student) => {
-                                  const profile = student.profiles || {};
-                                  const isExpired = student.expires_at ? new Date(student.expires_at) < new Date() : false;
-                                  return (
-                                    <tr key={student.id} className="hover:bg-gray-50/30 transition-colors">
-                                      <td className="px-6 py-4">
-                                        <div className="font-black text-gray-900 text-sm">
-                                          {profile.name || '알 수 없는 사용자'} {profile.nickname ? `(${profile.nickname})` : ''}
-                                        </div>
-                                      </td>
+                          <div className="flex flex-col">
+                            {selectedEnrolledStudentIds.length > 0 && (
+                              <div className="bg-purple-50 border-b border-purple-100 px-6 py-3 flex items-center justify-between transition-all duration-200">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-purple-900 font-bold text-sm">
+                                    선택됨: <span className="font-black text-purple-700">{selectedEnrolledStudentIds.length}명</span> / 전체 {enrolledStudents.length}명
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-purple-700 border-purple-200 hover:bg-purple-100 font-bold h-8 rounded-lg text-xs"
+                                    onClick={() => {
+                                      setBulkExpiryDate(new Date(new Date().setMonth(new Date().getMonth() + 3)).toISOString().split('T')[0]);
+                                      setBulkExpiryInfinite(false);
+                                      setIsBulkExpiryModalOpen(true);
+                                    }}
+                                    type="button"
+                                  >
+                                    <Clock className="w-3.5 h-3.5 mr-1" /> 선택 수강생 일괄 만료일 변경
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-gray-500 hover:text-gray-700 font-bold h-8 text-xs"
+                                    onClick={() => setSelectedEnrolledStudentIds([])}
+                                    type="button"
+                                  >
+                                    선택 해제
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50/50 border-b border-gray-100">
+                                  <tr>
+                                    <th className="px-6 py-4 text-left w-12">
+                                      <Checkbox 
+                                        checked={enrolledStudents.length > 0 && selectedEnrolledStudentIds.length === enrolledStudents.length}
+                                        onCheckedChange={(checked) => {
+                                          if (checked) {
+                                            setSelectedEnrolledStudentIds(enrolledStudents.map(s => s.user_id));
+                                          } else {
+                                            setSelectedEnrolledStudentIds([]);
+                                          }
+                                        }}
+                                        className="border-gray-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                      />
+                                    </th>
+                                    <th className="px-6 py-4 text-left font-bold text-gray-600">이름 (닉네임)</th>
+                                    <th className="px-6 py-4 text-left font-bold text-gray-600">이메일</th>
+                                    <th className="px-6 py-4 text-left font-bold text-gray-600">휴대폰 번호</th>
+                                    <th className="px-6 py-4 text-left font-bold text-gray-600">수강 등록일</th>
+                                    <th className="px-6 py-4 text-left font-bold text-gray-600">수강 만료일</th>
+                                    <th className="px-6 py-4 text-right font-bold text-gray-600">관리</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 bg-white">
+                                  {enrolledStudents.map((student) => {
+                                    const profile = student.profiles || {};
+                                    const isExpired = student.expires_at ? new Date(student.expires_at) < new Date() : false;
+                                    return (
+                                      <tr key={student.id} className="hover:bg-gray-50/30 transition-colors">
+                                        <td className="px-6 py-4 w-12">
+                                          <Checkbox 
+                                            checked={selectedEnrolledStudentIds.includes(student.user_id)}
+                                            onCheckedChange={(checked) => {
+                                              if (checked) {
+                                                setSelectedEnrolledStudentIds(prev => [...prev, student.user_id]);
+                                              } else {
+                                                setSelectedEnrolledStudentIds(prev => prev.filter(uid => uid !== student.user_id));
+                                              }
+                                            }}
+                                            className="border-gray-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                                          />
+                                        </td>
+                                        <td className="px-6 py-4">
+                                          <div className="font-black text-gray-900 text-sm">
+                                            {profile.name || '알 수 없는 사용자'} {profile.nickname ? `(${profile.nickname})` : ''}
+                                          </div>
+                                        </td>
                                       <td className="px-6 py-4 text-gray-500 font-medium whitespace-nowrap">
                                         {profile.email || '-'}
                                       </td>
@@ -1742,6 +1881,7 @@ export default function AdminCourseEditor() {
                               </tbody>
                             </table>
                           </div>
+                        </div>
                         )}
                       </CardContent>
                     </Card>
@@ -1840,6 +1980,65 @@ export default function AdminCourseEditor() {
                             type="button"
                           >
                             만료일 저장
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                    {/* 일괄 수강 기간 수정 대화상자 */}
+                    <Dialog open={isBulkExpiryModalOpen} onOpenChange={setIsBulkExpiryModalOpen}>
+                      <DialogContent className="max-w-md rounded-3xl p-6 bg-white gap-6">
+                        <DialogHeader className="gap-2">
+                          <DialogTitle className="text-xl font-black text-gray-900 flex items-center gap-2">
+                            <Clock className="w-5 h-5 text-purple-600" /> 일괄 수강 기간 수정
+                          </DialogTitle>
+                          <DialogDescription className="text-sm font-medium text-gray-400">
+                            선택한 <span className="font-bold text-purple-700">{selectedEnrolledStudentIds.length}명</span>의 수강생들의 수강 만료일을 일괄로 변경합니다.
+                          </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between bg-purple-50/50 p-4 rounded-2xl border border-purple-100">
+                            <div className="space-y-0.5">
+                              <span className="font-bold text-sm text-purple-950">제한 없음 (상시)</span>
+                              <p className="text-xs text-purple-600 font-semibold">만료 기한 없이 무제한으로 시청 가능한 상태로 바꿉니다.</p>
+                            </div>
+                            <Switch
+                              checked={bulkExpiryInfinite}
+                              onCheckedChange={(checked) => setBulkExpiryInfinite(checked)}
+                              className="data-[state=checked]:bg-purple-600"
+                            />
+                          </div>
+
+                          {!bulkExpiryInfinite && (
+                            <div className="space-y-2">
+                              <Label className="text-sm font-bold text-gray-700">새 수강 만료 일자</Label>
+                              <Input
+                                type="date"
+                                className="h-11 bg-gray-50/50 border-gray-100 focus-visible:ring-purple-600 font-bold text-sm text-gray-900"
+                                value={bulkExpiryDate}
+                                onChange={(e) => setBulkExpiryDate(e.target.value)}
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        <DialogFooter className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
+                          <Button
+                            variant="ghost"
+                            onClick={() => setIsBulkExpiryModalOpen(false)}
+                            className="font-bold h-11 px-5 rounded-xl text-gray-500 hover:bg-gray-50 bg-transparent"
+                            type="button"
+                          >
+                            취소
+                          </Button>
+                          <Button
+                            onClick={handleUpdateBulkExpiry}
+                            disabled={isBulkUpdating}
+                            className="font-bold h-11 px-6 rounded-xl bg-purple-600 text-white hover:bg-purple-700 shadow-lg shadow-purple-600/10"
+                            type="button"
+                          >
+                            {isBulkUpdating ? "일괄 적용 중..." : "일괄 만료일 저장"}
                           </Button>
                         </DialogFooter>
                       </DialogContent>

@@ -44,6 +44,7 @@ import AdminDashboard from './pages/admin/Dashboard';
 import AdminCourseManagement from './pages/admin/CourseManagement';
 import AdminCMS from './pages/admin/CMS';
 import AdminUserManagement from './pages/admin/UserManagement';
+import AdminStudentManagement from './pages/admin/StudentManagement';
 import AdminCommunityManagement from './pages/admin/CommunityManagement';
 import AdminCommunityEditor from './pages/admin/CommunityEditor';
 import AdminStatistics from './pages/admin/Statistics';
@@ -243,6 +244,7 @@ function AppContent() {
           <Route path="cms" element={<AdminCMS />} />
           <Route path="users" element={<AdminUserManagement />} />
           <Route path="users/:id" element={<AdminUserManagement />} />
+          <Route path="students" element={<AdminStudentManagement />} />
           <Route path="community" element={<AdminCommunityManagement />} />
           <Route path="community/create" element={<AdminCommunityEditor />} />
           <Route path="community/edit/:id" element={<AdminCommunityEditor />} />

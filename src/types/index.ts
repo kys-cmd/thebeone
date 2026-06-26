@@ -65,6 +65,8 @@ export interface Course {
   is_force_closed?: boolean;
   is_duration_based?: boolean | null;
   duration_days?: number | null;
+  enrollment_created_at?: string | null;
+  enrollment_expires_at?: string | null;
 }
 
 export type CourseBlockType = 'video' | 'image' | 'text' | 'heading';
@@ -82,6 +84,7 @@ export interface CourseBlock {
 
 export interface CourseLayout {
   blocks: CourseBlock[];
+  duration_end_time?: string | null;
 }
 
 export interface CurriculumSection {

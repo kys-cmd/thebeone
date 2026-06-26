@@ -80,7 +80,14 @@ export const courseService = {
   async checkEnrollment(userId: string, courseId: string) {
     const { data, error } = await supabase
       .from('enrollments')
-      .select('id, expires_at')
+      .select(`
+        id,
+        expires_at,
+        course:courses (
+          is_duration_based,
+          end_date
+        )
+      `)
       .eq('user_id', userId)
       .eq('course_id', courseId)
       .eq('is_deleted', false)
@@ -89,8 +96,18 @@ export const courseService = {
     if (error) throw error;
     if (!data) return false;
 
+    const now = new Date();
     if (data.expires_at) {
-      return new Date(data.expires_at) > new Date();
+      if (new Date(data.expires_at) <= now) {
+        return false;
+      }
+    }
+
+    const course = (data as any).course;
+    if (course && !course.is_duration_based && course.end_date) {
+      if (new Date(course.end_date) <= now) {
+        return false;
+      }
     }
 
     return true;
@@ -178,7 +195,7 @@ export const courseService = {
         // 코스 기본 기간 기반으로 만료일 계산
         const { data: course, error: courseError } = await supabase
           .from('courses')
-          .select('is_duration_based, duration_days')
+          .select('is_duration_based, duration_days, layout')
           .eq('id', courseId)
           .single();
         
@@ -186,6 +203,9 @@ export const courseService = {
           if (course.is_duration_based && course.duration_days) {
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + course.duration_days);
+            const endTime = (course.layout as any)?.duration_end_time || "23:59";
+            const [h, m] = endTime.split(":").map(Number);
+            expiresAt.setHours(h !== undefined && !isNaN(h) ? h : 23, m !== undefined && !isNaN(m) ? m : 59, 0, 0);
             updateData.expires_at = expiresAt.toISOString();
           } else {
             updateData.expires_at = null;
@@ -207,7 +227,7 @@ export const courseService = {
     // 4. Check Capacity for offline courses & Fetch duration info
     const { data: course, error: courseError } = await supabase
       .from('courses')
-      .select('category, max_capacity, is_duration_based, duration_days')
+      .select('category, max_capacity, is_duration_based, duration_days, layout')
       .eq('id', courseId)
       .single();
 
@@ -239,6 +259,9 @@ export const courseService = {
     } else if (course.is_duration_based && course.duration_days) {
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + course.duration_days);
+      const endTime = (course.layout as any)?.duration_end_time || "23:59";
+      const [h, m] = endTime.split(":").map(Number);
+      expiresAt.setHours(h !== undefined && !isNaN(h) ? h : 23, m !== undefined && !isNaN(m) ? m : 59, 0, 0);
       enrollmentData.expires_at = expiresAt.toISOString();
     }
 
@@ -281,6 +304,7 @@ export const courseService = {
       .from('enrollments')
       .select(`
         id,
+        created_at,
         expires_at,
         course:courses (*)
       `)
@@ -290,10 +314,17 @@ export const courseService = {
     if (error) throw error;
     if (!data) return [];
     
-    const now = new Date();
     return (data as any[])
-      .filter(item => !item.expires_at || new Date(item.expires_at) > now)
-      .map(item => item.course)
+      .map(item => {
+        if (item.course) {
+          return {
+            ...item.course,
+            enrollment_created_at: item.created_at,
+            enrollment_expires_at: item.expires_at
+          };
+        }
+        return null;
+      })
       .filter(Boolean) as Course[];
   },
 

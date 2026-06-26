@@ -34,7 +34,14 @@ export const accessService = {
     // 2. 수강 신청 여부 확인
     const { data: enrollment, error } = await supabase
       .from('enrollments')
-      .select('id, expires_at')
+      .select(`
+        id,
+        expires_at,
+        course:courses (
+          is_duration_based,
+          end_date
+        )
+      `)
       .eq('user_id', resolvedUserId)
       .eq('course_id', courseId)
       .eq('is_deleted', false)
@@ -42,9 +49,19 @@ export const accessService = {
 
     if (error || !enrollment) return false;
 
+    const now = new Date();
     // 만료일 검사
     if (enrollment.expires_at) {
-      return new Date(enrollment.expires_at) > new Date();
+      if (new Date(enrollment.expires_at) <= now) {
+        return false;
+      }
+    }
+
+    const course = (enrollment as any).course;
+    if (course && !course.is_duration_based && course.end_date) {
+      if (new Date(course.end_date) <= now) {
+        return false;
+      }
     }
 
     return true;

@@ -25,7 +25,7 @@ function decodePercentBytes(str: string): string {
   const buffer = Buffer.from(bytes);
   
   const utf8Decoded = iconv.decode(buffer, "utf-8");
-  if (!utf8Decoded.includes("\uFFFD") && !utf8Decoded.includes("??") && !utf8Decoded.includes("")) {
+  if (!utf8Decoded.includes("\uFFFD") && !utf8Decoded.includes("??")) {
     return utf8Decoded;
   }
   

@@ -53,6 +53,82 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
+const isExpiredCourse = (course: Course) => {
+  const now = new Date();
+  if (course.enrollment_expires_at) {
+    return new Date(course.enrollment_expires_at) <= now;
+  }
+  if (!course.is_duration_based && course.end_date) {
+    return new Date(course.end_date) <= now;
+  }
+  return false;
+};
+
+const renderStudyPeriod = (course: Course) => {
+  let startDate: Date | null = null;
+  let endDate: Date | null = null;
+
+  if (course.enrollment_expires_at) {
+    startDate = course.enrollment_created_at ? new Date(course.enrollment_created_at) : null;
+    endDate = new Date(course.enrollment_expires_at);
+  } else {
+    startDate = course.start_date ? new Date(course.start_date) : null;
+    endDate = course.end_date ? new Date(course.end_date) : null;
+  }
+
+  if (!startDate && !endDate) {
+    return <span className="text-gray-400">수강 기간 제한 없음</span>;
+  }
+
+  const formatDateStr = (d: Date | null) => {
+    if (!d) return '상시';
+    const yy = d.getFullYear();
+    const mm = d.getMonth() + 1;
+    const dd = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${yy}. ${mm}. ${dd}. ${hh}:${min}`;
+  };
+
+  const startStr = formatDateStr(startDate);
+  const endStr = formatDateStr(endDate);
+
+  let dDayStr = '';
+  if (isExpiredCourse(course)) {
+    dDayStr = '수강일 만료';
+  } else if (endDate) {
+    const today = new Date();
+    const tDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const eDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    const diffTime = eDate.getTime() - tDate.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays > 0) {
+      dDayStr = `D-${diffDays}`;
+    } else if (diffDays === 0) {
+      dDayStr = 'D-Day';
+    } else {
+      dDayStr = '수강일 만료';
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1 w-full text-xs font-bold font-sans text-slate-600">
+      <div className="flex items-center justify-between w-full">
+        <span>- 시작일: {startStr}</span>
+        {dDayStr && (
+          <Badge className={cn(
+            "text-[10px] px-1.5 py-0.5 font-bold border-none",
+            dDayStr.includes('만료') ? 'bg-red-50 text-red-600 hover:bg-red-50' : 'bg-purple-50 text-purple-600 hover:bg-purple-50'
+          )}>
+            {dDayStr}
+          </Badge>
+        )}
+      </div>
+      <div>- 종료일: {endStr}</div>
+    </div>
+  );
+};
+
 const MOCK_STATS = [
   { name: 'Mon', hours: 0 },
   { name: 'Tue', hours: 0 },
@@ -309,12 +385,19 @@ export default function MyPage() {
               <p className="text-gray-400 font-bold">진행 중인 비원커뮤니티회원전용 강의가 없습니다.</p>
             </div>
           ) : (
-            beoneCourses.map((course) => (
+            beoneCourses.map((course) => {
+              const isExpired = isExpiredCourse(course);
+              return (
               <Card key={course.id} className="overflow-hidden border-none shadow-sm rounded-[40px] group hover:shadow-2xl transition-all bg-white flex flex-col justify-between">
                 <div>
                   <div className="aspect-[16/9] bg-gray-100 relative">
                     <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
-                    <div className="absolute top-4 left-4">
+                     {isExpired && (
+                       <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-10">
+                         <span className="text-white font-black text-sm bg-red-600 px-3.5 py-1.5 rounded-full shadow-lg shadow-red-600/30">수강일 만료</span>
+                       </div>
+                     )}
+                    <div className="absolute top-4 left-4 z-20">
                       <Badge className="bg-[#1C8436] text-white border-none font-bold font-sans">
                         비원커뮤니티회원전용
                       </Badge>
@@ -324,6 +407,12 @@ export default function MyPage() {
                     <div className="space-y-2">
                       <h4 className="text-lg font-black text-gray-900 line-clamp-1">{course.title}</h4>
                       <p className="text-sm font-bold text-gray-400">회원: {course.instructor}</p>
+                    </div>
+                    <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      <div className="flex items-start gap-2 text-xs font-bold text-slate-500 font-sans w-full">
+                         <Clock className="w-4 h-4 text-[#1C8436] shrink-0 mt-0.5" />
+                         <div className="flex-1 min-w-0">{renderStudyPeriod(course)}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -340,15 +429,17 @@ export default function MyPage() {
                   ) : (
                     <Button 
                       size="lg" 
-                      className="flex-1 h-14 rounded-2xl font-black bg-[#1C8436] hover:bg-[#156329] text-white font-sans transition-all"
+                      disabled={isExpired}
+                      className={`flex-1 h-14 rounded-2xl font-black font-sans transition-all ${isExpired ? '!bg-gray-200 !text-gray-400 !border-none cursor-not-allowed' : 'bg-[#1C8436] hover:bg-[#156329] text-white'}`}
                       onClick={() => navigate(`/course/${course.id}/learn`)}
                     >
-                      강의실 입장
+                      {isExpired ? "수강일 만료" : "강의실 입장"}
                     </Button>
                   )}
                 </div>
               </Card>
-            ))
+            );
+            })
           )}
         </div>
       </div>
@@ -438,12 +529,19 @@ export default function MyPage() {
                          </Button>
                        </div>
                      ) : (
-                       myCourses.map((course) => (
+                       myCourses.map((course) => {
+                         const isExpired = isExpiredCourse(course);
+                         return (
                          <Card key={course.id} className="overflow-hidden border-none shadow-sm rounded-[40px] group hover:shadow-2xl transition-all bg-white flex flex-col justify-between">
                            <div>
                              <div className="aspect-[16/9] bg-gray-100 relative">
                                 <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
-                                <div className="absolute top-4 left-4">
+                                 {isExpired && (
+                                   <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-10">
+                                     <span className="text-white font-black text-sm bg-red-600 px-3.5 py-1.5 rounded-full shadow-lg shadow-red-600/30">수강일 만료</span>
+                                   </div>
+                                 )}
+                                <div className="absolute top-4 left-4 z-20">
                                   <Badge className="bg-white/80 backdrop-blur-md text-gray-900 border-none font-bold font-sans">
                                     {course.category === 'regular' ? '정규강의' : 
                                       course.category === 'special_online' ? '온라인 특강' :
@@ -460,12 +558,11 @@ export default function MyPage() {
                                    <h4 className="text-lg font-black text-gray-900 line-clamp-1">{course.title}</h4>
                                    <p className="text-sm font-bold text-gray-400">강사: {course.instructor}</p>
                                 </div>
-                                <div className="space-y-2">
-                                   <div className="flex justify-between text-[10px] font-black text-gray-400 px-1 font-sans">
-                                      <span></span>
-                                      
+                                <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                   <div className="flex items-start gap-2 text-xs font-bold text-slate-500 font-sans w-full">
+                                      <Clock className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                                      <div className="flex-1 min-w-0">{renderStudyPeriod(course)}</div>
                                    </div>
-                                   
                                 </div>
                              </div>
                            </div>
@@ -473,10 +570,11 @@ export default function MyPage() {
                              <Button 
                                size="lg" 
                                variant="outline" 
-                               className={`flex-1 h-14 rounded-2xl font-black bg-purple-600 hover:bg-purple-700 text-white font-sans transition-all ${(course.category === 'special_offline' || course.category === 'beone_exclusive_offline') ? 'hidden' : ''}`}
+                               disabled={isExpired}
+                               className={`flex-1 h-14 rounded-2xl font-black font-sans transition-all ${isExpired ? '!bg-gray-200 !text-gray-400 !border-none cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 text-white'} ${(course.category === 'special_offline' || course.category === 'beone_exclusive_offline') ? 'hidden' : ''}`}
                                onClick={() => navigate(`/course/${course.id}/learn`)}
                              >
-                               강의실 입장
+                               {isExpired ? "수강일 만료" : "강의실 입장"}
                              </Button>
                              <Button
                                size="lg"
@@ -489,7 +587,8 @@ export default function MyPage() {
                              </Button>
                            </div>
                          </Card>
-                       ))
+                          );
+                        })
                      )}
                    </div>
                 </div>
@@ -529,12 +628,19 @@ export default function MyPage() {
                         </Button>
                       </div>
                     ) : (
-                      myCourses.map((course) => (
+                      myCourses.map((course) => {
+                        const isExpired = isExpiredCourse(course);
+                        return (
                         <Card key={course.id} className="overflow-hidden border-none shadow-sm rounded-[40px] group hover:shadow-2xl transition-all bg-white flex flex-col justify-between">
                           <div>
                             <div className="aspect-[16/9] bg-gray-100 relative">
                                <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
-                               <div className="absolute top-4 left-4">
+                               {isExpired && (
+                                 <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-10">
+                                   <span className="text-white font-black text-sm bg-red-600 px-3.5 py-1.5 rounded-full shadow-lg shadow-red-600/30">수강일 만료</span>
+                                 </div>
+                               )}
+                               <div className="absolute top-4 left-4 z-20">
                                  <Badge className="bg-white/80 backdrop-blur-md text-gray-900 border-none font-bold">
                                    {course.category === 'regular' ? '정규강의' : 
                                     course.category === 'special_online' ? '온라인 특강' :
@@ -551,16 +657,23 @@ export default function MyPage() {
                                   <h4 className="text-lg font-black text-gray-900 line-clamp-1">{course.title}</h4>
                                   <p className="text-sm font-bold text-gray-400">강사: {course.instructor}</p>
                                </div>
+                               <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                  <div className="flex items-start gap-2 text-xs font-bold text-slate-500 font-sans w-full">
+                                     <Clock className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                                     <div className="flex-1 min-w-0">{renderStudyPeriod(course)}</div>
+                                  </div>
+                                </div>
                             </div>
                           </div>
                           <div className="p-8 flex gap-2">
                             {!(course.category === 'special_offline' || course.category === 'beone_exclusive_offline') && (
                               <Button 
                                 size="lg" 
-                                className="flex-1 h-14 rounded-2xl font-black bg-purple-600 hover:bg-purple-700 text-white font-sans"
+                                disabled={isExpired}
+                                className={`flex-1 h-14 rounded-2xl font-black font-sans transition-all ${isExpired ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-none' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
                                 onClick={() => navigate(`/course/${course.id}/learn`)}
                               >
-                                강의실 입장
+                                {isExpired ? "수강일 만료" : "강의실 입장"}
                               </Button>
                             )}
                             <Button
@@ -573,7 +686,8 @@ export default function MyPage() {
                             </Button>
                           </div>
                         </Card>
-                      ))
+                      );
+                      })
                     )}
                   </div>
                 </div>
