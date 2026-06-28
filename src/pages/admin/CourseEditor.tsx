@@ -839,7 +839,9 @@ export default function AdminCourseEditor() {
                           }}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="강사를 선택하세요" />
+                            <SelectValue placeholder="강사를 선택하세요">
+                              {instructors.find(i => i.id === courseInfo.instructor_id)?.name || courseInfo.instructor || "강사를 선택하세요"}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {instructors.map(inst => (
@@ -868,7 +870,19 @@ export default function AdminCourseEditor() {
                           }}
                         >
                           <SelectTrigger>
-                            <SelectValue />
+                            <SelectValue>
+                              {(() => {
+                                switch (courseInfo.category) {
+                                  case "regular": return "정규강의";
+                                  case "special_online": return "온라인 특강";
+                                  case "special_offline": return "오프라인 특강";
+                                  case "beone_exclusive_online": return "온라인 비원커뮤니티회원전용";
+                                  case "beone_exclusive_offline": return "오프라인 비원커뮤니티회원전용";
+                                  case "live": return "비원아카데미 라이브";
+                                  default: return courseInfo.category || "정규강의";
+                                }
+                              })()}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="regular">정규강의</SelectItem>
@@ -891,7 +905,18 @@ export default function AdminCourseEditor() {
                             }
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="회원 등급 선택" />
+                              <SelectValue placeholder="회원 등급 선택">
+                                {(() => {
+                                  const grade = courseInfo.min_member_grade === 'bione_member' ? 'beone_member' : courseInfo.min_member_grade;
+                                  switch (grade) {
+                                    case "beone_member": return "비원아카데미 회원";
+                                    case "paid_member": return "유료 회원";
+                                    case "regular_member": return "일반 회원";
+                                    case "user": return "회원";
+                                    default: return grade || "회원 등급 선택";
+                                  }
+                                })()}
+                              </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="beone_member">비원아카데미 회원</SelectItem>
@@ -931,7 +956,9 @@ export default function AdminCourseEditor() {
                           }
                         >
                           <SelectTrigger>
-                            <SelectValue />
+                            <SelectValue>
+                              {courseInfo.access_type === "automatic" ? "자동승인 (결제시)" : "수동승인 (관리자)"}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="automatic">
@@ -2246,7 +2273,16 @@ export default function AdminCourseEditor() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue>
+                      {(() => {
+                        switch (courseInfo.status) {
+                          case "draft": return "초안(비공개)";
+                          case "published": return "공개(판매중)";
+                          case "private": return "비공개";
+                          default: return courseInfo.status || "초안(비공개)";
+                        }
+                      })()}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="draft">초안(비공개)</SelectItem>
