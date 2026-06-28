@@ -11,7 +11,10 @@ import {
   Calendar,
   Sparkles,
   ChevronRight,
-  User
+  User,
+  CalendarCheck,
+  Check,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +27,14 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabase';
@@ -58,6 +69,12 @@ export default function AdminStudentManagement() {
   const [selectedCourseId, setSelectedCourseId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Attendance States
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, Record<string, string>>>({});
+  const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
+  const [tempAttendance, setTempAttendance] = useState<Record<string, string>>({});
+  const [attendanceSearchQuery, setAttendanceSearchQuery] = useState('');
+
   // Stats
   const [stats, setStats] = useState({
     totalStudents: 0,
@@ -67,6 +84,15 @@ export default function AdminStudentManagement() {
 
   useEffect(() => {
     fetchInitialData();
+    // Load attendance from localStorage
+    const saved = localStorage.getItem('course_attendance');
+    if (saved) {
+      try {
+        setAttendanceMap(JSON.parse(saved));
+      } catch (e) {
+        console.error('Error parsing attendance from localStorage:', e);
+      }
+    }
   }, []);
 
   const fetchInitialData = async () => {
@@ -275,7 +301,17 @@ export default function AdminStudentManagement() {
 
     // Build the HTML template for students list
     // Column format: No | 이름 | 닉네임 | 휴대폰 번호 | 수강 등록일 | 출석 체크(반복되는 행은 빈칸) | 비고
+    const courseAttendance = attendanceMap[selectedCourseId] || {};
     const studentsHTML = sortedEnrollments.map((item, index) => {
+      const status = courseAttendance[item.user_id] || '';
+      const displayStatus = status === '미체크' ? '' : status;
+      
+      // Determine style color for statuses
+      let statusColor = '#1e293b'; // Default charcoal
+      if (status === '출석') statusColor = '#10b981'; // Emerald
+      else if (status === '지각') statusColor = '#f59e0b'; // Amber
+      else if (status === '결석') statusColor = '#ef4444'; // Rose
+
       return `
         <tr>
           <td style="font-weight: bold; color: #475569;">${index + 1}</td>
@@ -283,7 +319,7 @@ export default function AdminStudentManagement() {
           <td>${item.profile?.nickname || '닉네임 없음'}</td>
           <td>${getPhoneNumber(item.profile)}</td>
           <td>${formatDate(item.created_at)}</td>
-          <td class="attendance-cell"></td>
+          <td class="attendance-cell" style="font-weight: bold; color: ${statusColor};">${displayStatus}</td>
           <td class="remarks-cell"></td>
         </tr>
       `;
@@ -450,6 +486,83 @@ export default function AdminStudentManagement() {
     }
   };
 
+  // Open the attendance checking modal
+  const handleOpenAttendanceModal = () => {
+    if (selectedCourseId === 'all') {
+      toast.error('출석체크를 진행하려면 먼저 강의를 선택해주세요.');
+      return;
+    }
+    
+    const currentCourseAttendance = attendanceMap[selectedCourseId] || {};
+    const temp: Record<string, string> = {};
+    
+    filteredEnrollments.forEach(item => {
+      if (item.user_id) {
+        temp[item.user_id] = currentCourseAttendance[item.user_id] || '미체크';
+      }
+    });
+    
+    setTempAttendance(temp);
+    setAttendanceSearchQuery('');
+    setIsAttendanceModalOpen(true);
+  };
+
+  // Save the temporary attendance state to the persistent mapping
+  const handleSaveAttendance = () => {
+    const updatedMap = {
+      ...attendanceMap,
+      [selectedCourseId]: tempAttendance
+    };
+    setAttendanceMap(updatedMap);
+    localStorage.setItem('course_attendance', JSON.stringify(updatedMap));
+    setIsAttendanceModalOpen(false);
+    toast.success('출석체크 정보가 성공적으로 저장되었습니다.');
+  };
+
+  // Mark all currently filtered students in the modal as Present
+  const handleMarkAllPresent = (studentsToMark: StudentEnrollment[]) => {
+    const updated = { ...tempAttendance };
+    studentsToMark.forEach(item => {
+      if (item.user_id) {
+        updated[item.user_id] = '출석';
+      }
+    });
+    setTempAttendance(updated);
+    toast.success('목록의 모든 수강생의 출석 상태를 \'출석\'으로 일괄 지정했습니다.');
+  };
+
+  // Get a colored badge for attendance status
+  const getAttendanceBadge = (userId: string) => {
+    const status = (attendanceMap[selectedCourseId] || {})[userId] || '미체크';
+    
+    switch (status) {
+      case '출석':
+        return (
+          <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200/50 hover:bg-emerald-100/50 font-black rounded-lg">
+            출석
+          </Badge>
+        );
+      case '지각':
+        return (
+          <Badge className="bg-amber-50 text-amber-700 border border-amber-200/50 hover:bg-amber-100/50 font-black rounded-lg">
+            지각
+          </Badge>
+        );
+      case '결석':
+        return (
+          <Badge className="bg-rose-50 text-rose-700 border border-rose-200/50 hover:bg-rose-100/50 font-black rounded-lg">
+            결석
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="outline" className="text-slate-400 border-slate-200 bg-slate-50/50 hover:bg-slate-100/50 font-bold rounded-lg">
+            미체크
+          </Badge>
+        );
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Upper header with abstract background card */}
@@ -486,6 +599,19 @@ export default function AdminStudentManagement() {
             >
               <Printer className="w-4 h-4" />
               <span>출석부 출력</span>
+            </Button>
+
+            <Button 
+              disabled={selectedCourseId === 'all'}
+              onClick={handleOpenAttendanceModal} 
+              className={`font-extrabold px-6 h-12 rounded-2xl shadow-lg transition-all gap-2 ${
+                selectedCourseId === 'all' 
+                  ? 'bg-emerald-600/40 text-emerald-200/50 cursor-not-allowed' 
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/30'
+              }`}
+            >
+              <CalendarCheck className="w-4 h-4" />
+              <span>출석체크</span>
             </Button>
           </div>
         </div>
@@ -589,6 +715,9 @@ export default function AdminStudentManagement() {
                     {selectedCourseId === 'all' && (
                       <th className="py-4.5 px-6 text-left text-xs font-black text-slate-500 uppercase tracking-wider">등록된 강의명</th>
                     )}
+                    {selectedCourseId !== 'all' && (
+                      <th className="py-4.5 px-6 text-center text-xs font-black text-slate-500 uppercase tracking-wider w-32">출석 여부</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -620,6 +749,11 @@ export default function AdminStudentManagement() {
                           <Badge variant="outline" className="font-semibold text-xs border-purple-100 bg-purple-50/30 text-purple-700 px-2.5 py-1 rounded-md">
                             {item.course?.title || '알 수 없음'}
                           </Badge>
+                        </td>
+                      )}
+                      {selectedCourseId !== 'all' && (
+                        <td className="py-4.5 px-6 text-center text-sm">
+                          {getAttendanceBadge(item.user_id)}
                         </td>
                       )}
                     </tr>
@@ -666,6 +800,138 @@ export default function AdminStudentManagement() {
           </div>
         </div>
       )}
+
+      {/* Attendance Check Dialog */}
+      <Dialog open={isAttendanceModalOpen} onOpenChange={setIsAttendanceModalOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col gap-0 rounded-[32px] p-6 bg-white border border-slate-100 shadow-2xl">
+          <DialogHeader className="pb-4 border-b border-slate-100">
+            <DialogTitle className="text-2xl font-black text-slate-900 flex items-center gap-2">
+              <CalendarCheck className="w-6 h-6 text-emerald-600" />
+              <span>실시간 출석 체크</span>
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 font-bold mt-1">
+              강의명: <span className="text-slate-700 font-extrabold">{courses.find(c => c.id === selectedCourseId)?.title}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Modal Toolbar */}
+          <div className="py-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                value={attendanceSearchQuery}
+                onChange={(e) => setAttendanceSearchQuery(e.target.value)}
+                placeholder="이름으로 수강생 검색..."
+                className="pl-10 h-10 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold placeholder-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500"
+              />
+            </div>
+            
+            <Button
+              onClick={() => handleMarkAllPresent(filteredEnrollments.filter(item => {
+                if (attendanceSearchQuery.trim() !== '') {
+                  const q = attendanceSearchQuery.toLowerCase();
+                  return item.profile?.name?.toLowerCase().includes(q) || false;
+                }
+                return true;
+              }))}
+              className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/50 font-extrabold h-10 px-4 rounded-xl flex items-center gap-1.5 shrink-0 transition-colors"
+            >
+              <Check className="w-4 h-4" />
+              <span>일괄 출석 처리</span>
+            </Button>
+          </div>
+
+          {/* Student List in Modal */}
+          <div className="flex-1 overflow-y-auto min-h-[300px] max-h-[50vh] pr-1 -mr-2 space-y-3">
+            {filteredEnrollments.filter(item => {
+              if (attendanceSearchQuery.trim() !== '') {
+                const q = attendanceSearchQuery.toLowerCase();
+                return item.profile?.name?.toLowerCase().includes(q) || false;
+              }
+              return true;
+            }).length === 0 ? (
+              <div className="py-16 text-center text-slate-400 font-bold">
+                검색 결과와 일치하는 수강생이 없습니다.
+              </div>
+            ) : (
+              filteredEnrollments.filter(item => {
+                if (attendanceSearchQuery.trim() !== '') {
+                  const q = attendanceSearchQuery.toLowerCase();
+                  return item.profile?.name?.toLowerCase().includes(q) || false;
+                }
+                return true;
+              }).map((item) => {
+                const userId = item.user_id;
+                if (!userId) return null;
+                const currentStatus = tempAttendance[userId] || '미체크';
+
+                return (
+                  <div 
+                    key={item.id} 
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-50 hover:bg-slate-100/50 rounded-2xl border border-slate-100 gap-3 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center font-black text-sm shrink-0">
+                        {item.profile?.name?.[0] || '수'}
+                      </div>
+                      <div>
+                        <div className="font-extrabold text-slate-800 text-sm">
+                          {item.profile?.name || '이름 없음'}
+                          {item.profile?.nickname && (
+                            <span className="text-slate-400 font-bold text-xs ml-1.5">({item.profile.nickname})</span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-400 font-bold font-mono mt-0.5">
+                          {getPhoneNumber(item.profile)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Attendance Pill Buttons */}
+                    <div className="flex items-center gap-1 shrink-0 self-end sm:self-auto">
+                      {[
+                        { key: '출석', colorClass: 'data-[selected=true]:bg-emerald-500 data-[selected=true]:text-white hover:bg-emerald-50 text-emerald-600 border-emerald-100' },
+                        { key: '지각', colorClass: 'data-[selected=true]:bg-amber-500 data-[selected=true]:text-white hover:bg-amber-50 text-amber-600 border-amber-100' },
+                        { key: '결석', colorClass: 'data-[selected=true]:bg-rose-500 data-[selected=true]:text-white hover:bg-rose-50 text-rose-600 border-rose-100' },
+                        { key: '미체크', colorClass: 'data-[selected=true]:bg-slate-400 data-[selected=true]:text-white hover:bg-slate-200 text-slate-500 border-slate-200' }
+                      ].map((btn) => {
+                        const isSelected = currentStatus === btn.key;
+                        return (
+                          <button
+                            key={btn.key}
+                            onClick={() => setTempAttendance({ ...tempAttendance, [userId]: btn.key })}
+                            data-selected={isSelected}
+                            className={`h-9 px-3 text-xs font-extrabold rounded-lg border transition-all ${btn.colorClass}`}
+                          >
+                            {btn.key}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Modal Footer */}
+          <DialogFooter className="mt-6 pt-4 border-t border-slate-100 flex flex-col-reverse sm:flex-row gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setIsAttendanceModalOpen(false)}
+              className="rounded-xl font-bold h-11 px-5 border-slate-200 text-slate-500 hover:bg-slate-50"
+            >
+              취소
+            </Button>
+            <Button
+              onClick={handleSaveAttendance}
+              className="rounded-xl font-extrabold h-11 px-6 bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-700/10"
+            >
+              저장하기
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
