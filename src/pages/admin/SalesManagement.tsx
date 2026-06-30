@@ -29,6 +29,7 @@ import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 
 export default function AdminSalesManagement() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -260,6 +261,85 @@ export default function AdminSalesManagement() {
     return !!matchesSearch;
   });
 
+  const handleExportExcel = () => {
+    if (filteredOrders.length === 0) {
+      toast.error('내보낼 결제 내역이 없습니다.');
+      return;
+    }
+
+    try {
+      const excelData = filteredOrders.map((order, index) => {
+        // Parse tid and approval code from logs
+        let tid = '-';
+        let applNum = '-';
+        if (order.logs && order.logs.length > 0) {
+          const successLog = order.logs.find((l: any) => l.status === 'SUCCESS') || order.logs[0];
+          if (successLog && successLog.raw_response) {
+            try {
+              const rawRes = successLog.raw_response;
+              const parsed = typeof rawRes === 'string' ? JSON.parse(rawRes) : rawRes;
+              const rawObj = parsed.details || parsed;
+              
+              tid = rawObj.tid || rawObj.TID || rawObj.AuthTID || rawObj.payment_tid || rawObj.P_TID || '-';
+              applNum = rawObj.applNum || rawObj.applNo || rawObj.AuthCode || rawObj.applCode || rawObj.P_AUTH_NO || rawObj.appl_num || '-';
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+
+        const formattedDate = order.created_at 
+          ? format(new Date(order.created_at), 'yyyy-MM-dd HH:mm:ss', { locale: ko })
+          : '-';
+
+        return {
+          'No': index + 1,
+          '결제일시': formattedDate,
+          '주문번호 (Merchant UID)': order.merchant_uid || order.id?.split('-')[0] || '-',
+          '승인 거래번호 (TID)': tid,
+          '승인번호': applNum,
+          '구매자 실명': order.profile?.name || '-',
+          '구매자 닉네임': order.profile?.nickname || '-',
+          '구매자 이메일': order.profile?.email || '-',
+          '강의명 (상품)': order.course?.title || '삭제된 강의 정보',
+          '코스 ID': order.course_id || '-',
+          '결제 금액': order.amount || 0,
+          '결제 방법': order.payment_method || 'CARD',
+          '결제 상태': (order.status || '').toUpperCase() === 'PAID' || (order.status || '').toUpperCase() === 'COMPLETED' ? '결제완료' : '결제대기'
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      
+      // Column widths helper
+      const max_widths = [
+        { wch: 6 },   // No
+        { wch: 22 },  // 결제일시
+        { wch: 25 },  // 주문번호
+        { wch: 25 },  // 승인 거래번호
+        { wch: 15 },  // 승인번호
+        { wch: 15 },  // 구매자 실명
+        { wch: 15 },  // 구매자 닉네임
+        { wch: 25 },  // 구매자 이메일
+        { wch: 35 },  // 강의명
+        { wch: 20 },  // 코스 ID
+        { wch: 12 },  // 결제 금액
+        { wch: 10 },  // 결제 방법
+        { wch: 10 }   // 결제 상태
+      ];
+      worksheet['!cols'] = max_widths;
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "매출 내역");
+      
+      XLSX.writeFile(workbook, `매출내역_${new Date().toISOString().split('T')[0]}.xlsx`);
+      toast.success('엑셀 파일이 성공적으로 생성되었습니다.');
+    } catch (err: any) {
+      console.error('Excel export error:', err);
+      toast.error('엑셀 생성 중 오류가 발생했습니다: ' + err.message);
+    }
+  };
+
   const getOrderStatusBadge = (status: string) => {
     const s = (status || '').toUpperCase();
     if (s === 'COMPLETED' || s === 'PAID') {
@@ -303,7 +383,11 @@ export default function AdminSalesManagement() {
             )}
             커뮤니티 수동 동기화 & 만료 수거
           </Button>
-          <Button variant="outline" className="h-12 px-6 rounded-2xl gap-2 font-black border-gray-100 shadow-sm hover:bg-gray-50">
+          <Button 
+            onClick={handleExportExcel}
+            variant="outline" 
+            className="h-12 px-6 rounded-2xl gap-2 font-black border-gray-100 shadow-sm hover:bg-gray-50 active:scale-95 transition-all"
+          >
             <Download className="w-4 h-4" />
             엑셀 다운로드
           </Button>
