@@ -702,57 +702,57 @@ export default function AdminStudentManagement() {
               <p className="text-slate-400 text-xs font-bold mt-1">새로운 수강 결제나 수강 등록 내역이 수집될 때까지 대기하세요.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
+            <div className="overflow-x-auto lg:overflow-x-visible">
+              <table className="w-full border-collapse min-w-[700px] lg:min-w-0 table-auto">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/50">
-                    <th className="py-4.5 px-8 text-center text-xs font-black text-slate-500 uppercase tracking-wider w-20">No</th>
-                    <th className="py-4.5 px-6 text-left text-xs font-black text-slate-500 uppercase tracking-wider">이름</th>
-                    <th className="py-4.5 px-6 text-left text-xs font-black text-slate-500 uppercase tracking-wider">닉네임</th>
-                    <th className="py-4.5 px-6 text-left text-xs font-black text-slate-500 uppercase tracking-wider">이메일주소</th>
-                    <th className="py-4.5 px-6 text-left text-xs font-black text-slate-500 uppercase tracking-wider">휴대폰번호</th>
-                    <th className="py-4.5 px-6 text-left text-xs font-black text-slate-500 uppercase tracking-wider">수강 등록일</th>
+                    <th className="py-3.5 px-4 text-center text-xs font-black text-slate-500 uppercase tracking-wider w-16">No</th>
+                    <th className="py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider w-24">이름</th>
+                    <th className="py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider w-28">닉네임</th>
+                    <th className="py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider">이메일주소</th>
+                    <th className="py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider w-36">휴대폰번호</th>
+                    <th className="py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider w-32">수강 등록일</th>
                     {selectedCourseId === 'all' && (
-                      <th className="py-4.5 px-6 text-left text-xs font-black text-slate-500 uppercase tracking-wider">등록된 강의명</th>
+                      <th className="py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider">등록된 강의명</th>
                     )}
                     {selectedCourseId !== 'all' && (
-                      <th className="py-4.5 px-6 text-center text-xs font-black text-slate-500 uppercase tracking-wider w-32">출석 여부</th>
+                      <th className="py-3.5 px-3 text-center text-xs font-black text-slate-500 uppercase tracking-wider w-28">출석 여부</th>
                     )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredEnrollments.map((item, index) => (
                     <tr key={item.id} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="py-4.5 px-8 text-center text-sm font-bold text-slate-400">
+                      <td className="py-3.5 px-4 text-center text-sm font-bold text-slate-400">
                         {filteredEnrollments.length - index}
                       </td>
-                      <td className="py-4.5 px-6 text-sm font-extrabold text-slate-900">
+                      <td className="py-3.5 px-3 text-sm font-extrabold text-slate-900 truncate max-w-[100px]" title={item.profile?.name || ''}>
                         {item.profile?.name || '이름 없음'}
                       </td>
-                      <td className="py-4.5 px-6 text-sm font-semibold text-slate-600">
+                      <td className="py-3.5 px-3 text-sm font-semibold text-slate-600 truncate max-w-[120px]" title={item.profile?.nickname || ''}>
                         {item.profile?.nickname || '닉네임 없음'}
                       </td>
-                      <td className="py-4.5 px-6 text-sm font-medium text-slate-500">
+                      <td className="py-3.5 px-3 text-sm font-medium text-slate-500 truncate max-w-[200px]" title={item.profile?.email || ''}>
                         {item.profile?.email || '-'}
                       </td>
-                      <td className="py-4.5 px-6 text-sm font-mono font-bold text-slate-600">
+                      <td className="py-3.5 px-3 text-sm font-mono font-bold text-slate-600 whitespace-nowrap">
                         {getPhoneNumber(item.profile)}
                       </td>
-                      <td className="py-4.5 px-6 text-sm font-semibold text-slate-500">
+                      <td className="py-3.5 px-3 text-sm font-semibold text-slate-500 whitespace-nowrap">
                         <span className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5 text-slate-400" />
                           {formatDate(item.created_at)}
                         </span>
                       </td>
                       {selectedCourseId === 'all' && (
-                        <td className="py-4.5 px-6 text-sm font-bold text-slate-800">
-                          <Badge variant="outline" className="font-semibold text-xs border-purple-100 bg-purple-50/30 text-purple-700 px-2.5 py-1 rounded-md">
+                        <td className="py-3.5 px-3 text-sm font-bold text-slate-800">
+                          <Badge variant="outline" className="font-semibold text-xs border-purple-100 bg-purple-50/30 text-purple-700 px-2.5 py-1 rounded-md line-clamp-1 max-w-[180px]" title={item.course?.title || ''}>
                             {item.course?.title || '알 수 없음'}
                           </Badge>
                         </td>
                       )}
                       {selectedCourseId !== 'all' && (
-                        <td className="py-4.5 px-6 text-center text-sm">
+                        <td className="py-3.5 px-3 text-center text-sm">
                           {getAttendanceBadge(item.user_id)}
                         </td>
                       )}

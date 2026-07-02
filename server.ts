@@ -245,22 +245,7 @@ async function startServer() {
       
       const targetUrl = `${cleanSupUrl}/storage/v1/object/public/${bucket}/${safeFilePath}${queryStr}`;
       
-      const response = await fetch(targetUrl);
-      if (!response.ok) {
-        return res.status(response.status).send("Asset not found");
-      }
-      
-      const contentType = response.headers.get("content-type");
-      const contentLength = response.headers.get("content-length");
-      const cacheControl = response.headers.get("cache-control") || "public, max-age=31536000, immutable";
-      
-      if (contentType) res.setHeader("Content-Type", contentType);
-      if (contentLength) res.setHeader("Content-Length", contentLength);
-      res.setHeader("Cache-Control", cacheControl);
-      
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      return res.send(buffer);
+      return res.redirect(targetUrl);
     } catch (error: any) {
       console.error("[Assets Proxy] Error:", error);
       next(error);

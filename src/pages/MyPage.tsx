@@ -16,7 +16,9 @@ import {
   Star,
   ArrowRight,
   MessageSquare,
-  X
+  X,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -150,6 +152,7 @@ export default function MyPage() {
   const [reviewContent, setReviewContent] = useState('');
   const [reviewRating, setReviewRating] = useState(5);
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [viewType, setViewType] = useState<'card' | 'list'>('card');
 
   // Controlled fields for settings form
   const [name, setName] = useState('');
@@ -602,15 +605,43 @@ export default function MyPage() {
             {activeMenu === 'courses' && (
               <div className="space-y-10">
                 <div className="space-y-6">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
                     <div className="flex items-center gap-2">
                       <span className="text-2xl">🎓</span>
                       <h3 className="text-2xl font-black tracking-tighter text-gray-900">구독 중인 내 강의</h3>
                     </div>
-                    <Badge className="bg-purple-100 text-purple-600 border-none px-4 py-1.5 font-black text-xs font-sans">총 {myCourses.length}개</Badge>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <Badge className="bg-purple-100 text-purple-600 border-none px-4 py-1.5 font-black text-xs font-sans">총 {myCourses.length}개</Badge>
+                      <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+                        <button
+                          onClick={() => setViewType('card')}
+                          className={cn(
+                            "p-2 rounded-lg transition-all",
+                            viewType === 'card' 
+                              ? "bg-white text-purple-600 shadow-xs" 
+                              : "text-slate-500 hover:text-slate-800"
+                          )}
+                          title="카드형 보기"
+                        >
+                          <LayoutGrid className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setViewType('list')}
+                          className={cn(
+                            "p-2 rounded-lg transition-all",
+                            viewType === 'list' 
+                              ? "bg-white text-purple-600 shadow-xs" 
+                              : "text-slate-500 hover:text-slate-800"
+                          )}
+                          title="리스트형 보기"
+                        >
+                          <List className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  <div className={viewType === 'card' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" : "flex flex-col gap-6"}>
                     {loading ? (
                       <div className="col-span-full text-center py-20 text-gray-400 font-bold">강의 정보를 불러오고 있습니다...</div>
                     ) : myCourses.length === 0 ? (
@@ -630,63 +661,128 @@ export default function MyPage() {
                     ) : (
                       myCourses.map((course) => {
                         const isExpired = isExpiredCourse(course);
-                        return (
-                        <Card key={course.id} className="overflow-hidden border-none shadow-sm rounded-[40px] group hover:shadow-2xl transition-all bg-white flex flex-col justify-between">
-                          <div>
-                            <div className="aspect-[16/9] bg-gray-100 relative">
-                               <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
-                               {isExpired && (
-                                 <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-10">
-                                   <span className="text-white font-black text-sm bg-red-600 px-3.5 py-1.5 rounded-full shadow-lg shadow-red-600/30">수강일 만료</span>
-                                 </div>
-                               )}
-                               <div className="absolute top-4 left-4 z-20">
-                                 <Badge className="bg-white/80 backdrop-blur-md text-gray-900 border-none font-bold">
-                                   {course.category === 'regular' ? '정규강의' : 
-                                    course.category === 'special_online' ? '온라인 특강' :
-                                    course.category === 'special_offline' ? '오프라인 특강' :
-                                    course.category === 'special' ? '특강' : 
-                                    course.category === 'beone_exclusive_online' ? '온라인 비원커뮤니티회원전용' :
-                                    course.category === 'beone_exclusive_offline' ? '오프라인 비원커뮤니티회원전용' :
-                                    course.category === 'beone_exclusive' ? '비원커뮤니티회원전용' : '비원아카데미 Live'}
-                                 </Badge>
-                               </div>
-                            </div>
-                            <div className="p-8 pb-0 space-y-6">
-                               <div className="space-y-2">
-                                  <h4 className="text-lg font-black text-gray-900 line-clamp-1">{course.title}</h4>
-                                  <p className="text-sm font-bold text-gray-400">강사: {course.instructor}</p>
-                               </div>
-                               <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                  <div className="flex items-start gap-2 text-xs font-bold text-slate-500 font-sans w-full">
-                                     <Clock className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-                                     <div className="flex-1 min-w-0">{renderStudyPeriod(course)}</div>
+                        
+                        if (viewType === 'list') {
+                          return (
+                            <Card key={course.id} className="overflow-hidden border-none shadow-xs rounded-[32px] group hover:shadow-xl transition-all bg-white flex flex-col md:flex-row items-stretch md:items-center justify-between p-6 gap-6">
+                              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-1 min-w-0">
+                                {/* Thumbnail */}
+                                <div className="w-full sm:w-44 aspect-[16/9] bg-gray-100 relative rounded-2xl overflow-hidden shrink-0">
+                                  <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
+                                  {isExpired && (
+                                    <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-10">
+                                      <span className="text-white font-black text-[10px] bg-red-600 px-2.5 py-1 rounded-full shadow-lg">수강만료</span>
+                                    </div>
+                                  )}
+                                  <div className="absolute top-2 left-2 z-20">
+                                    <Badge className="bg-white/90 backdrop-blur-md text-[10px] text-gray-900 border-none font-bold py-0.5 px-2">
+                                      {course.category === 'regular' ? '정규강의' : 
+                                       course.category === 'special_online' ? '온라인 특강' :
+                                       course.category === 'special_offline' ? '오프라인 특강' :
+                                       course.category === 'special' ? '특강' : 
+                                       course.category === 'beone_exclusive_online' ? '온라인 비원커뮤니티회원전용' :
+                                       course.category === 'beone_exclusive_offline' ? '오프라인 비원커뮤니티회원전용' :
+                                       course.category === 'beone_exclusive' ? '비원커뮤니티회원전용' : '비원아카데미 Live'}
+                                    </Badge>
                                   </div>
                                 </div>
+
+                                {/* Details */}
+                                <div className="space-y-3 flex-1 min-w-0">
+                                  <div>
+                                    <h4 className="text-lg font-black text-gray-900 truncate">{course.title}</h4>
+                                    <p className="text-sm font-bold text-gray-400 mt-0.5">강사: {course.instructor}</p>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs font-bold text-slate-500 font-sans max-w-md bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
+                                    <Clock className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                    <div className="truncate">{renderStudyPeriod(course)}</div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Actions */}
+                              <div className="flex sm:flex-row md:flex-col lg:flex-row items-center gap-2 shrink-0 w-full md:w-auto">
+                                {!(course.category === 'special_offline' || course.category === 'beone_exclusive_offline') && (
+                                  <Button 
+                                    size="default" 
+                                    disabled={isExpired}
+                                    className={`w-full sm:w-auto md:w-full lg:w-auto h-11 px-5 rounded-xl font-black font-sans transition-all shrink-0 ${isExpired ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-none' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
+                                    onClick={() => navigate(`/course/${course.id}/learn`)}
+                                  >
+                                    {isExpired ? "수강일 만료" : "강의실 입장"}
+                                  </Button>
+                                )}
+                                <Button
+                                  size="default"
+                                  variant="outline"
+                                  className="w-full sm:w-auto md:w-full lg:w-auto h-11 px-5 rounded-xl font-black border-gray-100 hover:bg-yellow-50 hover:text-yellow-600 hover:border-yellow-200 text-gray-700 font-sans transition-all shrink-0"
+                                  onClick={() => handleOpenReview(course)}
+                                >
+                                  후기 작성하기
+                                </Button>
+                              </div>
+                            </Card>
+                          );
+                        }
+
+                        // Default Card Layout
+                        return (
+                          <Card key={course.id} className="overflow-hidden border-none shadow-sm rounded-[40px] group hover:shadow-2xl transition-all bg-white flex flex-col justify-between">
+                            <div>
+                              <div className="aspect-[16/9] bg-gray-100 relative">
+                                 <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
+                                 {isExpired && (
+                                   <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-10">
+                                     <span className="text-white font-black text-sm bg-red-600 px-3.5 py-1.5 rounded-full shadow-lg shadow-red-600/30">수강일 만료</span>
+                                   </div>
+                                 )}
+                                 <div className="absolute top-4 left-4 z-20">
+                                   <Badge className="bg-white/80 backdrop-blur-md text-gray-900 border-none font-bold">
+                                     {course.category === 'regular' ? '정규강의' : 
+                                      course.category === 'special_online' ? '온라인 특강' :
+                                      course.category === 'special_offline' ? '오프라인 특강' :
+                                      course.category === 'special' ? '특강' : 
+                                      course.category === 'beone_exclusive_online' ? '온라인 비원커뮤니티회원전용' :
+                                      course.category === 'beone_exclusive_offline' ? '오프라인 비원커뮤니티회원전용' :
+                                      course.category === 'beone_exclusive' ? '비원커뮤니티회원전용' : '비원아카데미 Live'}
+                                   </Badge>
+                                 </div>
+                              </div>
+                              <div className="p-8 pb-0 space-y-6">
+                                 <div className="space-y-2">
+                                    <h4 className="text-lg font-black text-gray-900 line-clamp-1">{course.title}</h4>
+                                    <p className="text-sm font-bold text-gray-400">강사: {course.instructor}</p>
+                                 </div>
+                                 <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                    <div className="flex items-start gap-2 text-xs font-bold text-slate-500 font-sans w-full">
+                                       <Clock className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                                       <div className="flex-1 min-w-0">{renderStudyPeriod(course)}</div>
+                                    </div>
+                                  </div>
+                              </div>
                             </div>
-                          </div>
-                          <div className="p-8 flex gap-2">
-                            {!(course.category === 'special_offline' || course.category === 'beone_exclusive_offline') && (
-                              <Button 
-                                size="lg" 
-                                disabled={isExpired}
-                                className={`flex-1 h-14 rounded-2xl font-black font-sans transition-all ${isExpired ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-none' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
-                                onClick={() => navigate(`/course/${course.id}/learn`)}
+                            <div className="p-8 flex gap-2">
+                              {!(course.category === 'special_offline' || course.category === 'beone_exclusive_offline') && (
+                                <Button 
+                                  size="lg" 
+                                  disabled={isExpired}
+                                  className={`flex-1 h-14 rounded-2xl font-black font-sans transition-all ${isExpired ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-none' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
+                                  onClick={() => navigate(`/course/${course.id}/learn`)}
+                                >
+                                  {isExpired ? "수강일 만료" : "강의실 입장"}
+                                </Button>
+                              )}
+                              <Button
+                                size="lg"
+                                variant="outline"
+                                className="flex-1 h-14 rounded-2xl font-black border-gray-100 hover:bg-yellow-50 hover:text-yellow-600 hover:border-yellow-200 text-gray-700 font-sans"
+                                onClick={() => handleOpenReview(course)}
                               >
-                                {isExpired ? "수강일 만료" : "강의실 입장"}
+                                후기 작성하기
                               </Button>
-                            )}
-                            <Button
-                              size="lg"
-                              variant="outline"
-                              className="flex-1 h-14 rounded-2xl font-black border-gray-100 hover:bg-yellow-50 hover:text-yellow-600 hover:border-yellow-200 text-gray-700 font-sans"
-                              onClick={() => handleOpenReview(course)}
-                            >
-                              후기 작성하기
-                            </Button>
-                          </div>
-                        </Card>
-                      );
+                            </div>
+                          </Card>
+                        );
                       })
                     )}
                   </div>

@@ -50,26 +50,13 @@ export const handler: Handler = async (event) => {
     const targetUrl = `${cleanSupUrl}/storage/v1/object/public/${bucket}/${safeFilePath}${queryStr}`;
     console.log("[Assets Proxy] Redirecting to:", targetUrl);
 
-    const response = await fetch(targetUrl);
-    if (!response.ok) {
-      return {
-        statusCode: response.status,
-        body: "Asset not found in storage",
-      };
-    }
-
-    const contentType = response.headers.get("content-type") || "application/octet-stream";
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
     return {
-      statusCode: 200,
+      statusCode: 302,
       headers: {
-        "Content-Type": contentType,
-        "Cache-Control": "public, max-age=31536000, immutable",
+        "Location": targetUrl,
+        "Cache-Control": "no-cache",
       },
-      body: buffer.toString("base64"),
-      isBase64Encoded: true,
+      body: "",
     };
   } catch (error: any) {
     console.error("[Assets Proxy] Serverless Error:", error);
