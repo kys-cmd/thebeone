@@ -1802,11 +1802,11 @@ export default function AdminCourseEditor() {
                               </div>
                             )}
 
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-sm">
+                            <div className="w-full overflow-hidden">
+                              <table className="w-full text-sm table-fixed border-collapse">
                                 <thead className="bg-gray-50/50 border-b border-gray-100">
                                   <tr>
-                                    <th className="px-6 py-4 text-left w-12">
+                                    <th className="px-4 py-4 text-left w-[6%]">
                                       <Checkbox 
                                         checked={enrolledStudents.length > 0 && selectedEnrolledStudentIds.length === enrolledStudents.length}
                                         onCheckedChange={(checked) => {
@@ -1819,12 +1819,10 @@ export default function AdminCourseEditor() {
                                         className="border-gray-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
                                       />
                                     </th>
-                                    <th className="px-6 py-4 text-left font-bold text-gray-600">이름 (닉네임)</th>
-                                    <th className="px-6 py-4 text-left font-bold text-gray-600">이메일</th>
-                                    <th className="px-6 py-4 text-left font-bold text-gray-600">휴대폰 번호</th>
-                                    <th className="px-6 py-4 text-left font-bold text-gray-600">수강 등록일</th>
-                                    <th className="px-6 py-4 text-left font-bold text-gray-600">수강 만료일</th>
-                                    <th className="px-6 py-4 text-right font-bold text-gray-600">관리</th>
+                                    <th className="px-3 py-4 text-left font-bold text-gray-600 w-[22%]">이름 (닉네임)</th>
+                                    <th className="px-3 py-4 text-left font-bold text-gray-600 w-[32%]">연락처 (이메일/연락처)</th>
+                                    <th className="px-3 py-4 text-left font-bold text-gray-600 w-[24%]">수강 기간 (등록일/만료일)</th>
+                                    <th className="px-4 py-4 text-right font-bold text-gray-600 w-[16%]">관리</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 bg-white">
@@ -1833,7 +1831,7 @@ export default function AdminCourseEditor() {
                                     const isExpired = student.expires_at ? new Date(student.expires_at) < new Date() : false;
                                     return (
                                       <tr key={student.id} className="hover:bg-gray-50/30 transition-colors">
-                                        <td className="px-6 py-4 w-12">
+                                        <td className="px-4 py-4">
                                           <Checkbox 
                                             checked={selectedEnrolledStudentIds.includes(student.user_id)}
                                             onCheckedChange={(checked) => {
@@ -1846,59 +1844,57 @@ export default function AdminCourseEditor() {
                                             className="border-gray-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
                                           />
                                         </td>
-                                        <td className="px-6 py-4">
-                                          <div className="font-black text-gray-900 text-sm">
-                                            {profile.name || '알 수 없는 사용자'} {profile.nickname ? `(${profile.nickname})` : ''}
+                                        <td className="px-3 py-4 truncate">
+                                          <div className="font-extrabold text-gray-900 text-sm truncate" title={profile.name || ''}>
+                                            {profile.name || '알 수 없는 사용자'}
                                           </div>
+                                          {profile.nickname && (
+                                            <div className="text-xs text-slate-400 mt-0.5 truncate" title={profile.nickname}>
+                                              {profile.nickname}
+                                            </div>
+                                          )}
                                         </td>
-                                      <td className="px-6 py-4 text-gray-500 font-medium whitespace-nowrap">
-                                        {profile.email || '-'}
+                                      <td className="px-3 py-4 truncate">
+                                        <div className="font-semibold text-slate-900 text-sm truncate" title={profile.email || ''}>
+                                          {profile.email || '-'}
+                                        </div>
+                                        <div className="font-mono text-xs text-slate-400 mt-0.5 truncate" title={profile.mobile_phone || profile.phone || ''}>
+                                          {profile.mobile_phone || profile.phone || '-'}
+                                        </div>
                                       </td>
-                                      <td className="px-6 py-4 text-gray-500 font-medium whitespace-nowrap">
-                                        {profile.mobile_phone || profile.phone || '-'}
-                                      </td>
-                                      <td className="px-6 py-4 text-gray-500 font-medium text-xs whitespace-nowrap">
-                                        {student.created_at ? new Date(student.created_at).toLocaleDateString() : '-'}
-                                      </td>
-                                      <td className="px-6 py-4 text-xs whitespace-nowrap">
-                                        {student.expires_at ? (
-                                          <div className="flex flex-col gap-1">
-                                            <span className="font-semibold text-gray-700">
-                                              {new Date(student.expires_at).toLocaleDateString()}
+                                      <td className="px-3 py-4 truncate">
+                                        <div className="font-bold text-slate-700 text-sm truncate" title={student.created_at ? new Date(student.created_at).toLocaleDateString() : ''}>
+                                          {student.created_at ? new Date(student.created_at).toLocaleDateString() : '-'}
+                                        </div>
+                                        <div className="text-xs mt-0.5 truncate">
+                                          {student.expires_at ? (
+                                            <span className={`${isExpired ? 'font-semibold text-rose-600' : 'font-semibold text-green-600'}`}>
+                                              ~ {new Date(student.expires_at).toLocaleDateString()}
                                             </span>
-                                            {isExpired ? (
-                                              <Badge className="bg-red-50 text-red-600 border border-red-100 hover:bg-red-50 text-[10px] w-fit font-bold rounded-lg px-2 py-0.5">
-                                                수강 만료됨
-                                              </Badge>
-                                            ) : (
-                                              <Badge className="bg-green-50 text-green-600 border border-green-100 hover:bg-green-50 text-[10px] w-fit font-bold rounded-lg px-2 py-0.5">
-                                                수강중
-                                              </Badge>
-                                            )}
-                                          </div>
-                                        ) : (
-                                          <span className="text-gray-400 font-medium">제한 없음 (상시)</span>
-                                        )}
+                                          ) : (
+                                            <span className="text-slate-400 font-medium">제한 없음</span>
+                                          )}
+                                        </div>
                                       </td>
-                                      <td className="px-6 py-4 text-right">
-                                        <div className="flex items-center justify-end gap-2">
+                                      <td className="px-4 py-4 text-right">
+                                        <div className="flex items-center justify-end gap-1.5">
                                           <Button 
                                             variant="outline" 
                                             size="sm" 
-                                            className="text-purple-600 border-purple-100 hover:bg-purple-50 font-bold h-8 rounded-lg text-xs"
+                                            className="text-purple-600 border-purple-100 hover:bg-purple-50 font-bold h-8 rounded-lg text-xs px-2 shrink-0"
                                             onClick={() => handleOpenEditExpiryModal(student)}
                                             type="button"
                                           >
-                                            <Clock className="w-3.5 h-3.5 mr-1" /> 기간 수정
+                                            기간 수정
                                           </Button>
                                           <Button 
                                             variant="ghost" 
                                             size="sm" 
-                                            className="text-red-600 hover:text-red-700 hover:bg-red-50 font-bold h-8 rounded-lg text-xs"
+                                            className="text-red-600 hover:text-red-700 hover:bg-red-50 font-bold h-8 rounded-lg text-xs px-2 shrink-0"
                                             onClick={() => handleOpenUnenrollConfirm(student.user_id, profile.name || '수강생')}
                                             type="button"
                                           >
-                                            수강 해제
+                                            해제
                                           </Button>
                                         </div>
                                       </td>

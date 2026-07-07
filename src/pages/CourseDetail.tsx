@@ -14,7 +14,9 @@ import {
   MessageSquare,
   Trophy,
   Video,
-  Lock
+  Lock,
+  Trash2,
+  Edit2
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -32,24 +34,70 @@ import { getVimeoEmbedUrl } from '@/lib/vimeo';
 import { CurriculumItem } from '@/types';
 
 function CourseReviews({ courseId }: { courseId: string }) {
+  const { user } = useAuthStore();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Edit states
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [editRating, setEditRating] = useState(5);
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  const loadReviews = async () => {
+    try {
+      const allReviews = await reviewService.getReviews();
+      setReviews(allReviews.filter(r => r.course_id === courseId));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function loadReviews() {
-      try {
-        const allReviews = await reviewService.getReviews();
-        setReviews(allReviews.filter(r => r.course_id === courseId));
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }
     loadReviews();
   }, [courseId]);
 
+  const handleSaveEdit = async (reviewId: string) => {
+    if (!editContent.trim()) {
+      toast.error('후기 내용을 입력해주세요.');
+      return;
+    }
+    try {
+      setIsSubmittingEdit(true);
+      await reviewService.updateReview(reviewId, {
+        content: editContent,
+        rating: editRating
+      });
+      toast.success('수강후기가 수정되었습니다.');
+      setEditingId(null);
+      loadReviews();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || '수강후기 수정에 실패했습니다.');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  const handleDelete = async (reviewId: string) => {
+    if (!window.confirm('정말로 이 수강후기를 삭제하시겠습니까?')) {
+      return;
+    }
+    try {
+      await reviewService.deleteReview(reviewId);
+      toast.success('수강후기가 삭제되었습니다.');
+      loadReviews();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || '수강후기 삭제에 실패했습니다.');
+    }
+  };
+
   if (loading) return <div className="py-10 text-center text-gray-400 font-bold">후기 데이터를 불러오는 중...</div>;
+
+  const isAdmin = user && (user.role === 'admin' || user.role === 'super_admin');
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -59,29 +107,107 @@ function CourseReviews({ courseId }: { courseId: string }) {
            <p className="text-gray-400 font-bold">아직 작성된 후기가 없습니다.</p>
         </div>
       ) : (
-        reviews.map(review => (
-          <div key={review.id} className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm space-y-4 flex flex-col justify-between">
-            <div className="space-y-4">
-              <div className="flex items-center gap-1 text-yellow-400">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className={`w-4 h-4 ${i < review.rating ? 'fill-current' : 'text-gray-200'}`} />
-                ))}
+        reviews.map(review => {
+          const isOwner = user && user.id === review.user_id;
+          const isEditing = editingId === review.id;
+
+          return (
+            <div key={review.id} className="relative bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm space-y-4 flex flex-col justify-between group">
+              {isEditing ? (
+                <div className="space-y-4 w-full text-left">
+                  <div className="flex items-center gap-1 text-yellow-400">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Star 
+                        key={s} 
+                        onClick={() => setEditRating(s)}
+                        className={`w-5 h-5 cursor-pointer transition-all ${s <= editRating ? 'fill-current text-yellow-500' : 'text-gray-200'}`} 
+                      />
+                    ))}
+                  </div>
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 text-gray-800 focus:outline-none focus:border-purple-500 transition-all text-sm min-h-[100px] resize-none"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button 
+                      onClick={() => setEditingId(null)} 
+                      variant="outline" 
+                      size="sm" 
+                      className="rounded-xl text-xs font-bold h-8"
+                    >
+                      취소
+                    </Button>
+                    <Button 
+                      onClick={() => handleSaveEdit(review.id)} 
+                      size="sm" 
+                      disabled={isSubmittingEdit}
+                      className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold h-8"
+                    >
+                      {isSubmittingEdit ? '저장 중...' : '저장'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 text-left">
+                  <div className="flex items-center gap-1 text-yellow-400">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className={`w-4 h-4 ${i < review.rating ? 'fill-current' : 'text-gray-200'}`} />
+                    ))}
+                  </div>
+                  <p className="text-gray-700 leading-relaxed font-medium break-keep">"{review.content}"</p>
+                  
+                  {/* 별도 섹션: 수정 및 삭제 버튼 */}
+                  {(isOwner || isAdmin) && (
+                    <div className="flex items-center gap-2 pt-3 border-t border-dashed border-gray-100">
+                      {isOwner && (
+                        <button 
+                          onClick={() => {
+                            setEditingId(review.id);
+                            setEditContent(review.content);
+                            setEditRating(review.rating);
+                          }}
+                          className="flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-700 font-bold bg-purple-50 hover:bg-purple-100/80 px-3 py-1.5 rounded-xl transition-all shadow-sm"
+                          title="수정"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                          수정
+                        </button>
+                      )}
+                      {(isOwner || isAdmin) && (
+                        <button 
+                          onClick={() => handleDelete(review.id)}
+                          className="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-700 font-bold bg-rose-50 hover:bg-rose-100/80 px-3 py-1.5 rounded-xl transition-all shadow-sm"
+                          title="삭제"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          삭제
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 pt-4 border-t border-gray-50 text-left">
+                <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden">
+                  <img src={review.user_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${review.user_id}`} alt="" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-black text-gray-900">{review.user_name || '익명 수강생'}</p>
+                    {isOwner && (
+                      <Badge className="bg-purple-50 text-purple-600 border border-purple-100 hover:bg-purple-50 text-[9px] font-black rounded-md px-1.5 py-0">내 후기</Badge>
+                    )}
+                  </div>
+                  <p className="text-[10px] font-bold text-gray-400">
+                    {review.created_at ? new Date(review.created_at).toLocaleDateString() : ''}
+                  </p>
+                </div>
               </div>
-              <p className="text-gray-700 leading-relaxed font-medium break-keep">"{review.content}"</p>
             </div>
-            <div className="flex items-center gap-3 pt-4 border-t border-gray-50">
-              <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden">
-                <img src={review.user_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${review.user_id}`} alt="" />
-              </div>
-              <div>
-                <p className="text-sm font-black text-gray-900">{review.user_name || '익명 수강생'}</p>
-                <p className="text-[10px] font-bold text-gray-400">
-                  {review.created_at ? new Date(review.created_at).toLocaleDateString() : ''}
-                </p>
-              </div>
-            </div>
-          </div>
-        ))
+          );
+        })
       )}
     </div>
   );

@@ -43,6 +43,7 @@ import { Course } from '@/types';
 interface StudentEnrollment {
   id: string;
   created_at: string;
+  expires_at?: string | null;
   course_id: string;
   user_id: string;
   profile: {
@@ -115,6 +116,7 @@ export default function AdminStudentManagement() {
         .select(`
           id,
           created_at,
+          expires_at,
           course_id,
           user_id,
           profiles (
@@ -142,6 +144,7 @@ export default function AdminStudentManagement() {
       const mappedEnrollments: StudentEnrollment[] = (enrollmentsData || []).map((e: any) => ({
         id: e.id,
         created_at: e.created_at,
+        expires_at: e.expires_at || null,
         course_id: e.course_id,
         user_id: e.user_id,
         profile: e.profiles ? {
@@ -238,6 +241,7 @@ export default function AdminStudentManagement() {
         '이메일주소': item.profile?.email || '-',
         '휴대폰번호': getPhoneNumber(item.profile),
         '수강 등록일': formatDate(item.created_at),
+        '수강 만료일': item.expires_at ? formatDate(item.expires_at) : (item.course?.end_date ? formatDate(item.course.end_date) : '제한 없음'),
         '강의명': item.course?.title || '-'
       }));
 
@@ -251,6 +255,7 @@ export default function AdminStudentManagement() {
         { wch: 25 }, // 이메일주소
         { wch: 18 }, // 휴대폰번호
         { wch: 15 }, // 수강 등록일
+        { wch: 15 }, // 수강 만료일
         { wch: 35 }  // 강의명
       ];
       worksheet['!cols'] = max_widths;
@@ -702,62 +707,73 @@ export default function AdminStudentManagement() {
               <p className="text-slate-400 text-xs font-bold mt-1">새로운 수강 결제나 수강 등록 내역이 수집될 때까지 대기하세요.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto lg:overflow-x-visible">
-              <table className="w-full border-collapse min-w-[700px] lg:min-w-0 table-auto">
+            <div className="w-full overflow-hidden">
+              <table className="w-full border-collapse table-fixed">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/50">
-                    <th className="py-3.5 px-4 text-center text-xs font-black text-slate-500 uppercase tracking-wider w-16">No</th>
-                    <th className="py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider w-24">이름</th>
-                    <th className="py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider w-28">닉네임</th>
-                    <th className="py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider">이메일주소</th>
-                    <th className="py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider w-36">휴대폰번호</th>
-                    <th className="py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider w-32">수강 등록일</th>
+                    <th className={`py-3.5 px-4 text-center text-xs font-black text-slate-500 uppercase tracking-wider ${selectedCourseId === 'all' ? 'w-[6%]' : 'w-[8%]'}`}>No</th>
+                    <th className={`py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider ${selectedCourseId === 'all' ? 'w-[11%]' : 'w-[13%]'}`}>이름</th>
+                    <th className={`py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider ${selectedCourseId === 'all' ? 'w-[13%]' : 'w-[15%]'}`}>닉네임</th>
+                    <th className={`py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider ${selectedCourseId === 'all' ? 'w-[28%]' : 'w-[32%]'}`}>연락처 (이메일/연락처)</th>
+                    <th className={`py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider w-[24%]`}>수강 기간 (등록일/만료일)</th>
                     {selectedCourseId === 'all' && (
-                      <th className="py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider">등록된 강의명</th>
+                      <th className="py-3.5 px-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider w-[18%]">등록된 강의명</th>
                     )}
                     {selectedCourseId !== 'all' && (
-                      <th className="py-3.5 px-3 text-center text-xs font-black text-slate-500 uppercase tracking-wider w-28">출석 여부</th>
+                      <th className="py-3.5 px-3 text-center text-xs font-black text-slate-500 uppercase tracking-wider w-[8%]">출석 여부</th>
                     )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredEnrollments.map((item, index) => (
-                    <tr key={item.id} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="py-3.5 px-4 text-center text-sm font-bold text-slate-400">
-                        {filteredEnrollments.length - index}
-                      </td>
-                      <td className="py-3.5 px-3 text-sm font-extrabold text-slate-900 truncate max-w-[100px]" title={item.profile?.name || ''}>
-                        {item.profile?.name || '이름 없음'}
-                      </td>
-                      <td className="py-3.5 px-3 text-sm font-semibold text-slate-600 truncate max-w-[120px]" title={item.profile?.nickname || ''}>
-                        {item.profile?.nickname || '닉네임 없음'}
-                      </td>
-                      <td className="py-3.5 px-3 text-sm font-medium text-slate-500 truncate max-w-[200px]" title={item.profile?.email || ''}>
-                        {item.profile?.email || '-'}
-                      </td>
-                      <td className="py-3.5 px-3 text-sm font-mono font-bold text-slate-600 whitespace-nowrap">
-                        {getPhoneNumber(item.profile)}
-                      </td>
-                      <td className="py-3.5 px-3 text-sm font-semibold text-slate-500 whitespace-nowrap">
-                        <span className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          {formatDate(item.created_at)}
-                        </span>
-                      </td>
-                      {selectedCourseId === 'all' && (
-                        <td className="py-3.5 px-3 text-sm font-bold text-slate-800">
-                          <Badge variant="outline" className="font-semibold text-xs border-purple-100 bg-purple-50/30 text-purple-700 px-2.5 py-1 rounded-md line-clamp-1 max-w-[180px]" title={item.course?.title || ''}>
-                            {item.course?.title || '알 수 없음'}
-                          </Badge>
+                  {filteredEnrollments.map((item, index) => {
+                    const expireDate = item.expires_at || item.course?.end_date;
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/40 transition-colors">
+                        <td className="py-3.5 px-4 text-center text-sm font-bold text-slate-400 truncate">
+                          {filteredEnrollments.length - index}
                         </td>
-                      )}
-                      {selectedCourseId !== 'all' && (
-                        <td className="py-3.5 px-3 text-center text-sm">
-                          {getAttendanceBadge(item.user_id)}
+                        <td className="py-3.5 px-3 text-sm font-extrabold text-slate-900 truncate" title={item.profile?.name || ''}>
+                          {item.profile?.name || '이름 없음'}
                         </td>
-                      )}
-                    </tr>
-                  ))}
+                        <td className="py-3.5 px-3 text-sm font-semibold text-slate-600 truncate" title={item.profile?.nickname || ''}>
+                          {item.profile?.nickname || '닉네임 없음'}
+                        </td>
+                        <td className="py-3.5 px-3 text-sm truncate">
+                          <div className="font-semibold text-slate-900 truncate" title={item.profile?.email || ''}>
+                            {item.profile?.email || '-'}
+                          </div>
+                          <div className="font-mono text-xs text-slate-400 mt-0.5 truncate" title={getPhoneNumber(item.profile)}>
+                            {getPhoneNumber(item.profile)}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-3 text-sm truncate">
+                          <div className="flex items-center gap-1.5 font-bold text-slate-700 truncate" title={`등록일: ${formatDate(item.created_at)}`}>
+                            <Calendar className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                            <span className="truncate">{formatDate(item.created_at)}</span>
+                          </div>
+                          <div className="text-xs mt-0.5 pl-5 truncate" title={expireDate ? `만료일: ${formatDate(expireDate)}` : '만료일 없음'}>
+                            {expireDate ? (
+                              <span className="font-semibold text-rose-600">~ {formatDate(expireDate)}</span>
+                            ) : (
+                              <span className="text-slate-400 font-medium">제한 없음</span>
+                            )}
+                          </div>
+                        </td>
+                        {selectedCourseId === 'all' && (
+                          <td className="py-3.5 px-3 text-sm font-bold text-slate-800 truncate">
+                            <Badge variant="outline" className="font-semibold text-xs border-purple-100 bg-purple-50/30 text-purple-700 px-2 py-0.5 rounded-md truncate max-w-full inline-block text-left" title={item.course?.title || ''}>
+                              {item.course?.title || '알 수 없음'}
+                            </Badge>
+                          </td>
+                        )}
+                        {selectedCourseId !== 'all' && (
+                          <td className="py-3.5 px-3 text-center text-sm truncate">
+                            {getAttendanceBadge(item.user_id)}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -11,7 +11,9 @@ import {
   ChevronRight,
   User,
   Star,
-  Send
+  Send,
+  Trash2,
+  Edit2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { courseService } from '@/services/courseService';
@@ -49,6 +51,12 @@ export default function LearningPlayer() {
   const [rating, setRating] = useState(5);
   const [reviewContent, setReviewContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Review edit states
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+  const [editReviewContent, setEditReviewContent] = useState('');
+  const [editReviewRating, setEditReviewRating] = useState(5);
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
   // Vimeo tracking player refs
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -362,7 +370,7 @@ export default function LearningPlayer() {
         course_id: id,
         course_title: course?.title,
         user_id: user.id,
-        user_name: user.name,
+        user_name: user.nickname || user.name,
         user_avatar: user.avatar_url || undefined,
         content: reviewContent,
         rating: rating,
@@ -379,6 +387,42 @@ export default function LearningPlayer() {
        toast.error('후기 등록에 실패했습니다.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSaveReviewEdit = async (reviewId: string) => {
+    if (!editReviewContent.trim()) {
+      toast.error('후기 내용을 입력해주세요.');
+      return;
+    }
+    try {
+      setIsSubmittingEdit(true);
+      await reviewService.updateReview(reviewId, {
+        content: editReviewContent,
+        rating: editReviewRating
+      });
+      toast.success('수강후기가 수정되었습니다.');
+      setEditingReviewId(null);
+      fetchReviews();
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || '수강후기 수정에 실패했습니다.');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  const handleDeleteReview = async (reviewId: string) => {
+    if (!window.confirm('정말로 이 수강후기를 삭제하시겠습니까?')) {
+      return;
+    }
+    try {
+      await reviewService.deleteReview(reviewId);
+      toast.success('수강후기가 삭제되었습니다.');
+      fetchReviews();
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || '수강후기 삭제에 실패했습니다.');
     }
   };
 
@@ -629,33 +673,113 @@ export default function LearningPlayer() {
 
                      <div className="space-y-3 md:space-y-4">
                         {reviews.length > 0 ? (
-                           reviews.map((review, idx) => (
-                              <motion.div 
-                                key={review.id || `review-${idx}`}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: idx * 0.05 }}
-                                className="bg-gray-900/50 border border-gray-800 p-4 md:p-6 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4 text-left"
-                              >
-                                 <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 md:gap-3">
-                                       <img src={review.user_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${review.user_id}`} alt="" className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-gray-800" />
-                                       <div>
-                                          <p className="text-white text-xs md:text-sm font-bold">{review.user_name}</p>
-                                          <p className="text-gray-500 text-[9px] md:text-[10px]">{review.created_at ? new Date(review.created_at).toLocaleDateString() : '방금 전'}</p>
-                                       </div>
-                                    </div>
-                                    <div className="flex items-center gap-0.5">
-                                       {[...Array(5)].map((_, i) => (
-                                          <Star key={i} className={`w-3 h-3 ${i < review.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-800'}`} />
-                                       ))}
-                                    </div>
-                                 </div>
-                                 <p className="text-gray-300 text-xs md:text-sm leading-relaxed break-keep">
-                                    {review.content}
-                                 </p>
-                              </motion.div>
-                           ))
+                           reviews.map((review, idx) => {
+                              const isOwner = user && user.id === review.user_id;
+                              const isAdmin = user && (user.role === 'admin' || user.role === 'super_admin');
+                              const isEditing = editingReviewId === review.id;
+
+                              return (
+                                <motion.div 
+                                  key={review.id || `review-${idx}`}
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ delay: idx * 0.05 }}
+                                  className="relative bg-gray-900/50 border border-gray-800 p-4 md:p-6 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4 text-left group"
+                                >
+                                   {isEditing ? (
+                                      <div className="space-y-3 w-full">
+                                         <div className="flex items-center gap-1 text-yellow-400">
+                                            {[1, 2, 3, 4, 5].map((s) => (
+                                               <Star 
+                                                 key={s} 
+                                                 onClick={() => setEditReviewRating(s)}
+                                                 className={`w-5 h-5 cursor-pointer transition-all ${s <= editReviewRating ? 'fill-yellow-500 text-yellow-500' : 'text-gray-700'}`} 
+                                               />
+                                            ))}
+                                         </div>
+                                         <textarea 
+                                            value={editReviewContent}
+                                            onChange={(e) => setEditReviewContent(e.target.value)}
+                                            className="w-full bg-gray-800 border border-gray-700 rounded-xl p-3 text-white focus:outline-none focus:border-purple-500 transition-all text-sm min-h-[80px]"
+                                         />
+                                         <div className="flex justify-end gap-2">
+                                            <Button 
+                                              onClick={() => setEditingReviewId(null)} 
+                                              variant="outline" 
+                                              size="sm" 
+                                              className="border-gray-700 hover:bg-gray-800 text-gray-300 rounded-xl text-xs font-bold h-8"
+                                            >
+                                               취소
+                                            </Button>
+                                            <Button 
+                                              onClick={() => handleSaveReviewEdit(review.id)} 
+                                              size="sm" 
+                                              disabled={isSubmittingEdit}
+                                              className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold h-8"
+                                            >
+                                               {isSubmittingEdit ? '저장 중...' : '저장'}
+                                            </Button>
+                                         </div>
+                                      </div>
+                                   ) : (
+                                      <>
+                                         <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2 md:gap-3">
+                                               <img src={review.user_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${review.user_id}`} alt="" className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-gray-800" />
+                                               <div>
+                                                  <div className="flex items-center gap-1.5">
+                                                     <p className="text-white text-xs md:text-sm font-bold">{review.user_name}</p>
+                                                     {isOwner && (
+                                                        <span className="text-[10px] text-purple-400 bg-purple-950/40 border border-purple-900/50 px-1.5 py-0 rounded font-bold">내 후기</span>
+                                                     )}
+                                                  </div>
+                                                  <p className="text-gray-500 text-[9px] md:text-[10px]">{review.created_at ? new Date(review.created_at).toLocaleDateString() : '방금 전'}</p>
+                                               </div>
+                                            </div>
+                                            <div className="flex items-center gap-0.5">
+                                               {[...Array(5)].map((_, i) => (
+                                                  <Star key={i} className={`w-3 h-3 ${i < review.rating ? 'text-yellow-500 fill-yellow-500' : 'text-gray-800'}`} />
+                                               ))}
+                                            </div>
+                                         </div>
+                                         <p className="text-gray-300 text-xs md:text-sm leading-relaxed break-keep">
+                                            {review.content}
+                                         </p>
+
+                                         {/* 별도 섹션: 수정 및 삭제 버튼 */}
+                                         {(isOwner || isAdmin) && (
+                                            <div className="flex items-center gap-2 pt-2 border-t border-dashed border-gray-800">
+                                               {isOwner && (
+                                                  <button 
+                                                    onClick={() => {
+                                                       setEditingReviewId(review.id);
+                                                       setEditReviewContent(review.content);
+                                                       setEditReviewRating(review.rating);
+                                                    }}
+                                                    className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 font-bold bg-purple-950/40 hover:bg-purple-900/50 px-2.5 py-1.5 rounded-xl transition-all shadow-sm"
+                                                    title="수정"
+                                                  >
+                                                     <Edit2 className="w-3 h-3" />
+                                                     수정
+                                                  </button>
+                                               )}
+                                               {(isOwner || isAdmin) && (
+                                                  <button 
+                                                    onClick={() => handleDeleteReview(review.id)}
+                                                    className="flex items-center gap-1.5 text-xs text-rose-400 hover:text-rose-300 font-bold bg-rose-950/40 hover:bg-rose-900/50 px-2.5 py-1.5 rounded-xl transition-all shadow-sm"
+                                                    title="삭제"
+                                                  >
+                                                     <Trash2 className="w-3 h-3" />
+                                                     삭제
+                                                  </button>
+                                               )}
+                                            </div>
+                                         )}
+                                      </>
+                                   )}
+                                </motion.div>
+                              );
+                           })
                         ) : (
                            <div className="py-8 md:py-12 text-center bg-gray-900/30 rounded-2xl md:rounded-3xl border border-dashed border-gray-800">
                               <MessageSquare className="w-8 h-8 md:w-10 md:h-10 text-gray-800 mx-auto mb-3" />

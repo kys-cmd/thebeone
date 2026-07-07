@@ -15,6 +15,36 @@ export interface Review {
   created_at?: string;
 }
 
+async function mapNicknames(reviews: Review[]): Promise<Review[]> {
+  if (!reviews || reviews.length === 0) return reviews;
+  const userIds = Array.from(new Set(reviews.map(r => r.user_id).filter((id): id is string => !!id)));
+  if (userIds.length === 0) return reviews;
+
+  try {
+    const { data: profiles, error } = await supabase
+      .from('profiles')
+      .select('id, name, nickname, avatar_url')
+      .in('id', userIds);
+
+    if (profiles && !error) {
+      return reviews.map(r => {
+        const prof = profiles.find(p => p.id === r.user_id);
+        if (prof) {
+          return {
+            ...r,
+            user_name: prof.nickname || prof.name || r.user_name || '익명 수강생',
+            user_avatar: prof.avatar_url || r.user_avatar
+          };
+        }
+        return r;
+      });
+    }
+  } catch (err) {
+    console.error('Error matching nicknames in reviewService:', err);
+  }
+  return reviews;
+}
+
 export const reviewService = {
   async getReviewsByCourseId(courseId: string): Promise<Review[]> {
     const { data: remoteData, error } = await supabase
@@ -36,7 +66,7 @@ export const reviewService = {
       new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
     );
     
-    return combined;
+    return await mapNicknames(combined);
   },
 
   async getReviews(): Promise<Review[]> {
@@ -59,7 +89,7 @@ export const reviewService = {
       new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
     );
     
-    return combined;
+    return await mapNicknames(combined);
   },
 
   async getBestReviews(): Promise<Review[]> {
@@ -82,7 +112,7 @@ export const reviewService = {
       new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
     );
 
-    return combined;
+    return await mapNicknames(combined);
   },
 
   async toggleBestReview(id: string, isBest: boolean): Promise<void> {
@@ -184,6 +214,28 @@ export const reviewService = {
     if (error && localIndex === -1) {
       console.error('Error deleting review:', error);
       throw new Error('수강후기 삭제에 실패했습니다.');
+    }
+  },
+
+  async updateReview(id: string, updates: Partial<Review>): Promise<void> {
+    // 1. 로컬 스토리지 데이터 처리
+    const localData = JSON.parse(localStorage.getItem('offline_reviews') || '[]');
+    const localIndex = localData.findIndex((r: Review) => r.id === id);
+    
+    if (localIndex !== -1) {
+      localData[localIndex] = { ...localData[localIndex], ...updates };
+      localStorage.setItem('offline_reviews', JSON.stringify(localData));
+    }
+
+    // 2. 원격 DB 데이터 처리
+    const { error } = await supabase
+      .from('reviews')
+      .update(updates)
+      .eq('id', id);
+
+    if (error && localIndex === -1) {
+      console.error('Error updating review:', error);
+      throw new Error('수강후기 수정에 실패했습니다.');
     }
   },
 
