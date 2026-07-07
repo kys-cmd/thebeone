@@ -176,6 +176,8 @@ export const reviewService = {
       localStorage.setItem('offline_reviews', JSON.stringify(updatedLocalData));
     }
 
+    let apiSucceeded = false;
+
     try {
       const session = (await supabase.auth.getSession()).data.session;
       if (session) {
@@ -195,24 +197,18 @@ export const reviewService = {
         const contentType = response.headers.get("content-type");
         if (contentType && contentType.includes("application/json")) {
           result = await response.json();
-        } else {
-          const text = await response.text();
-          throw new Error(`서버 오류가 발생했습니다 (상태 코드: ${response.status}). ${text.slice(0, 100)}`);
         }
 
-        if (response.ok && result.status === 'success') {
-          return;
-        } else if (result && result.message) {
-          throw new Error(result.message);
+        if (response.ok && result && result.status === 'success') {
+          apiSucceeded = true;
+          return; // Server delete succeeded!
         } else {
-          throw new Error(`수강후기 삭제 실패 (상태 코드: ${response.status})`);
+          const errMsg = result?.message || `상태 코드: ${response.status}`;
+          console.warn(`서버 API를 통한 수강후기 삭제 실패 (${errMsg}). 직접 클라이언트 호출을 시도합니다.`);
         }
       }
     } catch (e: any) {
-      console.warn('Error deleting review through server API, trying direct client call:', e);
-      if (localIndex === -1 && !e.message?.includes('network')) {
-        throw e;
-      }
+      console.warn('서버 API 호출 중 오류 발생. 직접 클라이언트 호출을 시도합니다:', e);
     }
 
     // 2. 원격 DB 데이터 처리 (is_deleted 필드 업데이트)
@@ -223,8 +219,8 @@ export const reviewService = {
 
     // 로컬에서도 없고 DB에서도 에러가 나면 예외 처리
     if (error && localIndex === -1) {
-      console.error('Error deleting review:', error);
-      throw new Error('수강후기 삭제에 실패했습니다.');
+      console.error('Error deleting review directly:', error);
+      throw new Error(error.message || '수강후기 삭제 권한이 없거나 삭제에 실패했습니다.');
     }
   },
 

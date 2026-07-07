@@ -1464,7 +1464,8 @@ async function startServer() {
               return res.status(404).json({ status: "error", message: "존재하지 않거나 이미 삭제된 수강후기입니다." });
             }
 
-            if (review.user_id === requestingUser.id) {
+            console.log(`[admin-delete-review] Owner Check - Review ID: ${reviewId}, Review Owner: ${review.user_id}, Requester: ${requestingUser.id}`);
+            if (review.user_id && requestingUser.id && String(review.user_id).trim().toLowerCase() === String(requestingUser.id).trim().toLowerCase()) {
               canDelete = true;
             }
           }
