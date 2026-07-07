@@ -190,11 +190,22 @@ export const reviewService = {
             reviewId: id
           })
         });
-        const result = await response.json();
+
+        let result: any = null;
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          result = await response.json();
+        } else {
+          const text = await response.text();
+          throw new Error(`서버 오류가 발생했습니다 (상태 코드: ${response.status}). ${text.slice(0, 100)}`);
+        }
+
         if (response.ok && result.status === 'success') {
           return;
-        } else if (result.message) {
+        } else if (result && result.message) {
           throw new Error(result.message);
+        } else {
+          throw new Error(`수강후기 삭제 실패 (상태 코드: ${response.status})`);
         }
       }
     } catch (e: any) {

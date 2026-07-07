@@ -1430,57 +1430,66 @@ async function startServer() {
       }
 
       if (action === "admin-delete-review") {
-        const { reviewId } = req.body;
-        if (!reviewId) {
-          return res.status(400).json({ status: "error", message: "Missing target reviewId parameter." });
-        }
+        try {
+          const { reviewId } = req.body;
+          if (!reviewId) {
+            return res.status(400).json({ status: "error", message: "Missing target reviewId parameter." });
+          }
 
-        if (!requestingUser) {
-          return res.status(401).json({ status: "error", message: "수강후기 삭제를 위해서는 로그인이 필요합니다." });
-        }
+          if (!requestingUser) {
+            return res.status(401).json({ status: "error", message: "수강후기 삭제를 위해서는 로그인이 필요합니다." });
+          }
 
-        const callerIsAdmin = await isAdminCheck(requestingUser.id);
-        let canDelete = callerIsAdmin;
+          if (!supabaseAdmin) {
+            return res.status(500).json({ status: "error", message: "서버의 Supabase Admin 서비스가 구성되지 않았습니다." });
+          }
 
-        if (!canDelete) {
-          // Fetch review to check owner
-          const { data: review, error: fetchErr } = await supabaseAdmin
+          const callerIsAdmin = await isAdminCheck(requestingUser.id);
+          let canDelete = callerIsAdmin;
+
+          if (!canDelete) {
+            // Fetch review to check owner
+            const { data: review, error: fetchErr } = await supabaseAdmin
+              .from("reviews")
+              .select("user_id")
+              .eq("id", reviewId)
+              .maybeSingle();
+
+            if (fetchErr) {
+              console.error("Error fetching review for deletion check:", fetchErr);
+              return res.status(500).json({ status: "error", message: `수강후기 조회 오류: ${fetchErr.message}` });
+            }
+
+            if (!review) {
+              return res.status(404).json({ status: "error", message: "존재하지 않거나 이미 삭제된 수강후기입니다." });
+            }
+
+            if (review.user_id === requestingUser.id) {
+              canDelete = true;
+            }
+          }
+
+          if (!canDelete) {
+            return res.status(403).json({ status: "error", message: "수강후기 삭제 권한이 없습니다. 본인이 작성한 글이거나 관리자여야 합니다." });
+          }
+
+          const { data, error } = await supabaseAdmin
             .from("reviews")
-            .select("user_id")
+            .update({ is_deleted: true })
             .eq("id", reviewId)
+            .select()
             .maybeSingle();
 
-          if (fetchErr) {
-            console.error("Error fetching review for deletion check:", fetchErr);
-            return res.status(500).json({ status: "error", message: "수강후기 정보를 조회하는 중 오류가 발생했습니다." });
+          if (error) {
+            console.error("Error deleting review via server role:", error);
+            return res.status(500).json({ status: "error", message: `수강후기 삭제 DB 오류: ${error.message}` });
           }
 
-          if (!review) {
-            return res.status(404).json({ status: "error", message: "존재하지 않거나 이미 삭제된 수강후기입니다." });
-          }
-
-          if (review.user_id === requestingUser.id) {
-            canDelete = true;
-          }
+          return res.json({ status: "success", message: "수강후기가 성공적으로 즉각 영구(소프트) 삭제 처리되었습니다." });
+        } catch (err: any) {
+          console.error("Critical error in admin-delete-review action:", err);
+          return res.status(500).json({ status: "error", message: `서버 내부 오류: ${err.message || err}` });
         }
-
-        if (!canDelete) {
-          return res.status(403).json({ status: "error", message: "수강후기 삭제 권한이 없습니다. 본인이 작성한 글이거나 관리자여야 합니다." });
-        }
-
-        const { data, error } = await supabaseAdmin
-          .from("reviews")
-          .update({ is_deleted: true })
-          .eq("id", reviewId)
-          .select()
-          .maybeSingle();
-
-        if (error) {
-          console.error("Error deleting review via server role:", error);
-          return res.status(500).json({ status: "error", message: error.message });
-        }
-
-        return res.json({ status: "success", message: "수강후기가 성공적으로 즉각 영구(소프트) 삭제 처리되었습니다." });
       }
 
       // Rest of the admin actions require user to be an admin
