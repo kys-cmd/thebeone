@@ -902,17 +902,19 @@ export default function AdminUserManagement() {
                     </CardHeader>
                     <CardContent className="p-8 space-y-6">
                       {isActivityEditing && (
-                        <div className="flex gap-3 bg-white p-3 rounded-2xl border border-dashed border-gray-300 shadow-sm">
-                          <Select value={tempCourseToAdd} onValueChange={setTempCourseToAdd}>
-                            <SelectTrigger className="border-none shadow-none focus:ring-0 flex-1">
-                              <SelectValue placeholder="강의 선택..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableCourses.filter(c => !editFormData.courses.includes(c.title)).map((course) => (
-                                <SelectItem key={course.id} value={course.title}>{course.title}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                        <div className="flex gap-3 bg-white p-3 rounded-2xl border border-dashed border-gray-300 shadow-sm items-center">
+                          <div className="flex-1 min-w-0">
+                            <Select value={tempCourseToAdd} onValueChange={setTempCourseToAdd}>
+                              <SelectTrigger className="border-none shadow-none focus:ring-0 w-full min-w-0 overflow-hidden text-left bg-transparent">
+                                <SelectValue placeholder="강의 선택..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableCourses.filter(c => !editFormData.courses.includes(c.title)).map((course) => (
+                                  <SelectItem key={course.id} value={course.title}>{course.title}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                           <Button className="shrink-0 bg-blue-600" onClick={handleAddCourseToUser}>추가하기</Button>
                         </div>
                       )}
@@ -951,17 +953,19 @@ export default function AdminUserManagement() {
                     </CardHeader>
                     <CardContent className="p-8 space-y-6">
                       {isActivityEditing && (
-                        <div className="flex gap-3 bg-white p-3 rounded-2xl border border-dashed border-gray-300 shadow-sm">
-                          <Select value={tempCommunityToAdd} onValueChange={setTempCommunityToAdd}>
-                            <SelectTrigger className="border-none shadow-none focus:ring-0 flex-1">
-                              <SelectValue placeholder="커뮤니티 선택..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableCommunities.filter(c => !editFormData.communities.includes(c.title)).map((comm) => (
-                                <SelectItem key={comm.id} value={comm.title}>{comm.title}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                        <div className="flex gap-3 bg-white p-3 rounded-2xl border border-dashed border-gray-300 shadow-sm items-center">
+                          <div className="flex-1 min-w-0">
+                            <Select value={tempCommunityToAdd} onValueChange={setTempCommunityToAdd}>
+                              <SelectTrigger className="border-none shadow-none focus:ring-0 w-full min-w-0 overflow-hidden text-left bg-transparent">
+                                <SelectValue placeholder="커뮤니티 선택..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableCommunities.filter(c => !editFormData.communities.includes(c.title)).map((comm) => (
+                                  <SelectItem key={comm.id} value={comm.title}>{comm.title}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                           <Button className="shrink-0 bg-blue-600" onClick={handleAddCommunityToUser}>가입하기</Button>
                         </div>
                       )}
