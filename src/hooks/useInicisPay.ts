@@ -163,15 +163,24 @@ export function useInicisPay() {
       if (isMobile) {
         form.action = "https://mobile.inicis.com/smart/payment/";
         form.target = "_top"; // Break out of developer preview iframes to prevent browser deep-link blocks
-        
+
+        // [한글깨짐 방지] 이니시스 모바일 모듈은 요청 데이터를 EUC-KR로 해석하므로 (이니시스 공식 FAQ),
+        // UTF-8 페이지에서는 폼 전송 인코딩을 euc-kr로 지정해야 P_GOODS/P_UNAME 한글이 깨지지 않습니다.
+        // P_CHARSET=utf8 은 "인증 응답" 인코딩 지정용이므로 그대로 유지합니다.
+        form.acceptCharset = "euc-kr";
+        form.setAttribute("accept-charset", "euc-kr");
+
+        // EUC-KR로 표현할 수 없는 문자(이모지 등 서로게이트 페어)는 전송 시 깨지므로 사전에 제거
+        const toEucKrSafe = (s: string) => s.replace(/[\uD800-\uDFFF]/g, "").trim();
+
         const cleanPhone = (params.userPhone || "010-0000-0000").replace(/[^0-9]/g, "");
         const mobileFields: Record<string, string> = {
           P_INI_PAYMENT: "CARD",
           P_MID: mid,
           P_OID: oid,
           P_AMT: params.price.toString(),
-          P_GOODS: params.courseName,
-          P_UNAME: params.userName || "구매자",
+          P_GOODS: toEucKrSafe(params.courseName) || "온라인 강좌",
+          P_UNAME: toEucKrSafe(params.userName || "") || "구매자",
           P_MOBILE: cleanPhone,
           P_EMAIL: params.userEmail || "user@example.com",
           P_NEXT_URL: returnUrl,

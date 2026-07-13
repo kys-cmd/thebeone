@@ -1216,7 +1216,8 @@ export const handler: Handler = async (event, context) => {
           const apiResponse = await fetch(cancelUrl, {
             method: "POST",
             headers: {
-              "Content-Type": "application/x-www-form-urlencoded"
+              // INIAPI 규격상 charset=utf-8 명시 필수 — 미명시 시 msg(취소사유) 한글이 이니시스 측에서 깨짐
+              "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"
             },
             body: requestParams.toString()
           });
