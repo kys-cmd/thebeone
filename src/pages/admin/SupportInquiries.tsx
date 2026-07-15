@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cmsService } from '@/services/cmsService';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -952,41 +953,33 @@ export default function SupportInquiries() {
         )}
       </Tabs>
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirmId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setDeleteConfirmId(null)} />
-          
-          <Card className="relative w-full max-w-md border border-slate-200 bg-white p-6 shadow-2xl rounded-3xl text-center">
-            <div className="pt-4 flex flex-col items-center">
-              <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4 animate-pulse">
-                <Trash2 className="w-8 h-8" />
-              </div>
-              <h3 className="text-xl font-black text-slate-900">정말로 삭제하시겠습니까?</h3>
-              <p className="text-sm font-semibold text-slate-500 mt-2">
-                이 작업은 되돌릴 수 없습니다. 삭제 후 화면에서 영구적으로 숨겨집니다.
-              </p>
-            </div>
-            <div className="flex items-center justify-center gap-3 mt-6">
-              <Button
-                variant="outline"
-                className="w-full h-12 rounded-2xl font-bold border-slate-200 hover:bg-slate-50"
-                onClick={() => setDeleteConfirmId(null)}
-                disabled={loading}
-              >
-                취소
-              </Button>
-              <Button
-                className="w-full h-12 rounded-2xl font-black bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-100"
-                onClick={executeDelete}
-                disabled={loading}
-              >
-                {loading ? '삭제 중...' : '확인 및 삭제'}
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirmId} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}>
+        <DialogContent className="sm:max-w-xs rounded-2xl p-6 bg-white" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black text-slate-900 text-center">
+              삭제하시겠습니까?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="flex-1 h-11 rounded-xl font-bold border-slate-200 hover:bg-slate-50"
+              onClick={() => setDeleteConfirmId(null)}
+              disabled={loading}
+            >
+              취소
+            </Button>
+            <Button
+              className="flex-1 h-11 rounded-xl font-black bg-red-600 hover:bg-red-700 text-white"
+              onClick={executeDelete}
+              disabled={loading}
+            >
+              {loading ? '삭제 중...' : '삭제'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
