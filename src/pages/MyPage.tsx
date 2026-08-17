@@ -52,7 +52,7 @@ import { profileService } from '@/services/profileService';
 import { authService } from '@/services/authService';
 import { Course } from '@/types';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
 const isExpiredCourse = (course: Course) => {
@@ -64,6 +64,47 @@ const isExpiredCourse = (course: Course) => {
     return new Date(course.end_date) <= now;
   }
   return false;
+};
+
+type CourseViewType = 'card' | 'list';
+type CourseStatusFilter = 'all' | 'active';
+
+const VIEW_TYPE_STORAGE_KEY = 'mypage:courseViewType';
+const STATUS_FILTER_STORAGE_KEY = 'mypage:courseStatusFilter';
+
+// 헤더의 '내 강의실' 링크는 /mypage?tab=classroom 으로 들어온다.
+const QUERY_TO_MENU: Record<string, string> = {
+  classroom: 'courses',
+  courses: 'courses',
+  dashboard: 'dashboard',
+  payments: 'payments',
+  settings: 'settings',
+};
+
+const MENU_TO_QUERY: Record<string, string> = {
+  courses: 'classroom',
+  dashboard: 'dashboard',
+  payments: 'payments',
+  settings: 'settings',
+};
+
+const readStoredValue = <T extends string>(key: string, allowed: readonly T[], fallback: T): T => {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const stored = window.localStorage.getItem(key) as T | null;
+    return stored && allowed.includes(stored) ? stored : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const writeStoredValue = (key: string, value: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // 저장 공간이 막혀 있어도 화면 동작에는 영향을 주지 않는다.
+  }
 };
 
 const renderStudyPeriod = (course: Course) => {
@@ -143,8 +184,9 @@ const MOCK_STATS = [
 
 export default function MyPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, provider, setUser } = useAuthStore();
-  const [activeMenu, setActiveMenu] = useState('dashboard');
+  const [activeMenu, setActiveMenu] = useState(() => QUERY_TO_MENU[searchParams.get('tab') || ''] || 'dashboard');
   const [myCourses, setMyCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
@@ -152,7 +194,30 @@ export default function MyPage() {
   const [reviewContent, setReviewContent] = useState('');
   const [reviewRating, setReviewRating] = useState(5);
   const [submittingReview, setSubmittingReview] = useState(false);
-  const [viewType, setViewType] = useState<'card' | 'list'>('card');
+  const [viewType, setViewType] = useState<CourseViewType>(() =>
+    readStoredValue(VIEW_TYPE_STORAGE_KEY, ['card', 'list'] as const, 'card')
+  );
+  const [statusFilter, setStatusFilter] = useState<CourseStatusFilter>(() =>
+    readStoredValue(STATUS_FILTER_STORAGE_KEY, ['all', 'active'] as const, 'all')
+  );
+
+  const handleViewTypeChange = (next: CourseViewType) => {
+    setViewType(next);
+    writeStoredValue(VIEW_TYPE_STORAGE_KEY, next);
+  };
+
+  const handleStatusFilterChange = (next: CourseStatusFilter) => {
+    setStatusFilter(next);
+    writeStoredValue(STATUS_FILTER_STORAGE_KEY, next);
+  };
+
+  // '수강 중' = 수강 기간이 만료되지 않은 강의
+  const activeCourses = React.useMemo(() => myCourses.filter((c) => !isExpiredCourse(c)), [myCourses]);
+  const filteredCourses = statusFilter === 'active' ? activeCourses : myCourses;
+  const statusFilterOptions: { id: CourseStatusFilter; label: string; count: number }[] = [
+    { id: 'all', label: '전체', count: myCourses.length },
+    { id: 'active', label: '수강 중', count: activeCourses.length },
+  ];
 
   // Controlled fields for settings form
   const [name, setName] = useState('');
@@ -182,12 +247,25 @@ export default function MyPage() {
     }
   }, [isIncomplete]);
 
+  // 헤더의 '내 강의실' 링크(?tab=classroom)로 들어오면 해당 탭을 열어준다.
+  React.useEffect(() => {
+    if (isIncomplete) return;
+    const mapped = QUERY_TO_MENU[searchParams.get('tab') || ''];
+    if (mapped) {
+      setActiveMenu(mapped);
+    }
+  }, [searchParams, isIncomplete]);
+
   const handleMenuClick = (menuId: string) => {
     if (isIncomplete) {
       toast.error('필수 회원정보를 모두 입력하고 저장하셔야 다른 메뉴를 이용하실 수 있습니다.');
       return;
     }
     setActiveMenu(menuId);
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('tab', MENU_TO_QUERY[menuId] || menuId);
+    setSearchParams(nextParams, { replace: true });
   };
 
   const formatPhoneNumber = (value: string) => {
@@ -611,14 +689,17 @@ export default function MyPage() {
                       <h3 className="text-2xl font-black tracking-tighter text-gray-900">구독 중인 내 강의</h3>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                      <Badge className="bg-purple-100 text-purple-600 border-none px-4 py-1.5 font-black text-xs font-sans">총 {myCourses.length}개</Badge>
+                      <Badge className="bg-purple-100 text-purple-600 border-none px-4 py-1.5 font-black text-xs font-sans">총 {filteredCourses.length}개</Badge>
                       <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
                         <button
-                          onClick={() => setViewType('card')}
+                          type="button"
+                          onClick={() => handleViewTypeChange('card')}
+                          aria-pressed={viewType === 'card'}
+                          aria-label="카드형 보기"
                           className={cn(
                             "p-2 rounded-lg transition-all",
-                            viewType === 'card' 
-                              ? "bg-white text-purple-600 shadow-xs" 
+                            viewType === 'card'
+                              ? "bg-white text-purple-600 shadow-xs"
                               : "text-slate-500 hover:text-slate-800"
                           )}
                           title="카드형 보기"
@@ -626,11 +707,14 @@ export default function MyPage() {
                           <LayoutGrid className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => setViewType('list')}
+                          type="button"
+                          onClick={() => handleViewTypeChange('list')}
+                          aria-pressed={viewType === 'list'}
+                          aria-label="리스트형 보기"
                           className={cn(
                             "p-2 rounded-lg transition-all",
-                            viewType === 'list' 
-                              ? "bg-white text-purple-600 shadow-xs" 
+                            viewType === 'list'
+                              ? "bg-white text-purple-600 shadow-xs"
                               : "text-slate-500 hover:text-slate-800"
                           )}
                           title="리스트형 보기"
@@ -641,25 +725,82 @@ export default function MyPage() {
                     </div>
                   </div>
 
+                  {/* 수강 상태 불릿 필터 */}
+                  <div
+                    role="radiogroup"
+                    aria-label="수강 상태 필터"
+                    className="flex items-center gap-1 flex-wrap bg-white p-1.5 rounded-2xl border border-slate-100 shadow-xs w-fit"
+                  >
+                    {statusFilterOptions.map((option) => {
+                      const isSelected = statusFilter === option.id;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={isSelected}
+                          onClick={() => handleStatusFilterChange(option.id)}
+                          className={cn(
+                            "flex items-center gap-2 pl-3 pr-4 py-2 rounded-xl font-black text-sm font-sans transition-all",
+                            isSelected
+                              ? "bg-purple-50 text-purple-600"
+                              : "text-slate-400 hover:text-slate-700 hover:bg-slate-50"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                              isSelected ? "border-purple-600" : "border-slate-300"
+                            )}
+                          >
+                            {isSelected && <span className="w-2 h-2 rounded-full bg-purple-600" />}
+                          </span>
+                          <span>{option.label}</span>
+                          <span className={cn("text-xs", isSelected ? "text-purple-400" : "text-slate-300")}>
+                            {option.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
                   <div className={viewType === 'card' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" : "flex flex-col gap-6"}>
                     {loading ? (
                       <div className="col-span-full text-center py-20 text-gray-400 font-bold">강의 정보를 불러오고 있습니다...</div>
-                    ) : myCourses.length === 0 ? (
+                    ) : filteredCourses.length === 0 ? (
                       <div className="col-span-full bg-white p-20 rounded-[40px] text-center border-2 border-dashed border-gray-100 space-y-6">
                         <BookOpen className="w-16 h-16 text-gray-200 mx-auto" />
-                        <div>
-                          <p className="text-xl font-black text-gray-900">아직 수강 중인 강의가 없습니다.</p>
-                          <p className="text-gray-400 font-bold mt-1">비원아카데미의 프리미엄 강의들을 만나보세요!</p>
-                        </div>
-                        <Button 
-                          className="bg-purple-600 hover:bg-purple-700 text-white font-black px-8 h-14 rounded-2xl"
-                          onClick={() => navigate('/courses')}
-                        >
-                          강의 둘러보기
-                        </Button>
+                        {statusFilter === 'active' && myCourses.length > 0 ? (
+                          <>
+                            <div>
+                              <p className="text-xl font-black text-gray-900">현재 수강 중인 강의가 없습니다.</p>
+                              <p className="text-gray-400 font-bold mt-1">수강 기간이 만료된 강의는 '전체'에서 확인하실 수 있습니다.</p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              className="border-gray-100 text-gray-700 font-black px-8 h-14 rounded-2xl hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200"
+                              onClick={() => handleStatusFilterChange('all')}
+                            >
+                              전체 강의 보기
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <div>
+                              <p className="text-xl font-black text-gray-900">아직 수강 중인 강의가 없습니다.</p>
+                              <p className="text-gray-400 font-bold mt-1">비원아카데미의 프리미엄 강의들을 만나보세요!</p>
+                            </div>
+                            <Button
+                              className="bg-purple-600 hover:bg-purple-700 text-white font-black px-8 h-14 rounded-2xl"
+                              onClick={() => navigate('/courses')}
+                            >
+                              강의 둘러보기
+                            </Button>
+                          </>
+                        )}
                       </div>
                     ) : (
-                      myCourses.map((course) => {
+                      filteredCourses.map((course) => {
                         const isExpired = isExpiredCourse(course);
                         
                         if (viewType === 'list') {
