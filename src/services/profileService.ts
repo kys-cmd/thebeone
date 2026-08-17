@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { Profile } from '@/types';
+import { DUPLICATE_PHONE_MESSAGE } from '@/lib/profile';
+import { isDuplicatePhoneError } from '@/services/authService';
 
 export const profileService = {
   async getAllProfiles() {
@@ -34,6 +36,10 @@ export const profileService = {
     
     if (error) {
       console.error('Database Profile Update Error:', error);
+      // 휴대폰 번호 고유 인덱스 위반은 사용자가 이해할 수 있는 문구로 바꿔서 전달한다.
+      if (isDuplicatePhoneError(error)) {
+        throw new Error(DUPLICATE_PHONE_MESSAGE);
+      }
       throw error;
     }
 

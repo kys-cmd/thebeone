@@ -9,12 +9,16 @@ import { LogIn, UserPlus, ArrowRight, Mail, Key, ShieldCheck, ArrowLeft, User, P
 import { authService } from '@/services/authService';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/useAuthStore';
+import { PROFILE_COMPLETION_PATH, isProfileIncomplete } from '@/lib/profile';
 import { toast } from 'sonner';
 
 export default function Login() {
   const navigate = useNavigate();
   const { setUser } = useAuthStore();
-  const [mode, setMode] = useState<'login' | 'forgot' | 'findId'>('login');
+  // 회원가입 화면의 '아이디 찾기로 이동' 링크(?mode=findId)를 지원한다.
+  const [mode, setMode] = useState<'login' | 'forgot' | 'findId'>(
+    () => (new URLSearchParams(window.location.search).get('mode') === 'findId' ? 'findId' : 'login')
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [forgotEmail, setForgotEmail] = useState('');
@@ -84,10 +88,10 @@ export default function Login() {
           const profile = await authService.getCurrentProfile();
           if (profile) {
             setUser(profile, provider);
-            const isGoogleUser = provider === 'google';
-            const isIncomplete = isGoogleUser && (!profile.name || !profile.nickname || !(profile.mobile_phone || profile.phone) || !profile.gender || !profile.birthdate);
-            if (isIncomplete) {
-              navigate('/mypage');
+            // 구글 간편가입 회원은 기본정보를 모두 저장해야 가입이 최종 완료된다.
+            if (isProfileIncomplete(profile, provider)) {
+              toast.info('가입을 완료하려면 내 정보에서 기본정보를 입력해 주세요.');
+              navigate(PROFILE_COMPLETION_PATH);
             } else if (inviteParam) {
               navigate(`/community?invite=${inviteParam}`);
             } else if (profile.role === 'admin' || profile.role === 'super_admin') {

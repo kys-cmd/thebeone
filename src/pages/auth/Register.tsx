@@ -8,6 +8,13 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ChevronRight, Info } from 'lucide-react';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
+import {
+  DUPLICATE_PHONE_MESSAGE,
+  PROFILE_COMPLETION_PATH,
+  formatPhoneNumber,
+  isProfileIncomplete,
+  isValidMobilePhone,
+} from '@/lib/profile';
 import { toast } from 'sonner';
 
 export default function Register() {
@@ -15,6 +22,7 @@ export default function Register() {
   const { setUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [oauthErrorDetail, setOauthErrorDetail] = useState<string | null>(null);
+  const [duplicatePhone, setDuplicatePhone] = useState(false);
   
   const inviteParam = new URLSearchParams(window.location.search).get('invite');
   const [formData, setFormData] = useState({
@@ -42,10 +50,16 @@ export default function Register() {
               refresh_token: session.refresh_token,
             });
           }
+          const provider = event.data.session?.user?.app_metadata?.provider
+            || (await authService.getSessionProvider());
           const profile = await authService.getCurrentProfile();
           if (profile) {
-            setUser(profile);
-            if (inviteParam) {
+            setUser(profile, provider);
+            // 구글 간편가입은 기본정보를 모두 저장해야 가입이 최종 완료된다.
+            if (isProfileIncomplete(profile, provider)) {
+              toast.info('가입을 완료하려면 내 정보에서 기본정보를 입력해 주세요.');
+              navigate(PROFILE_COMPLETION_PATH);
+            } else if (inviteParam) {
               navigate(`/community?invite=${inviteParam}`);
             } else if (profile.role === 'admin' || profile.role === 'super_admin') {
               navigate('/admin');
@@ -110,19 +124,9 @@ export default function Register() {
     }
   };
 
-  const formatPhoneNumber = (value: string) => {
-    const numbers = value.replace(/[^\d]/g, '');
-    if (numbers.length <= 3) {
-      return numbers;
-    } else if (numbers.length <= 7) {
-      return `${numbers.slice(0, 3)}-${numbers.slice(3)}`;
-    } else {
-      return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7, 11)}`;
-    }
-  };
-
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setDuplicatePhone(false);
 
     // 필수 입력값 검증
     if (!formData.email.trim()) {
@@ -151,8 +155,7 @@ export default function Register() {
     }
 
     // 핸드폰 번호 형식 및 패턴 매칭 (010-0000-0000 또는 010-000-0000)
-    const phoneRegex = /^010-\d{3,4}-\d{4}$/;
-    if (!phoneRegex.test(formData.phone)) {
+    if (!isValidMobilePhone(formData.phone)) {
       return toast.error('핸드폰 번호는 010-0000-0000 형식이어야 합니다.');
     }
 
@@ -161,11 +164,12 @@ export default function Register() {
     }
     setLoading(true);
     try {
+      // signUp이 계정을 만들기 전에 휴대폰 번호 중복 여부를 먼저 확인한다.
       await authService.signUp(
-        formData.email, 
-        formData.password, 
-        formData.fullName, 
-        formData.nickname, 
+        formData.email,
+        formData.password,
+        formData.fullName,
+        formData.nickname,
         formData.phone,
         formData.gender,
         formData.birthday
@@ -173,7 +177,13 @@ export default function Register() {
       toast.success('회원가입이 완료되었습니다! 로그인 해주세요.');
       navigate(inviteParam ? `/auth/login?invite=${inviteParam}` : '/auth/login');
     } catch (error: any) {
-      toast.error('회원가입에 실패했습니다: ' + error.message);
+      const message = error?.message || '';
+      if (message === DUPLICATE_PHONE_MESSAGE) {
+        setDuplicatePhone(true);
+        toast.error(DUPLICATE_PHONE_MESSAGE);
+      } else {
+        toast.error('회원가입에 실패했습니다: ' + message);
+      }
     } finally {
       setLoading(false);
     }
@@ -322,14 +332,33 @@ export default function Register() {
               </div>
               <div className="space-y-2">
                  <Label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Phone</Label>
-                 <Input 
+                 <Input
                   required
                   value={formData.phone || ''}
-                  onChange={(e) => setFormData({...formData, phone: formatPhoneNumber(e.target.value)})}
-                  placeholder="010-0000-0000" 
+                  onChange={(e) => {
+                    setDuplicatePhone(false);
+                    setFormData({...formData, phone: formatPhoneNumber(e.target.value)});
+                  }}
+                  placeholder="010-0000-0000"
                   maxLength={13}
-                  className="h-14 bg-gray-50 border-gray-50 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                  aria-invalid={duplicatePhone}
+                  className={`h-14 rounded-2xl font-bold ${
+                    duplicatePhone
+                      ? 'bg-red-50 border-red-200 focus-visible:ring-red-500'
+                      : 'bg-gray-50 border-gray-50 focus-visible:ring-purple-600'
+                  }`}
                 />
+                {duplicatePhone && (
+                  <p className="text-[11px] font-bold text-red-600 leading-relaxed pl-1">
+                    {DUPLICATE_PHONE_MESSAGE}{' '}
+                    <Link
+                      to="/auth/login?mode=findId"
+                      className="underline font-black text-red-700 hover:text-red-800"
+                    >
+                      아이디 찾기로 이동
+                    </Link>
+                  </p>
+                )}
               </div>
               <div className="space-y-4">
                  <Label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Gender</Label>

@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { authService } from '@/services/authService';
+import { PROFILE_COMPLETION_PATH, isProfileIncomplete } from '@/lib/profile';
 import Header from './components/layout/Header';
 import { FloatingChat } from './components/community/FloatingChat';
 import Footer from './components/layout/Footer';
@@ -57,6 +58,28 @@ import AdminErrorLogs from './pages/admin/ErrorLogs';
 import AdminFontDemo from './pages/admin/FontDemo';
 import { Outlet } from 'react-router-dom';
 
+/**
+ * 기본정보 입력을 마치지 않은 회원도 접근할 수 있어야 하는 경로.
+ * (기본정보 입력 화면 자체와 인증/결제 콜백)
+ */
+const isProfileGateExempt = (pathname: string) =>
+  pathname === '/mypage' || pathname.startsWith('/auth') || pathname.startsWith('/payment');
+
+/**
+ * 구글 간편가입 회원이 기본정보를 저장하기 전에는 서비스를 이용할 수 없도록 막는다.
+ * 공개 페이지 외에 수강 플레이어/관리자 화면에서도 동일하게 적용한다.
+ */
+function RequireCompleteProfile({ children }: { children: React.ReactNode }) {
+  const { user, provider, isLoading } = useAuthStore();
+  const location = useLocation();
+
+  if (!isLoading && isProfileIncomplete(user, provider) && !isProfileGateExempt(location.pathname)) {
+    return <Navigate to={PROFILE_COMPLETION_PATH} replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function AdminPrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading, setLoading } = useAuthStore();
 
@@ -99,8 +122,7 @@ function PublicLayout() {
 
   const isAuthRoute = location.pathname.startsWith('/auth') || location.pathname.startsWith('/payment');
 
-  const isGoogleUser = provider === 'google';
-  const isIncomplete = user && isGoogleUser && (!user.name || !user.nickname || !(user.mobile_phone || user.phone) || !user.gender || !user.birthdate);
+  const isIncomplete = isProfileIncomplete(user, provider);
 
   const isPopup = typeof window !== 'undefined' && (
     new URLSearchParams(location.search).get('popup') === 'true' ||
@@ -116,7 +138,7 @@ function PublicLayout() {
   }, [location.search]);
 
   if (!isLoading && isIncomplete && !isAuthRoute && location.pathname !== '/mypage') {
-    return <Navigate to="/mypage" replace />;
+    return <Navigate to={PROFILE_COMPLETION_PATH} replace />;
   }
 
   if (isPopup) {
@@ -232,9 +254,11 @@ function AppContent() {
       <Routes>
         {/* Admin Routes */}
         <Route path="/admin" element={
-          <AdminPrivateRoute>
-            <AdminLayout />
-          </AdminPrivateRoute>
+          <RequireCompleteProfile>
+            <AdminPrivateRoute>
+              <AdminLayout />
+            </AdminPrivateRoute>
+          </RequireCompleteProfile>
         }>
           <Route index element={<AdminDashboard />} />
           <Route path="courses" element={<AdminCourseManagement />} />
@@ -257,7 +281,11 @@ function AppContent() {
           <Route path="font-demo" element={<AdminFontDemo />} />
         </Route>
 
-        <Route path="/course/:id/learn" element={<LearningPlayer />} />
+        <Route path="/course/:id/learn" element={
+          <RequireCompleteProfile>
+            <LearningPlayer />
+          </RequireCompleteProfile>
+        } />
 
         {/* Public Routes with Shared Layout */}
         <Route element={<PublicLayout />}>

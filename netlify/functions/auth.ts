@@ -116,6 +116,66 @@ export const handler: Handler = async (event) => {
     const { path: reqPath } = event;
     const body = JSON.parse(event.body || "{}");
 
+    // Route: Check duplicated phone number (/api/auth/check-phone)
+    // 휴대폰 번호를 회원 식별 Key로 사용하므로 가입/기본정보 저장 전에 중복 여부를 확인한다.
+    if (reqPath.endsWith("check-phone")) {
+      const { phone, excludeUserId } = body;
+      const normalized = String(phone || "").replace(/[^0-9]/g, "");
+
+      if (!normalized) {
+        return {
+          statusCode: 400,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: "휴대폰 번호를 입력해 주세요." })
+        };
+      }
+      if (!/^01[016789]\d{7,8}$/.test(normalized)) {
+        return {
+          statusCode: 400,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: "올바른 휴대폰 번호 형식이 아닙니다." })
+        };
+      }
+
+      // 저장된 값이 하이픈 포함/미포함 어느 쪽이어도, 또 10자리 번호의 끊어 쓰기가
+      // 3-3-4든 3-4-3이든 모두 잡히도록 가능한 표기를 전부 만들어 조회한다.
+      const phoneVariants = [normalized];
+      if (normalized.length === 11) {
+        phoneVariants.push(`${normalized.slice(0, 3)}-${normalized.slice(3, 7)}-${normalized.slice(7)}`);
+      } else if (normalized.length === 10) {
+        phoneVariants.push(`${normalized.slice(0, 3)}-${normalized.slice(3, 6)}-${normalized.slice(6)}`);
+        phoneVariants.push(`${normalized.slice(0, 3)}-${normalized.slice(3, 7)}-${normalized.slice(7)}`);
+      }
+      const variants = Array.from(new Set(phoneVariants));
+      const orFilter = variants
+        .flatMap((v) => [`mobile_phone.eq.${v}`, `phone.eq.${v}`])
+        .join(",");
+
+      const { data: phoneMatches, error: phoneErr } = await supabaseAdmin
+        .from("profiles")
+        .select("id, is_deleted")
+        .or(orFilter);
+
+      if (phoneErr) {
+        console.error("[Check Phone] Error querying profiles:", phoneErr);
+        return {
+          statusCode: 500,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: "데이터베이스 조회 중 오류가 발생했습니다." })
+        };
+      }
+
+      const duplicated = (phoneMatches || []).some(
+        (profile: any) => !profile.is_deleted && profile.id !== excludeUserId
+      );
+
+      return {
+        statusCode: 200,
+        headers: responseHeaders,
+        body: JSON.stringify({ status: "success", duplicated })
+      };
+    }
+
     // Route: Find email (/api/auth/find-email)
     if (reqPath.endsWith("find-email")) {
       const { name, mobile } = body;

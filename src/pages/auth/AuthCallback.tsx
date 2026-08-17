@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/store/useAuthStore';
+import { PROFILE_COMPLETION_PATH, isProfileIncomplete } from '@/lib/profile';
 import { toast } from 'sonner';
 
 export default function AuthCallback() {
@@ -56,10 +57,10 @@ export default function AuthCallback() {
         }
 
         toast.success('로그인되었습니다.');
-        const isGoogleUser = provider === 'google';
-        const isIncomplete = isGoogleUser && (!profile?.name || !profile?.nickname || !(profile?.mobile_phone || profile?.phone) || !profile?.gender || !profile?.birthdate);
-        if (isIncomplete) {
-          navigate('/mypage');
+        // 구글 간편가입 회원은 기본정보를 모두 저장해야 가입이 최종 완료된다.
+        if (isProfileIncomplete(profile, provider)) {
+          toast.info('가입을 완료하려면 내 정보에서 기본정보를 입력해 주세요.');
+          navigate(PROFILE_COMPLETION_PATH);
         } else if (profile?.role === 'admin' || profile?.role === 'super_admin') {
           navigate('/admin');
         } else {

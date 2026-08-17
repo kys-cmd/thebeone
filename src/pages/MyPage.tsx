@@ -51,6 +51,12 @@ import { reviewService } from '@/services/reviewService';
 import { profileService } from '@/services/profileService';
 import { authService } from '@/services/authService';
 import { Course } from '@/types';
+import {
+  DUPLICATE_PHONE_MESSAGE,
+  formatPhoneNumber,
+  isProfileIncomplete,
+  isValidMobilePhone,
+} from '@/lib/profile';
 import { toast } from 'sonner';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -253,7 +259,7 @@ export default function MyPage() {
   const [birthdate, setBirthdate] = useState('');
 
   const isGoogleUser = provider === 'google';
-  const isIncomplete = !!(user && isGoogleUser && (!user.name || !user.nickname || !(user.mobile_phone || user.phone) || !user.gender || !user.birthdate));
+  const isIncomplete = isProfileIncomplete(user, provider);
 
   // Auto populate on user load
   React.useEffect(() => {
@@ -292,17 +298,6 @@ export default function MyPage() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set('tab', MENU_TO_QUERY[menuId] || menuId);
     setSearchParams(nextParams, { replace: true });
-  };
-
-  const formatPhoneNumber = (value: string) => {
-    const numbers = value.replace(/[^\d]/g, '');
-    if (numbers.length <= 3) {
-      return numbers;
-    } else if (numbers.length <= 7) {
-      return `${numbers.slice(0, 3)}-${numbers.slice(3)}`;
-    } else {
-      return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7, 11)}`;
-    }
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -989,7 +984,7 @@ export default function MyPage() {
                             toast.error('휴대폰 번호를 입력해주세요.');
                             return;
                           }
-                          if (phone.trim().length < 12) {
+                          if (!isValidMobilePhone(phone)) {
                             toast.error('올바른 휴대폰 번호 형식이 아닙니다.');
                             return;
                           }
@@ -1002,8 +997,17 @@ export default function MyPage() {
                             return;
                           }
 
+                          const wasIncomplete = isIncomplete;
+
                           try {
                             setLoading(true);
+
+                            // 휴대폰 번호가 회원 식별 Key이므로 다른 회원이 쓰고 있으면 저장할 수 없다.
+                            if (await authService.isPhoneTaken(phone, user.id)) {
+                              toast.error(DUPLICATE_PHONE_MESSAGE);
+                              return;
+                            }
+
                             const updatedProfile = await profileService.updateProfile(user.id, {
                               name: name.trim(),
                               nickname: nickname.trim(),
@@ -1011,9 +1015,14 @@ export default function MyPage() {
                               birthdate,
                               gender
                             });
-                            
+
                             setUser(updatedProfile, provider);
-                            toast.success('정보가 성공적으로 업데이트 되었습니다!');
+                            // 구글 간편가입 회원은 이 저장으로 가입이 최종 완료된다.
+                            if (wasIncomplete) {
+                              toast.success('회원가입이 완료되었습니다! 이제 비원아카데미의 모든 기능을 이용하실 수 있습니다.');
+                            } else {
+                              toast.success('정보가 성공적으로 업데이트 되었습니다!');
+                            }
                           } catch (error: any) {
                             console.error('Update failed:', error);
                             const msg = error.message || error.error_description || '정보 업데이트에 실패했습니다.';
@@ -1024,7 +1033,7 @@ export default function MyPage() {
                         }}
                         disabled={loading}
                       >
-                        {loading ? '저장 중...' : '변경 내용 저장하기'}
+                        {loading ? '저장 중...' : isIncomplete ? '기본정보 저장하고 가입 완료하기' : '변경 내용 저장하기'}
                       </Button>
                     </div>
                   </div>

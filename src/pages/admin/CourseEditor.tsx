@@ -209,6 +209,7 @@ export default function AdminCourseEditor() {
   const [layout, setLayout] = useState<Course["layout"]>({ blocks: [] });
 
   const [enrolledStudents, setEnrolledStudents] = useState<any[]>([]);
+  const [enrolledSearchQuery, setEnrolledSearchQuery] = useState("");
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
   const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
   const [allProfiles, setAllProfiles] = useState<any[]>([]);
@@ -704,6 +705,27 @@ export default function AdminCourseEditor() {
     const phoneMatch = (p.mobile_phone || p.phone || '').includes(q);
     return nameMatch || nicknameMatch || emailMatch || phoneMatch;
   });
+
+  // 수강생 목록 검색 (이름 / 닉네임 / 이메일 / 휴대폰 번호)
+  const enrolledSearchTerm = enrolledSearchQuery.trim().toLowerCase();
+  const enrolledSearchDigits = enrolledSearchQuery.replace(/[^0-9]/g, '');
+  const filteredEnrolledStudents = !enrolledSearchTerm
+    ? enrolledStudents
+    : enrolledStudents.filter((student) => {
+        const profile = student.profiles || {};
+        const haystack = [profile.name, profile.nickname, profile.email]
+          .map((v: string | null) => (v || '').toLowerCase());
+        if (haystack.some((v) => v.includes(enrolledSearchTerm))) return true;
+
+        // 번호는 하이픈 유무와 무관하게 비교한다.
+        if (!enrolledSearchDigits) return false;
+        const phoneDigits = `${profile.mobile_phone || ''}${profile.phone || ''}`.replace(/[^0-9]/g, '');
+        return phoneDigits.includes(enrolledSearchDigits);
+      });
+
+  const filteredEnrolledIds = filteredEnrolledStudents.map((s) => s.user_id);
+  const isAllFilteredEnrolledSelected =
+    filteredEnrolledIds.length > 0 && filteredEnrolledIds.every((uid) => selectedEnrolledStudentIds.includes(uid));
 
   const isAllFilteredSelected = filteredAvailableMembers.length > 0 && filteredAvailableMembers.every(m => selectedMemberIds.includes(m.id));
   const handleSelectAllToggle = () => {
@@ -1738,22 +1760,53 @@ export default function AdminCourseEditor() {
                     <Card className="border-none shadow-sm">
                       <CardHeader className="flex flex-row items-center justify-between col-span-2">
                         <div>
-                          <CardTitle className="text-lg">수강생 목록 ({enrolledStudents.length}명)</CardTitle>
+                          <CardTitle className="text-lg">
+                            수강생 목록 ({enrolledSearchTerm
+                              ? `${filteredEnrolledStudents.length}명 / 전체 ${enrolledStudents.length}명`
+                              : `${enrolledStudents.length}명`})
+                          </CardTitle>
                           <CardDescription>현재 이 강의를 시청할 권한을 가진 수강생 목록입니다.</CardDescription>
                         </div>
-                        <Button 
+                        <Button
                           onClick={() => {
                             setMemberSearchQuery("");
                             setSelectedMemberIds([]);
                             loadAllProfiles();
                             setIsEnrollModalOpen(true);
-                          }} 
+                          }}
                           className="bg-purple-600 hover:bg-purple-700 gap-2 h-10 px-4 rounded-xl font-bold"
                           type="button"
                         >
                           <UserPlus className="w-4 h-4" /> 수강생 추가하기
                         </Button>
                       </CardHeader>
+
+                      {/* 수강생 검색 */}
+                      {enrolledStudents.length > 0 && (
+                        <div className="px-6 pb-5">
+                          <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <Input
+                              type="text"
+                              placeholder="이름, 닉네임, 이메일, 휴대폰 번호로 수강생 검색..."
+                              className="pl-11 pr-11 h-12 bg-gray-50/50 border-gray-100 rounded-2xl focus-visible:ring-purple-600 font-medium"
+                              value={enrolledSearchQuery}
+                              onChange={(e) => setEnrolledSearchQuery(e.target.value)}
+                            />
+                            {enrolledSearchQuery && (
+                              <button
+                                type="button"
+                                onClick={() => setEnrolledSearchQuery("")}
+                                aria-label="검색어 지우기"
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       <CardContent className="p-0 border-t border-gray-100">
                         {isLoadingStudents ? (
                           <div className="py-24 text-center flex flex-col items-center justify-center gap-3">
@@ -1807,13 +1860,18 @@ export default function AdminCourseEditor() {
                                 <thead className="bg-gray-50/50 border-b border-gray-100">
                                   <tr>
                                     <th className="px-4 py-4 text-left w-[6%]">
-                                      <Checkbox 
-                                        checked={enrolledStudents.length > 0 && selectedEnrolledStudentIds.length === enrolledStudents.length}
+                                      <Checkbox
+                                        checked={isAllFilteredEnrolledSelected}
                                         onCheckedChange={(checked) => {
+                                          // 검색 중에는 검색 결과에 대해서만 전체 선택/해제한다.
                                           if (checked) {
-                                            setSelectedEnrolledStudentIds(enrolledStudents.map(s => s.user_id));
+                                            setSelectedEnrolledStudentIds(prev =>
+                                              Array.from(new Set([...prev, ...filteredEnrolledIds]))
+                                            );
                                           } else {
-                                            setSelectedEnrolledStudentIds([]);
+                                            setSelectedEnrolledStudentIds(prev =>
+                                              prev.filter(uid => !filteredEnrolledIds.includes(uid))
+                                            );
                                           }
                                         }}
                                         className="border-gray-300 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
@@ -1826,7 +1884,14 @@ export default function AdminCourseEditor() {
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 bg-white">
-                                  {enrolledStudents.map((student) => {
+                                  {filteredEnrolledStudents.length === 0 && (
+                                    <tr>
+                                      <td colSpan={5} className="py-16 text-center text-gray-400 font-medium">
+                                        '{enrolledSearchQuery}' 검색 결과와 일치하는 수강생이 없습니다.
+                                      </td>
+                                    </tr>
+                                  )}
+                                  {filteredEnrolledStudents.map((student) => {
                                     const profile = student.profiles || {};
                                     const isExpired = student.expires_at ? new Date(student.expires_at) < new Date() : false;
                                     return (

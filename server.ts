@@ -3076,6 +3076,66 @@ async function startServer() {
     }
   }
 
+  // 숫자만 남긴 번호로부터 DB에 저장돼 있을 수 있는 모든 표기 형태를 만든다.
+  const buildPhoneVariants = (normalized: string): string[] => {
+    const variants = [normalized];
+    if (normalized.length === 11) {
+      variants.push(`${normalized.slice(0, 3)}-${normalized.slice(3, 7)}-${normalized.slice(7)}`);
+    } else if (normalized.length === 10) {
+      variants.push(`${normalized.slice(0, 3)}-${normalized.slice(3, 6)}-${normalized.slice(6)}`);
+      variants.push(`${normalized.slice(0, 3)}-${normalized.slice(3, 7)}-${normalized.slice(7)}`);
+    }
+    return variants;
+  };
+
+  // ENDPOINT: Check whether a mobile phone number is already registered.
+  // 휴대폰 번호를 회원 식별 Key로 사용하므로, 가입/기본정보 저장 전에 중복 여부를 확인한다.
+  // profiles 테이블은 로그인한 사용자만 조회할 수 있어(RLS) 서비스 롤 클라이언트로 처리한다.
+  app.post("/api/auth/check-phone", async (req, res) => {
+    try {
+      const { phone, excludeUserId } = req.body;
+
+      const normalized = String(phone || "").replace(/[^0-9]/g, "");
+      if (!normalized) {
+        return res.status(400).json({ status: "error", message: "휴대폰 번호를 입력해 주세요." });
+      }
+      if (!/^01[016789]\d{7,8}$/.test(normalized)) {
+        return res.status(400).json({ status: "error", message: "올바른 휴대폰 번호 형식이 아닙니다." });
+      }
+
+      if (!supabaseAdmin) {
+        return res.status(500).json({ status: "error", message: "Supabase가 바인딩되지 않았습니다." });
+      }
+
+      // 저장된 값이 하이픈 포함/미포함 어느 쪽이어도, 또 10자리 번호의 끊어 쓰기가
+      // 3-3-4든 3-4-3이든 모두 잡히도록 가능한 표기를 전부 만들어 조회한다.
+      const variants = Array.from(new Set(buildPhoneVariants(normalized)));
+
+      const orFilter = variants
+        .flatMap((v) => [`mobile_phone.eq.${v}`, `phone.eq.${v}`])
+        .join(",");
+
+      const { data, error } = await supabaseAdmin
+        .from("profiles")
+        .select("id, is_deleted")
+        .or(orFilter);
+
+      if (error) {
+        console.error("[Check Phone] Error querying profiles:", error);
+        return res.status(500).json({ status: "error", message: "데이터베이스 조회 중 오류가 발생했습니다." });
+      }
+
+      const duplicated = (data || []).some(
+        (profile: any) => !profile.is_deleted && profile.id !== excludeUserId
+      );
+
+      return res.json({ status: "success", duplicated });
+    } catch (e: any) {
+      console.error("[Check Phone] Unexpected exception:", e);
+      return res.status(500).json({ status: "error", message: e.message || "서버 통신 장애가 일어났습니다." });
+    }
+  });
+
   // ENDPOINT: Find registered email (아이디 찾기) by matching name and phone number
   app.post("/api/auth/find-email", async (req, res) => {
     console.log("POST /api/auth/find-email called");
