@@ -107,6 +107,32 @@ const writeStoredValue = (key: string, value: string) => {
   }
 };
 
+const BEONE_CATEGORIES = ['beone_exclusive', 'beone_exclusive_online', 'beone_exclusive_offline'];
+
+const isBeOneCourse = (course: Course) => BEONE_CATEGORIES.includes(course.category);
+
+const CATEGORY_LABELS: Record<string, string> = {
+  regular: '정규강의',
+  special_online: '온라인 특강',
+  special_offline: '오프라인 특강',
+  special: '특강',
+  beone_exclusive_online: '온라인 비원커뮤니티회원전용',
+  beone_exclusive_offline: '오프라인 비원커뮤니티회원전용',
+  beone_exclusive: '비원커뮤니티회원전용',
+};
+
+const getCategoryLabel = (category: string) => CATEGORY_LABELS[category] || '비원아카데미 Live';
+
+// 강의 업로드일(created_at) 기준 최신순 정렬
+const getUploadedTime = (course: Course) => {
+  if (!course.created_at) return 0;
+  const time = new Date(course.created_at).getTime();
+  return Number.isNaN(time) ? 0 : time;
+};
+
+const sortByNewest = (courses: Course[]) =>
+  [...courses].sort((a, b) => getUploadedTime(b) - getUploadedTime(a));
+
 const renderStudyPeriod = (course: Course) => {
   let startDate: Date | null = null;
   let endDate: Date | null = null;
@@ -364,9 +390,6 @@ export default function MyPage() {
     }
   };
 
-  const [beoneCourses, setBeoneCourses] = useState<Course[]>([]);
-  const [beoneLoading, setBeoneLoading] = useState(false);
-
   const ROLE_RANK: Record<string, number> = {
     'user': 0,
     'regular_member': 1,
@@ -376,32 +399,11 @@ export default function MyPage() {
     'admin': 100,
     'super_admin': 100
   };
-  const userRank = user ? (ROLE_RANK[user.role || 'user'] || 0) : 0;
-  const isBeOneMember = userRank >= 3 || (user && (user.role === 'admin' || user.role === 'super_admin'));
-
-  const fetchBeoneCourses = async () => {
-    try {
-      setBeoneLoading(true);
-      const data = await courseService.getCourses();
-      const filtered = data.filter(c => c.category === 'beone_exclusive' || c.category === 'beone_exclusive_online');
-      setBeoneCourses(filtered);
-    } catch (error) {
-      console.error('[MyPage Fetch BeOne Exclusive error]:', error);
-    } finally {
-      setBeoneLoading(false);
-    }
-  };
 
   React.useEffect(() => {
     if (user) {
       fetchMyCourses();
       fetchMileageAndPayments();
-      
-      const rank = ROLE_RANK[user.role || 'user'] || 0;
-      const isBeOne = rank >= 3 || user.role === 'admin' || user.role === 'super_admin';
-      if (isBeOne) {
-        fetchBeoneCourses();
-      }
     }
   }, [user]);
 
@@ -413,16 +415,14 @@ export default function MyPage() {
       const rank = ROLE_RANK[user!.role || 'user'] || 0;
       const isBeOne = rank >= 3 || user!.role === 'admin' || user!.role === 'super_admin';
       
+      // 비원커뮤니티 회원은 별도 수강신청 없이도 전용 강의를 이용할 수 있으므로
+      // 수강 중인 강의 목록에 함께 합쳐서 하나의 목록으로 보여준다.
       let merged = [...data];
       if (isBeOne) {
         try {
           const allCourses = await courseService.getCourses();
-          const beOneExclusives = allCourses.filter(
-            c => c.category === 'beone_exclusive' || 
-                 c.category === 'beone_exclusive_online' || 
-                 c.category === 'beone_exclusive_offline'
-          );
-          
+          const beOneExclusives = allCourses.filter(isBeOneCourse);
+
           beOneExclusives.forEach(course => {
             if (!merged.some(mc => mc.id === course.id)) {
               merged.push(course);
@@ -432,99 +432,14 @@ export default function MyPage() {
           console.error('[MyPage merge BeOne exclusive lectures error]:', beOneErr);
         }
       }
-      
-      setMyCourses(merged);
+
+      setMyCourses(sortByNewest(merged));
     } catch (error) {
       console.error(error);
       toast.error('내 강의 정보를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const renderBeOneSection = () => {
-    if (!isBeOneMember) return null;
-    return (
-      <div className="space-y-6 pt-10 border-t border-slate-200">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl animate-pulse">🔑</span>
-            <div>
-              <h3 className="text-2xl font-black tracking-tighter text-gray-900">비원커뮤니티 회원 전용 강의</h3>
-            </div>
-          </div>
-          <Badge className="bg-[#1C8436] hover:bg-[#156329] text-white border-none px-4 py-1.5 font-black text-xs font-sans shrink-0">
-            비원아카데미 회원 혜택
-          </Badge>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {beoneLoading ? (
-            <div className="col-span-full text-center py-10 text-gray-400 font-bold font-sans">강의 정보를 불러오고 있습니다...</div>
-          ) : beoneCourses.length === 0 ? (
-            <div className="col-span-full bg-white p-12 rounded-[40px] text-center border-2 border-dashed border-gray-100 py-16">
-              <p className="text-gray-400 font-bold">진행 중인 비원커뮤니티회원전용 강의가 없습니다.</p>
-            </div>
-          ) : (
-            beoneCourses.map((course) => {
-              const isExpired = isExpiredCourse(course);
-              return (
-              <Card key={course.id} className="overflow-hidden border-none shadow-sm rounded-[40px] group hover:shadow-2xl transition-all bg-white flex flex-col justify-between">
-                <div>
-                  <div className="aspect-[16/9] bg-gray-100 relative">
-                    <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
-                     {isExpired && (
-                       <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-10">
-                         <span className="text-white font-black text-sm bg-red-600 px-3.5 py-1.5 rounded-full shadow-lg shadow-red-600/30">수강일 만료</span>
-                       </div>
-                     )}
-                    <div className="absolute top-4 left-4 z-20">
-                      <Badge className="bg-[#1C8436] text-white border-none font-bold font-sans">
-                        비원커뮤니티회원전용
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="p-8 space-y-6">
-                    <div className="space-y-2">
-                      <h4 className="text-lg font-black text-gray-900 line-clamp-1">{course.title}</h4>
-                      <p className="text-sm font-bold text-gray-400">회원: {course.instructor}</p>
-                    </div>
-                    <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                      <div className="flex items-start gap-2 text-xs font-bold text-slate-500 font-sans w-full">
-                         <Clock className="w-4 h-4 text-[#1C8436] shrink-0 mt-0.5" />
-                         <div className="flex-1 min-w-0">{renderStudyPeriod(course)}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-8 pt-0 flex gap-2">
-                  {course.category === 'beone_exclusive_offline' ? (
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      className="flex-1 h-14 rounded-2xl font-black border-gray-100 hover:bg-yellow-50 hover:text-yellow-600 hover:border-yellow-200 text-gray-700 font-sans transition-all"
-                      onClick={() => handleOpenReview(course)}
-                    >
-                      후기 작성하기
-                    </Button>
-                  ) : (
-                    <Button 
-                      size="lg" 
-                      disabled={isExpired}
-                      className={`flex-1 h-14 rounded-2xl font-black font-sans transition-all ${isExpired ? '!bg-gray-200 !text-gray-400 !border-none cursor-not-allowed' : 'bg-[#1C8436] hover:bg-[#156329] text-white'}`}
-                      onClick={() => navigate(`/course/${course.id}/learn`)}
-                    >
-                      {isExpired ? "수강일 만료" : "강의실 입장"}
-                    </Button>
-                  )}
-                </div>
-              </Card>
-            );
-            })
-          )}
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -623,14 +538,13 @@ export default function MyPage() {
                                    </div>
                                  )}
                                 <div className="absolute top-4 left-4 z-20">
-                                  <Badge className="bg-white/80 backdrop-blur-md text-gray-900 border-none font-bold font-sans">
-                                    {course.category === 'regular' ? '정규강의' : 
-                                      course.category === 'special_online' ? '온라인 특강' :
-                                      course.category === 'special_offline' ? '오프라인 특강' :
-                                      course.category === 'special' ? '특강' : 
-                                      course.category === 'beone_exclusive_online' ? '온라인 비원커뮤니티회원전용' :
-                                      course.category === 'beone_exclusive_offline' ? '오프라인 비원커뮤니티회원전용' :
-                                      course.category === 'beone_exclusive' ? '비원커뮤니티회원전용' : '비원아카데미 Live'}
+                                  <Badge className={cn(
+                                    "backdrop-blur-md border-none font-bold font-sans",
+                                    isBeOneCourse(course)
+                                      ? "bg-[#1C8436] text-white hover:bg-[#156329]"
+                                      : "bg-white/80 text-gray-900"
+                                  )}>
+                                    {getCategoryLabel(course.category)}
                                   </Badge>
                                 </div>
                              </div>
@@ -679,7 +593,6 @@ export default function MyPage() {
             )
             }
 
-            {activeMenu === 'dashboard' && renderBeOneSection()}
             {activeMenu === 'courses' && (
               <div className="space-y-10">
                 <div className="space-y-6">
@@ -816,14 +729,13 @@ export default function MyPage() {
                                     </div>
                                   )}
                                   <div className="absolute top-2 left-2 z-20">
-                                    <Badge className="bg-white/90 backdrop-blur-md text-[10px] text-gray-900 border-none font-bold py-0.5 px-2">
-                                      {course.category === 'regular' ? '정규강의' : 
-                                       course.category === 'special_online' ? '온라인 특강' :
-                                       course.category === 'special_offline' ? '오프라인 특강' :
-                                       course.category === 'special' ? '특강' : 
-                                       course.category === 'beone_exclusive_online' ? '온라인 비원커뮤니티회원전용' :
-                                       course.category === 'beone_exclusive_offline' ? '오프라인 비원커뮤니티회원전용' :
-                                       course.category === 'beone_exclusive' ? '비원커뮤니티회원전용' : '비원아카데미 Live'}
+                                    <Badge className={cn(
+                                      "backdrop-blur-md text-[10px] border-none font-bold py-0.5 px-2",
+                                      isBeOneCourse(course)
+                                        ? "bg-[#1C8436] text-white hover:bg-[#156329]"
+                                        : "bg-white/90 text-gray-900"
+                                    )}>
+                                      {getCategoryLabel(course.category)}
                                     </Badge>
                                   </div>
                                 </div>
@@ -878,14 +790,13 @@ export default function MyPage() {
                                    </div>
                                  )}
                                  <div className="absolute top-4 left-4 z-20">
-                                   <Badge className="bg-white/80 backdrop-blur-md text-gray-900 border-none font-bold">
-                                     {course.category === 'regular' ? '정규강의' : 
-                                      course.category === 'special_online' ? '온라인 특강' :
-                                      course.category === 'special_offline' ? '오프라인 특강' :
-                                      course.category === 'special' ? '특강' : 
-                                      course.category === 'beone_exclusive_online' ? '온라인 비원커뮤니티회원전용' :
-                                      course.category === 'beone_exclusive_offline' ? '오프라인 비원커뮤니티회원전용' :
-                                      course.category === 'beone_exclusive' ? '비원커뮤니티회원전용' : '비원아카데미 Live'}
+                                   <Badge className={cn(
+                                     "backdrop-blur-md border-none font-bold",
+                                     isBeOneCourse(course)
+                                       ? "bg-[#1C8436] text-white hover:bg-[#156329]"
+                                       : "bg-white/80 text-gray-900"
+                                   )}>
+                                     {getCategoryLabel(course.category)}
                                    </Badge>
                                  </div>
                               </div>
@@ -928,7 +839,6 @@ export default function MyPage() {
                     )}
                   </div>
                 </div>
-                {renderBeOneSection()}
               </div>
             )}
 
