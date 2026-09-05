@@ -1111,7 +1111,12 @@ export default function CommunityPage() {
   }, [messages, selectedCommunity, activeTab, user]);
 
   const scrollChatRef = useRef<HTMLDivElement>(null);
-  const isAdmin = user && (user.role === 'super_admin' || user.role === 'admin');
+  const isAdmin = !!user && (user.role === 'super_admin' || user.role === 'admin');
+
+  // 커뮤니티 게시글은 관리자만 작성할 수 있다.
+  // 단, 미션 챌린지 인증글은 회원이 직접 올리는 별도 흐름이라 그대로 허용한다.
+  const isMissionVerificationDraft = (editorInitialData as any)?.type === 'mission_verification';
+  const canWritePost = isAdmin || isMissionVerificationDraft;
 
   // Load accessible community IDs for all loaded communities
   useEffect(() => {
@@ -1241,9 +1246,8 @@ export default function CommunityPage() {
     if (!user) return toast.error('로그인이 필요합니다.');
     if (!newPostContent) return toast.error('내용을 입력해주세요.');
 
-    // Check permission
-    const canPost = selectedCommunity.post_permission === 'all' || isAdmin;
-    if (!canPost) return toast.error('이 커뮤니티는 관리자만 게시글을 작성할 수 있습니다.');
+    // 커뮤니티 게시글은 관리자만 작성할 수 있다.
+    if (!isAdmin) return toast.error('커뮤니티 게시글은 관리자만 작성할 수 있습니다.');
 
     setIsPosting(true);
     try {
@@ -1813,8 +1817,8 @@ export default function CommunityPage() {
       }));
       // Update comment count
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p));
-    } catch (error) {
-      toast.error('댓글 등록 실패');
+    } catch (error: any) {
+      toast.error(error?.message || '댓글 등록 실패');
       throw error;
     }
   };
@@ -2102,7 +2106,7 @@ export default function CommunityPage() {
                   <div className="text-left">
                     {communityDetailTab === 'posts' && (
                       <div className="space-y-4">
-                        {(!selectedCommunity.post_permission || selectedCommunity.post_permission === 'all' || isAdmin) && (
+                        {canWritePost ? (
                           isPostEditorExpanded ? (
                             <div className="bg-white rounded-2xl overflow-hidden border border-slate-150 shadow-md">
                               <PostEditor 
@@ -2138,6 +2142,10 @@ export default function CommunityPage() {
                               </div>
                             </div>
                           )
+                        ) : (
+                          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-[11px] text-slate-400 font-extrabold">
+                            🔒 커뮤니티 게시글은 관리자만 작성할 수 있습니다.
+                          </div>
                         )}
 
                         <PostList 
@@ -2154,6 +2162,7 @@ export default function CommunityPage() {
                           onVotePoll={handleVotePoll}
                           onDelete={handleDeletePost}
                           onEdit={handleEditPost}
+                          onTogglePin={handleTogglePin}
                           accessibleCommunityIds={accessibleCommunityIds}
                         />
                       </div>
@@ -2184,6 +2193,7 @@ export default function CommunityPage() {
                           onVotePoll={handleVotePoll}
                           onDelete={handleDeletePost}
                           onEdit={handleEditPost}
+                          onTogglePin={handleTogglePin}
                           accessibleCommunityIds={accessibleCommunityIds}
                         />
                       </div>
@@ -3074,7 +3084,7 @@ export default function CommunityPage() {
                           </div>
 
                           {/* ✍️ 입력창: 게시글 입력창 */}
-                          {(!selectedCommunity.post_permission || selectedCommunity.post_permission === 'all' || isAdmin) ? (
+                          {canWritePost ? (
                             isPostEditorExpanded ? (
                               <div id="post-editor-section" className="bg-white rounded-[26px] overflow-hidden border border-slate-150 shadow-md transition-all animate-fade-in">
                                 <PostEditor 
@@ -3123,7 +3133,7 @@ export default function CommunityPage() {
                             )
                           ) : (
                             <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xs text-slate-400 font-extrabold">
-                              🔒 본 채널은 오직 강사와 튜터만 게시글 작성이 가능한 공간입니다.
+                              🔒 커뮤니티 게시글은 관리자만 작성할 수 있습니다. 댓글로 자유롭게 의견을 남겨주세요.
                             </div>
                           )}
 
@@ -3148,6 +3158,7 @@ export default function CommunityPage() {
                                 onVotePoll={handleVotePoll}
                                 onDelete={handleDeletePost}
                                 onEdit={handleEditPost}
+                                onTogglePin={handleTogglePin}
                                 accessibleCommunityIds={accessibleCommunityIds}
                                 isFeedMode={false}
                                 allCommunities={allCommunitiesReady}
@@ -3236,6 +3247,7 @@ export default function CommunityPage() {
                                           mission_id: mission.id
                                         } as any);
                                         setCommunityDetailTab('posts');
+                                        setIsPostEditorExpanded(true);
                                         toast.success(`[${mission.title}]의 ${nextCount}회차 인증 템플릿이 로드되었습니다. ✍️`);
                                         setTimeout(() => {
                                           document.getElementById('post-editor-section')?.scrollIntoView({ behavior: 'smooth' });

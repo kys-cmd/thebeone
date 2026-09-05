@@ -33,10 +33,34 @@ export const handler: Handler = async (event) => {
       .map(seg => encodeURIComponent(decodeURIComponent(seg)))
       .join('/');
 
-    // Preserve query parameters (e.g. cache busting or resizing options)
-    const queryParams = event.queryStringParameters;
+    const queryParams = event.queryStringParameters || {};
+
+    // Image resizing: when width/height are requested, serve through Supabase's
+    // image transformation endpoint so lists can fetch right-sized thumbnails
+    // instead of full-resolution originals.
+    const width = parseInt(String(queryParams.width || ""), 10);
+    const height = parseInt(String(queryParams.height || ""), 10);
+    const quality = parseInt(String(queryParams.quality || ""), 10);
+    const resize = String(queryParams.resize || "");
+
+    if ((Number.isFinite(width) && width > 0) || (Number.isFinite(height) && height > 0)) {
+      const transformParams = new URLSearchParams();
+      if (Number.isFinite(width) && width > 0) transformParams.set("width", String(Math.min(width, 2560)));
+      if (Number.isFinite(height) && height > 0) transformParams.set("height", String(Math.min(height, 2560)));
+      transformParams.set("quality", String(Number.isFinite(quality) ? Math.min(100, Math.max(20, quality)) : 75));
+      if (["cover", "contain", "fill"].includes(resize)) transformParams.set("resize", resize);
+
+      const renderUrl = `${cleanSupUrl}/storage/v1/render/image/public/${bucket}/${safeFilePath}?${transformParams.toString()}`;
+      return {
+        statusCode: 302,
+        headers: { "Location": renderUrl, "Cache-Control": "no-cache" },
+        body: "",
+      };
+    }
+
+    // Preserve query parameters (e.g. cache busting)
     let queryStr = "";
-    if (queryParams && Object.keys(queryParams).length > 0) {
+    if (Object.keys(queryParams).length > 0) {
       const sp = new URLSearchParams();
       for (const [key, val] of Object.entries(queryParams)) {
         if (val !== undefined && val !== null) {

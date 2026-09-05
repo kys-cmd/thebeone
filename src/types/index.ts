@@ -141,6 +141,8 @@ export interface Post {
   image_urls?: string[];
   file_urls?: string[];
   links?: { title: string; url: string }[];
+  /** 댓글 허용 여부. 값이 없으면 허용으로 간주한다. */
+  allow_comments?: boolean;
   created_at: string;
   is_deleted: boolean;
   profiles?: {

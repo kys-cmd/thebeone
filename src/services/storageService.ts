@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
  * Client-size canvas compression helper for images.
  * Downsizes file if resolution is huge, and compresses quality if size is > 1MB.
  */
-function compressImage(file: File): Promise<File> {
+export function compressImage(file: File): Promise<File> {
   return new Promise((resolve) => {
     // Only compress standard images (exclude animated gifs and vector svgs)
     if (!file.type.startsWith('image/') || file.type.includes('gif') || file.type.includes('svg')) {

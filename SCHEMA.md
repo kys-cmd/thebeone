@@ -46,7 +46,33 @@
 - `user_id`: UUID (profiles.id 참조)
 - `joined_at`: TIMESTAMPTZ
 
-## 6. Messages (실시간 채팅 메시지)
+## 6. Posts (커뮤니티 게시글)
+- `id`: UUID (PK)
+- `community_id`: UUID (communities.id 참조)
+- `user_id`: UUID (profiles.id 참조, 작성자)
+- `title`: TEXT
+- `content`: TEXT (렌더링된 본문 HTML)
+- `content_json`: JSONB (블록형 본문. `blocks` 배열이 실제 렌더링 기준)
+- `hashtags`: TEXT[]
+- `image_urls` / `file_urls`: TEXT[] (첨부 목록. 목록 썸네일 추출에도 사용)
+- `allow_comments`: BOOLEAN (기본 true. false면 댓글 UI와 등록이 모두 차단)
+- `type`: TEXT (notice / general / mission_template / mission_verification)
+- `is_pinned`: BOOLEAN, `views`: INTEGER
+- `created_at`: TIMESTAMPTZ, `is_deleted`: BOOLEAN
+
+### content_json.blocks (블록형 본문)
+게시글 본문은 순서를 가진 블록 배열로 저장한다. 블록 종류:
+`richtext`(HTML), `image`, `video`, `file`, `link`(미리보기 카드),
+`poll`, `attendance`, `todo`.
+`blocks` 가 없는 예전 게시글은 클라이언트가 `content` + 첨부 컬럼을 조합해
+동일한 블록 배열로 변환해 렌더링한다.
+
+### 작성 권한
+커뮤니티 게시글은 관리자(`admin` / `super_admin`)만 작성할 수 있다.
+예외적으로 미션 인증글(`type = 'mission_verification'`)은 회원이 본인 명의로 작성 가능하다.
+(RLS 정책: `supabase_community_thread_posts.sql`)
+
+## 7. Messages (실시간 채팅 메시지)
 - `id`: UUID (PK)
 - `community_id`: UUID (communities.id 참조)
 - `user_id`: UUID (profiles.id 참조)

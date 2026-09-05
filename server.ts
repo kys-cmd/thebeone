@@ -240,7 +240,26 @@ async function startServer() {
         .map(seg => encodeURIComponent(decodeURIComponent(seg)))
         .join('/');
       
-      // Preserve query parameters (e.g. cache busting or resizing options)
+      // Image resizing: when width/height are requested, serve through Supabase's
+      // image transformation endpoint so lists can fetch right-sized thumbnails
+      // instead of full-resolution originals.
+      const width = parseInt(String(req.query.width || ''), 10);
+      const height = parseInt(String(req.query.height || ''), 10);
+      const quality = parseInt(String(req.query.quality || ''), 10);
+      const resize = String(req.query.resize || '');
+
+      if ((Number.isFinite(width) && width > 0) || (Number.isFinite(height) && height > 0)) {
+        const transformParams = new URLSearchParams();
+        if (Number.isFinite(width) && width > 0) transformParams.set("width", String(Math.min(width, 2560)));
+        if (Number.isFinite(height) && height > 0) transformParams.set("height", String(Math.min(height, 2560)));
+        transformParams.set("quality", String(Number.isFinite(quality) ? Math.min(100, Math.max(20, quality)) : 75));
+        if (["cover", "contain", "fill"].includes(resize)) transformParams.set("resize", resize);
+
+        const renderUrl = `${cleanSupUrl}/storage/v1/render/image/public/${bucket}/${safeFilePath}?${transformParams.toString()}`;
+        return res.redirect(renderUrl);
+      }
+
+      // Preserve query parameters (e.g. cache busting)
       const queryStr = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
       
       const targetUrl = `${cleanSupUrl}/storage/v1/object/public/${bucket}/${safeFilePath}${queryStr}`;

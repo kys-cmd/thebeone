@@ -1,7 +1,41 @@
 import { supabase } from '@/lib/supabase';
+import { compressImage } from '@/services/storageService';
 import { Community, Post, Message } from '@/types';
 
+/** 게시글 작성/수정 시 서버에 없을 수 있는(마이그레이션 전) 선택 컬럼들 */
+const OPTIONAL_POST_COLUMNS = ['content_json', 'hashtags', 'metadata', 'file_urls', 'allow_comments'] as const;
+
+/** 오류 메시지가 선택 컬럼 부재 때문인지 판단 */
+function isMissingColumnError(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  const message = error.message || '';
+  if (message.includes('relationship') || error.code === 'PGRST200') return true;
+  return OPTIONAL_POST_COLUMNS.some(col => message.includes(col));
+}
+
+/** 선택 컬럼을 제거한 payload 사본을 만든다 */
+function stripOptionalPostColumns<T extends Record<string, any>>(payload: T): Partial<T> {
+  const copy: Record<string, any> = { ...payload };
+  OPTIONAL_POST_COLUMNS.forEach(col => delete copy[col]);
+  return copy as Partial<T>;
+}
+
 export const communityService = {
+  /** 현재 로그인한 사용자가 관리자(admin/super_admin)인지 확인 */
+  async isCurrentUserAdmin(): Promise<boolean> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (error || !profile) return false;
+    return profile.role === 'admin' || profile.role === 'super_admin';
+  },
+
   async getCommunities() {
     const { data: communities, error } = await supabase
       .from('communities')
@@ -221,62 +255,62 @@ export const communityService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('로그인이 필요합니다.');
 
+    // 커뮤니티 게시글은 관리자만 작성할 수 있다.
+    // (미션 인증글은 회원이 직접 올리는 별도 흐름이라 예외로 둔다.)
+    if (post.type !== 'mission_verification') {
+      const isAdmin = await this.isCurrentUserAdmin();
+      if (!isAdmin) throw new Error('커뮤니티 게시글은 관리자만 작성할 수 있습니다.');
+    }
+
+    const basePost = {
+      allow_comments: true,
+      ...post,
+      user_id: user.id,
+      views: 0,
+      is_deleted: false,
+      created_at: new Date().toISOString(),
+    };
+
     const { data, error } = await supabase
       .from('posts')
-      .insert([{ 
-        ...post, 
-        user_id: user.id,
-        views: 0, 
-        is_deleted: false, 
-        created_at: new Date().toISOString() 
-      }])
+      .insert([basePost])
       .select('*, profiles(name, nickname, avatar_url)')
       .single();
 
     if (error) {
-      // Handle missing relationship or columns
-      if (error.message.includes('relationship') || error.code === 'PGRST200' || (error.message && (error.message.includes('content_json') || error.message.includes('metadata') || error.message.includes('hashtags') || error.message.includes('file_urls')))) {
-        const strippedPost = { ...post };
-        delete (strippedPost as any).content_json;
-        delete (strippedPost as any).hashtags;
-        delete (strippedPost as any).metadata;
-        delete (strippedPost as any).file_urls;
-
+      // 아직 마이그레이션되지 않은 DB라면 선택 컬럼을 빼고 재시도한다.
+      if (isMissingColumnError(error)) {
         const { data: rawPost, error: insertError } = await supabase
           .from('posts')
-          .insert([{ 
-            ...strippedPost, 
-            user_id: user.id,
-            views: 0, 
-            is_deleted: false, 
-            created_at: new Date().toISOString() 
-          }])
+          .insert([stripOptionalPostColumns(basePost)])
           .select()
           .single();
-        
+
         if (insertError) throw insertError;
-        
+
         const { data: profile } = await supabase
           .from('profiles')
           .select('name, nickname, avatar_url')
           .eq('id', user.id)
           .single();
-          
-        return { 
-          ...rawPost, 
+
+        return {
+          ...rawPost,
+          allow_comments: post.allow_comments !== false,
           profiles: profile,
           likes_count: 0,
           comments_count: 0,
-          is_liked: false
+          is_liked: false,
         };
       }
       throw error;
     }
+
     return {
       ...data,
       likes_count: 0,
       comments_count: 0,
-      is_liked: false
+      is_liked: false,
     };
   },
 
@@ -289,30 +323,23 @@ export const communityService = {
       .single();
 
     if (error) {
-      if (error.message.includes('relationship') || error.message.includes('content_json') || error.message.includes('metadata') || error.message.includes('hashtags') || error.message.includes('file_urls')) {
-        const strippedUpdates = { ...updates };
-        delete (strippedUpdates as any).content_json;
-        delete (strippedUpdates as any).hashtags;
-        delete (strippedUpdates as any).metadata;
-        delete (strippedUpdates as any).file_urls;
-        
+      if (isMissingColumnError(error)) {
         const { data: retryData, error: retryError } = await supabase
           .from('posts')
-          .update(strippedUpdates)
+          .update(stripOptionalPostColumns(updates))
           .eq('id', postId)
           .select()
           .single();
-          
+
         if (retryError) throw retryError;
 
-        // Manually join profile
         const { data: profile } = await supabase
           .from('profiles')
           .select('name, nickname, avatar_url')
           .eq('id', (retryData as any).user_id)
           .single();
 
-        return { ...retryData, profiles: profile } as Post;
+        return { ...retryData, allow_comments: updates.allow_comments !== false, profiles: profile } as Post;
       }
       throw error;
     }
@@ -502,6 +529,16 @@ export const communityService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('로그인이 필요합니다.');
 
+    // 작성자가 댓글을 막아둔 글에는 댓글을 달 수 없다.
+    const { data: target } = await supabase
+      .from('posts')
+      .select('allow_comments')
+      .eq('id', postId)
+      .maybeSingle();
+    if (target && target.allow_comments === false) {
+      throw new Error('이 게시글은 댓글을 받지 않습니다.');
+    }
+
     const { data, error } = await supabase
       .from('post_comments')
       .insert([{ post_id: postId, user_id: user.id, content }])
@@ -584,13 +621,16 @@ export const communityService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('로그인이 필요합니다.');
 
-    const fileExt = file.name.split('.').pop();
+    // 이미지는 업로드 전에 클라이언트에서 리사이즈/압축해 원본 용량을 줄인다.
+    const payload = file.type.startsWith('image/') ? await compressImage(file) : file;
+
+    const fileExt = payload.name.split('.').pop();
     const fileName = `${user.id}/${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
     const filePath = `${path}/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('community')
-      .upload(filePath, file);
+      .upload(filePath, payload, { cacheControl: '31536000', contentType: payload.type || undefined });
 
     if (uploadError) {
       if (uploadError.message.includes('Bucket not found')) {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Post, Comment as CommunityComment } from '@/types';
 import { PostCard } from './PostCard';
+import { ThreadPost } from './ThreadPost';
 import { Skeleton } from '@/components/ui/skeleton';
 import { motion } from 'framer-motion';
 import { PostEditor } from './PostEditor';
@@ -17,9 +18,11 @@ interface PostListProps {
   onJoinAttendance: (postId: string) => void;
   onToggleTodo: (postId: string, todoIndex: number, completed: boolean) => void;
   onVotePoll: (postId: string, optionIndex: number) => void;
+  onTogglePin?: (postId: string, isPinned: boolean) => void;
   onDelete?: (postId: string) => void;
   onEdit?: (post: Post) => void;
   accessibleCommunityIds?: Set<string>;
+  /** true면 요약 카드 목록, false면 스레드 형태의 블록형 게시글 */
   isFeedMode?: boolean;
   allCommunities?: any[];
   onCardClick?: (post: Post) => void;
@@ -40,6 +43,7 @@ export function PostList({
   onJoinAttendance,
   onToggleTodo,
   onVotePoll,
+  onTogglePin,
   onDelete,
   onEdit,
   accessibleCommunityIds,
@@ -82,12 +86,15 @@ export function PostList({
     <div className="space-y-0">
       {posts.map((post, idx) => {
         const isEditing = editingPostId === post.id;
+        const isRestricted = accessibleCommunityIds ? !accessibleCommunityIds.has(post.community_id) : false;
+        const communityName = allCommunities?.find((c: any) => c.id === post.community_id)?.name;
+
         return (
           <motion.div
              key={post.id}
              initial={{ opacity: 0, y: 20 }}
              animate={{ opacity: 1, y: 0 }}
-             transition={{ delay: idx * 0.05 }}
+             transition={{ delay: Math.min(idx, 6) * 0.05 }}
           >
             {isEditing ? (
               <div className="my-4 p-5 bg-white rounded-3xl border border-slate-200 shadow-lg">
@@ -102,7 +109,7 @@ export function PostList({
                   }}
                 />
               </div>
-            ) : (
+            ) : isFeedMode ? (
               <PostCard 
                 post={post}
                 currentUserId={currentUserId}
@@ -116,10 +123,29 @@ export function PostList({
                 onVotePoll={onVotePoll}
                 onDelete={onDelete}
                 onEdit={onEdit}
-                isRestricted={accessibleCommunityIds ? !accessibleCommunityIds.has(post.community_id) : false}
-                isFeedMode={isFeedMode}
-                communityName={allCommunities?.find((c: any) => c.id === post.community_id)?.name}
+                isRestricted={isRestricted}
+                isFeedMode
+                communityName={communityName}
                 onCardClick={onCardClick}
+              />
+            ) : (
+              <ThreadPost
+                post={post}
+                currentUserId={currentUserId}
+                isAdmin={isAdmin}
+                comments={postComments[post.id]}
+                onLike={onLike}
+                onCommentToggle={onCommentToggle}
+                onCommentSubmit={onCommentSubmit}
+                onTogglePin={onTogglePin}
+                onJoinAttendance={onJoinAttendance}
+                onToggleTodo={onToggleTodo}
+                onVotePoll={onVotePoll}
+                onDelete={onDelete}
+                onEdit={onEdit}
+                isRestricted={isRestricted}
+                communityName={communityName}
+                isLast={idx === posts.length - 1}
               />
             )}
           </motion.div>

@@ -6,8 +6,9 @@ import Mention from '@tiptap/extension-mention';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import Underline from '@tiptap/extension-underline';
-import { TextStyle } from '@tiptap/extension-text-style';
+import { TextStyle, FontSize } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
+import EmojiPicker, { EmojiStyle, Theme as EmojiTheme } from 'emoji-picker-react';
 import { 
   Image as ImageIcon, 
   Video, 
@@ -35,7 +36,11 @@ import {
   Strikethrough,
   ListOrdered,
   Undo,
-  Redo
+  Redo,
+  Type,
+  MessageSquare,
+  MessageSquareOff,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -60,6 +65,10 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Post } from '@/types';
+import { buildBlocksFromEditorState, parseContentJson, parseUrlList, type PostMedia } from './postContent';
+import { Video as VideoNode } from './tiptapVideo';
+import { IMAGE_WIDTHS, looksLikeImageUrl, looksLikeVideoUrl } from '@/lib/image';
+import { OptimizedImage } from '@/components/ui/optimized-image';
 
 // --- Types ---
 interface PostEditorProps {
@@ -78,9 +87,19 @@ interface LinkPreview {
   image?: string;
 }
 
-const POPULAR_EMOJIS = [
-  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🍕', '🍔', '🍟', 'ホットドッグ', '🥞', '🍩', '🍪', '🎂', '🧁', '🍦', '🍨', '🍧', '🍺', '🍻', '🥂', '🍾', '🍷', '🥃', '☕', '🥤', '🧉', '🧃', '🍗', '🥩', '🥓', '🍳', '🥞', '🍜', '🍝', '🍣', '🍤', '🍚', '🍙', '🍎', '🍓', '🍋', '🍒', '🍉', '🍇', '🥑', '🥦', '🥕', '🌽', '🌶️', '🧀', '🖐️', '✋', '👌', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '👇', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🙏', '✍️', '💅', '🤳', '💪', '⚙️', '🔥', '✨', '🎈', '🎉', '💡', '⏰', '📌', '📍', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💖', '🌟', '⚠️', '✅', '❌', '💯'
+/** 스토리지 업로드 실패 시 data URL 로 임시 저장할 수 있는 최대 크기 (2MB) */
+const MAX_INLINE_FALLBACK_BYTES = 2 * 1024 * 1024;
+
+const FONT_SIZES = [
+  { label: '아주 작게', value: '12px' },
+  { label: '작게', value: '14px' },
+  { label: '보통', value: '16px' },
+  { label: '조금 크게', value: '18px' },
+  { label: '크게', value: '22px' },
+  { label: '아주 크게', value: '28px' },
+  { label: '제목 크기', value: '36px' },
 ];
+
 
 // --- Tiptap Extensions Configuration ---
 const extensions = [
@@ -101,8 +120,10 @@ const extensions = [
     },
   }),
   Image.configure({
+    allowBase64: true,
     HTMLAttributes: {
       class: 'rounded-lg max-w-full h-auto border border-slate-200 my-4 inline-block shadow-sm',
+      loading: 'lazy',
     },
   }),
   Mention.configure({
@@ -110,8 +131,10 @@ const extensions = [
       class: 'text-purple-600 font-bold bg-purple-50 px-1 rounded',
     },
   }),
+  VideoNode,
   TextStyle,
   Color,
+  FontSize,
   Underline,
 ];
 
@@ -124,14 +147,35 @@ const EDITOR_COLORS = [
   { name: '파랑', color: '#3b82f6', class: 'bg-blue-500' },
   { name: '보라', color: '#6366f1', class: 'bg-indigo-500' },
   { name: '핑크', color: '#ec4899', class: 'bg-pink-500' },
+  { name: '청록', color: '#06b6d4', class: 'bg-cyan-500' },
+  { name: '자주', color: '#a21caf', class: 'bg-fuchsia-700' },
+  { name: '갈색', color: '#92400e', class: 'bg-amber-800' },
+  { name: '회색', color: '#64748b', class: 'bg-slate-500' },
 ];
 
 export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSubmit, submitButtonText }: PostEditorProps) {
   const [title, setTitle] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const [mediaUrls, setMediaUrls] = useState<{ type: 'image' | 'video' | 'file', url: string, name?: string }[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mediaUrls, setMediaUrls] = useState<PostMedia[]>([]);
   const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
   const [activeWidget, setActiveWidget] = useState<'attendance' | 'todo' | 'poll' | null>(null);
+  // 설정 모달을 열어둔 위젯 (첨부 여부와 별개로 관리한다)
+  const [editingWidget, setEditingWidget] = useState<'attendance' | 'todo' | 'poll' | null>(null);
+
+  /** 위젯을 첨부하고 설정 모달을 연다 */
+  const openWidgetEditor = (type: 'attendance' | 'todo' | 'poll') => {
+    setActiveWidget(type);
+    setEditingWidget(type);
+  };
+
+  /** 위젯 첨부를 해제한다 */
+  const detachWidget = () => {
+    setActiveWidget(null);
+    setEditingWidget(null);
+  };
+  // 댓글 허용 여부 (기본값: 허용)
+  const [allowComments, setAllowComments] = useState(true);
   
   // Widget States
   const [attendanceConfig, setAttendanceConfig] = useState({ title: '오늘의 출석체크' });
@@ -398,13 +442,18 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
   handleLinkPasteRef.current = handleLinkPaste;
 
   const handlePastedFile = async (file: File) => {
+    const isVideo = file.type.startsWith('video/');
     setIsUploading(true);
     try {
       let url = '';
       try {
         url = await communityService.uploadFile(file, `posts/${communityId || 'notices'}`);
       } catch (error) {
-        console.error('File paste upload failed, falling back to base64', error);
+        console.error('File paste upload failed', error);
+        if (file.size > MAX_INLINE_FALLBACK_BYTES) {
+          toast.error('붙여넣은 미디어 업로드에 실패했습니다. 파일 용량이 너무 큽니다.');
+          return;
+        }
         url = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
@@ -412,15 +461,25 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
         });
       }
 
-      const mediaItem = { type: 'image' as const, url, name: file.name || 'clipboard-screenshot.png' };
+      const mediaItem: PostMedia = {
+        type: isVideo ? 'video' : 'image',
+        url,
+        name: file.name || (isVideo ? 'clipboard-video.mp4' : 'clipboard-screenshot.png'),
+        size: file.size,
+      };
       setMediaUrls(prev => [...prev, mediaItem]);
-      
+
       if (editor) {
-        editor.chain().focus().setImage({ src: url, alt: mediaItem.name }).run();
-        toast.success('클립보드 스크린샷 이미지가 본문에 삽입되었습니다.');
+        if (isVideo) {
+          editor.chain().focus().setVideo({ src: url, title: mediaItem.name }).run();
+          toast.success('붙여넣은 동영상이 본문에 삽입되었습니다.');
+        } else {
+          editor.chain().focus().setImage({ src: url, alt: mediaItem.name }).run();
+          toast.success('붙여넣은 이미지가 본문에 삽입되었습니다.');
+        }
       }
     } catch (e) {
-      toast.error('클립보드 이미지 삽입 중 오류가 발생했습니다.');
+      toast.error('클립보드 미디어 삽입 중 오류가 발생했습니다.');
     } finally {
       setIsUploading(false);
     }
@@ -429,9 +488,27 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
   const handlePastedFileRef = useRef(handlePastedFile);
   handlePastedFileRef.current = handlePastedFile;
 
+  /**
+   * 링크를 복사해 붙여넣었을 때: 본문에 클릭 가능한 링크로 넣고
+   * 아래에 미리보기 카드 블록도 함께 만들어 준다.
+   */
+  const handleUrlPaste = (url: string) => {
+    if (!editor) return;
+    editor.chain().focus()
+      .insertContent({ type: 'text', text: url, marks: [{ type: 'link', attrs: { href: url } }] })
+      .insertContent(' ')
+      .run();
+    handleLinkPaste(url);
+  };
+
+  const handleUrlPasteRef = useRef(handleUrlPaste);
+  handleUrlPasteRef.current = handleUrlPaste;
+
   const editor = useEditor({
     extensions,
     content: '',
+    // 커서 위치가 바뀔 때마다 툴바의 활성 상태(굵게/색상/크기 등)를 갱신한다.
+    shouldRerenderOnTransaction: true,
     editorProps: {
       attributes: {
         class: cn(
@@ -480,11 +557,13 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
         return false;
       },
       handlePaste: (view, event) => {
+        // 1) 클립보드에 이미지/동영상이 있으면 업로드 후 본문에 바로 삽입한다.
         const items = event.clipboardData?.items;
         if (items) {
           for (let i = 0; i < items.length; i++) {
             const item = items[i];
-            if (item.type.indexOf('image/') !== -1) {
+            if (item.kind !== 'file') continue;
+            if (item.type.startsWith('image/') || item.type.startsWith('video/')) {
               const file = item.getAsFile();
               if (file) {
                 event.preventDefault();
@@ -494,11 +573,13 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
             }
           }
         }
-        
-        const text = event.clipboardData?.getData('text/plain') || '';
-        const urlRegex = /^(https?:\/\/[^\s]+)$/i;
-        if (urlRegex.test(text.trim())) {
-          handleLinkPasteRef.current(text.trim());
+
+        // 2) 링크만 복사해 붙여넣으면 클릭 가능한 링크로 삽입하고 미리보기 카드를 만든다.
+        const text = (event.clipboardData?.getData('text/plain') || '').trim();
+        if (/^https?:\/\/[^\s]+$/i.test(text)) {
+          event.preventDefault();
+          handleUrlPasteRef.current(text);
+          return true;
         }
         return false;
       }
@@ -511,80 +592,58 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
     }
   });
 
+  // 커서 위치의 글자 스타일 (툴바 활성 표시용)
+  const textStyleAttrs = editor?.getAttributes('textStyle') || {};
+  const currentFontSize: string | undefined = textStyleAttrs.fontSize || undefined;
+  const currentColor: string | undefined = textStyleAttrs.color || undefined;
+
   useEffect(() => {
-    if (initialPost && editor) {
-      setTitle(initialPost.title || '');
-      
-      // Parse content_json or use fallback
-      let content = initialPost.content_json;
-      if (typeof content === 'string') {
-        try {
-          content = JSON.parse(content);
-        } catch (e) {
-          console.error('Failed to parse content_json:', e);
-          content = null;
-        }
-      }
-      
-      const finalContent = content || { text: initialPost.content, media: [], link: null, widget: null };
-      
-      // Load editor content
-      if (finalContent.text) {
-        if (typeof finalContent.text === 'object') {
-          editor.commands.setContent(finalContent.text);
-        } else {
-          editor.commands.setContent(finalContent.text || '');
-        }
-      } else if (initialPost.content) {
-        editor.commands.setContent(initialPost.content);
-      }
-      
-      // Improved media loading logic: cross-reference all sources
-      let mediaList: any[] = [];
-      const seenUrls = new Set<string>();
+    if (!initialPost || !editor) return;
 
-      const addMedia = (m: any) => {
-        if (m && m.url && !seenUrls.has(m.url)) {
-          seenUrls.add(m.url);
-          mediaList.push(m);
-        }
-      };
+    setTitle(initialPost.title || '');
 
-      // 1. From content_json.media
-      if (Array.isArray(finalContent.media)) {
-        finalContent.media.forEach(addMedia);
-      }
+    const content = parseContentJson(initialPost.content_json) || {
+      text: initialPost.content,
+      media: [],
+      link: null,
+      widget: null,
+    };
 
-      // 2. From image_urls and file_urls
-      const parseUrls = (urls: any) => {
-        if (!urls) return [];
-        if (Array.isArray(urls)) return urls;
-        if (typeof urls === 'string') {
-          try {
-            const parsed = JSON.parse(urls);
-            return Array.isArray(parsed) ? parsed : [urls];
-          } catch (e) {
-            return urls.split(',').map((u: string) => u.trim()).filter(Boolean);
-          }
-        }
-        return [];
-      };
+    // 본문 로드: content_json.html > content_json.text(JSON doc) > 원본 content
+    if (content.html) {
+      editor.commands.setContent(content.html);
+    } else if (content.text) {
+      editor.commands.setContent(content.text);
+    } else if (initialPost.content) {
+      editor.commands.setContent(initialPost.content);
+    }
 
-      parseUrls(initialPost.image_urls).forEach((url: string) => addMedia({ type: 'image', url }));
-      parseUrls(initialPost.file_urls).forEach((url: string) => {
-        const isImg = url.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-        addMedia({ type: isImg ? 'image' : 'file', url });
-      });
-      
-      setMediaUrls(mediaList);
-      setLinkPreview(finalContent.link);
-      
-      if (finalContent.widget) {
-        setActiveWidget(finalContent.widget.type);
-        if (finalContent.widget.type === 'attendance') setAttendanceConfig(finalContent.widget.data);
-        if (finalContent.widget.type === 'todo') setTodoConfig(finalContent.widget.data);
-        if (finalContent.widget.type === 'poll') setPollConfig(finalContent.widget.data);
-      }
+    // 첨부 목록 복원: content_json.media 와 image_urls/file_urls 를 합쳐 중복 제거
+    const mediaList: PostMedia[] = [];
+    const seenUrls = new Set<string>();
+    const addMedia = (m?: PostMedia | null) => {
+      if (!m?.url || seenUrls.has(m.url)) return;
+      seenUrls.add(m.url);
+      mediaList.push(m);
+    };
+
+    if (Array.isArray(content.media)) content.media.forEach(addMedia);
+    parseUrlList(initialPost.image_urls).forEach(url => addMedia({ type: 'image', url }));
+    parseUrlList(initialPost.file_urls).forEach(url => {
+      if (looksLikeImageUrl(url)) addMedia({ type: 'image', url });
+      else if (looksLikeVideoUrl(url)) addMedia({ type: 'video', url });
+      else addMedia({ type: 'file', url });
+    });
+
+    setMediaUrls(mediaList);
+    setLinkPreview(content.link || null);
+    setAllowComments(initialPost.allow_comments !== false && content.allow_comments !== false);
+
+    if (content.widget) {
+      setActiveWidget(content.widget.type);
+      if (content.widget.type === 'attendance') setAttendanceConfig(content.widget.data);
+      if (content.widget.type === 'todo') setTodoConfig(content.widget.data);
+      if (content.widget.type === 'poll') setPollConfig(content.widget.data);
     }
   }, [initialPost, editor]);
 
@@ -594,16 +653,22 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
     if (!files || files.length === 0) return;
 
     setIsUploading(true);
-    const uploadPromises = Array.from(files).map(async (file) => {
+    const uploadPromises = Array.from(files).map(async (file): Promise<PostMedia | null> => {
       try {
         const url = await communityService.uploadFile(file, `posts/${communityId || 'notices'}`);
-        return { type, url, name: file.name };
+        return { type, url, name: file.name, size: file.size };
       } catch (error: any) {
-        console.error('File upload failed, falling back to base64', error);
-        return new Promise<{ type: 'image' | 'video' | 'file', url: string, name: string }>((resolve) => {
+        console.error('File upload failed', error);
+        // 스토리지 업로드가 실패하면 작은 파일만 임시로 data URL 로 담는다.
+        // (큰 동영상/파일까지 인라인으로 넣으면 게시글 저장 자체가 실패한다.)
+        if (file.size > MAX_INLINE_FALLBACK_BYTES) {
+          toast.error(`'${file.name}' 업로드에 실패했습니다. 파일이 너무 커서 임시 저장도 할 수 없습니다.`);
+          return null;
+        }
+        return new Promise<PostMedia>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => {
-            resolve({ type, url: reader.result as string, name: file.name });
+            resolve({ type, url: reader.result as string, name: file.name, size: file.size });
           };
           reader.readAsDataURL(file);
         });
@@ -612,7 +677,7 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
 
     try {
       const results = await Promise.all(uploadPromises);
-      const validResults = results.filter((r): r is { type: 'image' | 'video' | 'file', url: string, name: string } => r !== null);
+      const validResults = results.filter((r): r is PostMedia => !!r?.url);
       
       setMediaUrls(prev => [...prev, ...validResults]);
 
@@ -621,10 +686,9 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
           if (res.type === 'image') {
             editor.chain().focus().setImage({ src: res.url, alt: res.name }).run();
           } else if (res.type === 'video') {
-            editor.chain().focus().insertContent(`<video src="${res.url}" controls class="rounded-lg max-w-full my-4 border border-slate-200 bg-black h-auto block"></video>`).run();
-          } else {
-            editor.chain().focus().insertContent(`<p><a href="${res.url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 font-extrabold hover:underline">📎 ${res.name || '파일 다운로드'}</a></p>`).run();
+            editor.chain().focus().setVideo({ src: res.url, title: res.name }).run();
           }
+          // 일반 첨부파일은 본문에 넣지 않고 글 하단 첨부 블록으로만 노출한다.
         });
       }
 
@@ -637,6 +701,28 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
       setIsUploading(false);
       e.target.value = '';
     }
+  };
+
+  /** 첨부 목록에서 제거할 때 본문에 삽입된 같은 미디어도 함께 지운다. */
+  const removeMedia = (index: number) => {
+    const target = mediaUrls[index];
+    setMediaUrls(prev => prev.filter((_, i) => i !== index));
+    if (!editor || !target) return;
+
+    const positions: number[] = [];
+    editor.state.doc.descendants((node, pos) => {
+      if ((node.type.name === 'image' || node.type.name === 'video') && node.attrs.src === target.url) {
+        positions.push(pos);
+      }
+    });
+    if (positions.length === 0) return;
+
+    const tr = editor.state.tr;
+    positions.reverse().forEach(pos => {
+      const node = editor.state.doc.nodeAt(pos);
+      if (node) tr.delete(tr.mapping.map(pos), tr.mapping.map(pos + node.nodeSize));
+    });
+    editor.view.dispatch(tr);
   };
 
   const handleInsertLinkFromDialog = (url: string) => {
@@ -654,72 +740,86 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
   };
 
   const handleSubmit = async () => {
-    if (!editor || (!editor.getText() && mediaUrls.length === 0)) {
+    if (!editor || (!editor.getText().trim() && mediaUrls.length === 0)) {
       return toast.error('내용을 입력해주세요.');
     }
+    if (isSubmitting || isUploading) return;
+
+    const html = editor.getHTML();
+    const widget = activeWidget
+      ? {
+          type: activeWidget,
+          data:
+            activeWidget === 'attendance'
+              ? attendanceConfig
+              : activeWidget === 'todo'
+                ? todoConfig
+                : pollConfig,
+        }
+      : null;
+
+    // 본문 + 첨부 + 링크 + 위젯을 순서가 있는 블록 배열로 변환해 저장한다.
+    const blocks = buildBlocksFromEditorState({ html, media: mediaUrls, link: linkPreview, widget });
 
     const content_json = {
+      blocks,
       text: editor.getJSON(),
-      html: editor.getHTML(),
+      html,
       media: mediaUrls,
       link: linkPreview,
-      widget: activeWidget ? {
-        type: activeWidget,
-        data: activeWidget === 'attendance' ? attendanceConfig :
-              activeWidget === 'todo' ? todoConfig : pollConfig
-      } : null,
-      mission_id: initialPost?.content_json?.mission_id || initialPost?.mission_id || null
+      widget,
+      allow_comments: allowComments,
+      mission_id: parseContentJson(initialPost?.content_json)?.mission_id || initialPost?.mission_id || null,
     };
 
-    // Extract hashtags
     const text = editor.getText();
     const hashtags = text.match(/#[a-zA-Z0-9ㄱ-ㅎㅏ-ㅣ가-힣]+/g)?.map(t => t.slice(1)) || [];
 
-    // Trigger developer custom onSubmit console or props if provided
-    console.log('RichTextEditor Output:', {
-      title: title || '새 게시글',
-      html: editor.getHTML(),
-      json: editor.getJSON()
-    });
-
     if (onSubmit) {
       onSubmit({
-        title: title || editor.getText().slice(0, 20) || '새 게시글',
-        html: editor.getHTML(),
-        json: editor.getJSON()
+        title: title || text.slice(0, 20) || '새 게시글',
+        html,
+        json: editor.getJSON(),
       });
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const postData = {
         community_id: communityId || 'notices',
-        title: title || editor.getText().slice(0, 20) || '새 게시글',
-        content: editor.getHTML(),
+        title: title || text.slice(0, 20) || '새 게시글',
+        content: html,
         content_json,
         hashtags,
+        allow_comments: allowComments,
         type: (initialPost?.type || 'general') as any,
         image_urls: mediaUrls.filter(m => m.type === 'image').map(m => m.url),
         file_urls: mediaUrls.filter(m => m.type !== 'image').map(m => m.url),
-        metadata: content_json.widget ? content_json.widget.data : null
+        metadata: widget ? widget.data : null,
       };
 
-      const result = initialPost 
+      // initialPost 에 id 가 없으면(미션 인증 템플릿 등) 수정이 아니라 새 글 작성이다.
+      const isEditing = !!initialPost?.id;
+      const result = isEditing
         ? await communityService.updatePost(initialPost.id, postData)
         : await communityService.createPost(postData);
 
-      toast.success(initialPost ? '게시글이 수정되었습니다!' : '게시글이 등록되었습니다!');
+      toast.success(isEditing ? '게시글이 수정되었습니다!' : '게시글이 등록되었습니다!');
       if (onSuccess) onSuccess(result);
-      
-      if (!initialPost) {
+
+      if (!isEditing) {
         editor.commands.clearContent();
         setTitle('');
         setMediaUrls([]);
         setLinkPreview(null);
-        setActiveWidget(null);
+        detachWidget();
+        setAllowComments(true);
       }
     } catch (error: any) {
       toast.error(error.message || '게시글 처리 실패');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -927,6 +1027,56 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
 
           <div className="w-[1px] h-4 bg-slate-300 mx-1" />
 
+          {/* Font Size Popover */}
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "h-8 w-8 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-200/50 transition-colors",
+                    currentFontSize && "bg-slate-200 text-slate-900 border border-slate-300/40"
+                  )}
+                  title="글자 크기"
+                >
+                  <Type className="w-4 h-4" />
+                </Button>
+              }
+            />
+            <PopoverContent className="w-44 p-1.5 rounded-xl border border-slate-200 bg-white shadow-xl" align="start">
+              <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => editor?.chain().focus().unsetFontSize().run()}
+                  className={cn(
+                    "w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer border-none",
+                    !currentFontSize ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-50"
+                  )}
+                >
+                  기본 크기
+                </button>
+                {FONT_SIZES.map((size) => (
+                  <button
+                    key={size.value}
+                    type="button"
+                    onClick={() => editor?.chain().focus().setFontSize(size.value).run()}
+                    className={cn(
+                      "w-full text-left px-2.5 py-1.5 rounded-lg font-bold transition-colors cursor-pointer border-none flex items-center justify-between gap-2",
+                      currentFontSize === size.value ? "bg-purple-50 text-purple-700" : "text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    <span style={{ fontSize: `min(${size.value}, 20px)` }}>{size.label}</span>
+                    <span className="text-[9px] font-mono text-slate-400 shrink-0">{size.value}</span>
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          <div className="w-[1px] h-4 bg-slate-300 mx-1" />
+
           {/* Color Popover */}
           <Popover>
             <PopoverTrigger
@@ -966,6 +1116,23 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
                     title={col.name}
                   />
                 ))}
+              </div>
+              <div className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-2">
+                <input
+                  type="color"
+                  aria-label="사용자 지정 글자 색상"
+                  value={currentColor || '#1e293b'}
+                  onChange={(e) => editor?.chain().focus().setColor(e.target.value).run()}
+                  className="w-8 h-8 rounded-lg border border-slate-200 bg-white cursor-pointer p-0.5"
+                />
+                <span className="text-[10px] font-bold text-slate-500 flex-1">직접 색상 고르기</span>
+                <button
+                  type="button"
+                  onClick={() => editor?.chain().focus().unsetColor().run()}
+                  className="text-[10px] font-black text-slate-400 hover:text-slate-700 cursor-pointer border-none bg-transparent"
+                >
+                  초기화
+                </button>
               </div>
             </PopoverContent>
           </Popover>
@@ -1034,6 +1201,7 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
             onChange={(e) => handleFileUpload(e, 'image')} 
             accept="image/*" 
             className="hidden" 
+            multiple
           />
         </div>
         
@@ -1139,14 +1307,20 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
             {/* Visual Grid of Attachments */}
             {mediaUrls.length > 0 && (
               <div className="border-t border-slate-100 pt-4 mt-2">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2 select-none">📎 등록된 첨부파일 ({mediaUrls.length}개)</span>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2 select-none">📎 첨부 관리 ({mediaUrls.length}개) — 이미지·동영상은 본문에도 함께 삽입됩니다</span>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {mediaUrls.map((media, idx) => (
                     <div key={idx} className="relative aspect-[3/2] bg-slate-50 rounded-xl overflow-hidden border border-slate-205 group p-1 flex mt-1">
                       {media.type === 'image' ? (
                         <div className="w-full h-full relative">
-                          <img src={media.url} alt="upload" className="w-full h-full object-cover rounded-lg" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
+                          <OptimizedImage
+                            src={media.url}
+                            alt={media.name || '업로드 이미지'}
+                            displayWidth={IMAGE_WIDTHS.thumb}
+                            sizes="200px"
+                            className="object-cover rounded-lg"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2 pointer-events-none">
                             <span className="text-[10px] text-white truncate font-medium max-w-full">{media.name || '이미지'}</span>
                           </div>
                         </div>
@@ -1158,7 +1332,7 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
                       )}
                       <button 
                         type="button"
-                        onClick={() => setMediaUrls(prev => prev.filter((_, i) => i !== idx))}
+                        onClick={() => removeMedia(idx)}
                         className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-colors z-10 flex items-center justify-center"
                         title="첨부 해제"
                       >
@@ -1222,9 +1396,18 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
                          activeWidget === 'todo' ? '할 일 체크리스트 활성화' : '투표 위젯 활성화'}
                       </h4>
                     </div>
-                    <button type="button" onClick={() => setActiveWidget(null)} className="text-slate-400 hover:text-red-500">
-                      <X className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setEditingWidget(activeWidget)}
+                        className="text-[10px] font-black text-slate-500 hover:text-slate-800 px-2 py-1 rounded-md hover:bg-white/70"
+                      >
+                        설정 변경
+                      </button>
+                      <button type="button" onClick={detachWidget} className="text-slate-400 hover:text-red-500" title="위젯 제거">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                   <p className="text-[11px] text-slate-500">
                     {activeWidget === 'attendance' ? attendanceConfig.title :
@@ -1290,6 +1473,23 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
             multiple
           />
 
+          {/* 투표 만들기 */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => openWidgetEditor('poll')}
+            className={cn(
+              'rounded-md h-9 w-9 transition-colors',
+              activeWidget === 'poll'
+                ? 'text-purple-600 bg-white'
+                : 'text-slate-500 hover:text-purple-600 hover:bg-white'
+            )}
+            title="투표 만들기"
+          >
+            <Vote className="w-5 h-5" />
+          </Button>
+
           <div className="w-[1px] h-4 bg-slate-300 mx-1" />
 
           {/* Widgets Popover (Attendance/TodoList/Poll) */}
@@ -1306,7 +1506,7 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
                   <Button 
                     variant="ghost" 
                     className="justify-start gap-3 rounded-lg hover:bg-orange-50 text-slate-700 hover:text-orange-600"
-                    onClick={() => setActiveWidget('attendance')}
+                    onClick={() => openWidgetEditor('attendance')}
                   >
                     <CalendarCheck className="w-4 h-4" />
                     <span className="text-xs font-bold">출석체크 위젯</span>
@@ -1314,7 +1514,7 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
                   <Button 
                     variant="ghost" 
                     className="justify-start gap-3 rounded-lg hover:bg-blue-50 text-slate-700 hover:text-blue-600"
-                    onClick={() => setActiveWidget('todo')}
+                    onClick={() => openWidgetEditor('todo')}
                   >
                     <ListTodo className="w-4 h-4" />
                     <span className="text-xs font-bold">체크리스트 (할 일)</span>
@@ -1322,7 +1522,7 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
                   <Button 
                     variant="ghost" 
                     className="justify-start gap-3 rounded-lg hover:bg-purple-50 text-slate-700 hover:text-purple-600"
-                    onClick={() => setActiveWidget('poll')}
+                    onClick={() => openWidgetEditor('poll')}
                   >
                     <Vote className="w-4 h-4" />
                     <span className="text-xs font-bold">설문/투표 위젯</span>
@@ -1370,40 +1570,66 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
           <Popover>
             <PopoverTrigger
               render={
-                <Button variant="ghost" size="icon" className="text-slate-500 hover:text-yellow-500 hover:bg-white rounded-md h-9 w-9" title="이모지">
+                <Button type="button" variant="ghost" size="icon" className="text-slate-500 hover:text-yellow-500 hover:bg-white rounded-md h-9 w-9" title="이모티콘">
                   <Smile className="w-5 h-5" />
                 </Button>
               }
             />
-            <PopoverContent className="w-72 p-3 rounded-2xl border border-slate-200 bg-white shadow-xl max-h-72 overflow-y-auto" align="start">
-              <div className="grid grid-cols-7 gap-1">
-                {POPULAR_EMOJIS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => {
-                      if (editor) {
-                        editor.chain().focus().insertContent(emoji).run();
-                      }
-                    }}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-lg hover:bg-slate-100 transition-colors cursor-pointer border-none"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
+            <PopoverContent className="w-auto p-0 rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden" align="start">
+              <EmojiPicker
+                onEmojiClick={(emojiData) => {
+                  editor?.chain().focus().insertContent(emojiData.emoji).run();
+                }}
+                emojiStyle={EmojiStyle.NATIVE}
+                theme={EmojiTheme.LIGHT}
+                searchPlaceholder="이모티콘 검색"
+                width={320}
+                height={380}
+                lazyLoadEmojis
+                previewConfig={{ showPreview: false }}
+              />
             </PopoverContent>
           </Popover>
+
+          <div className="w-[1px] h-4 bg-slate-300 mx-1" />
+
+          {/* 댓글 허용 여부 (기본: 허용) */}
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              const next = !allowComments;
+              setAllowComments(next);
+              toast.info(next ? '이 게시글에 댓글을 받을 수 있습니다.' : '이 게시글은 댓글을 받지 않습니다.');
+            }}
+            aria-pressed={allowComments}
+            className={cn(
+              'h-9 px-3 rounded-lg gap-1.5 font-extrabold text-[11px] transition-colors',
+              allowComments
+                ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                : 'text-slate-500 bg-slate-100 hover:bg-slate-200'
+            )}
+            title="댓글 허용 여부를 켜고 끕니다"
+          >
+            {allowComments ? <MessageSquare className="w-4 h-4" /> : <MessageSquareOff className="w-4 h-4" />}
+            {allowComments ? '댓글 허용' : '댓글 잠금'}
+          </Button>
 
         </div>
 
         {/* Action Button */}
         <Button 
+          type="button"
           onClick={handleSubmit} 
-          disabled={isUploading}
+          disabled={isUploading || isSubmitting}
           className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-6 py-2.5 font-extrabold gap-2 transition-all shadow-md active:scale-95 text-xs select-none"
         >
-          {isUploading ? '업로드 대기 중...' : (
+          {isUploading ? '업로드 대기 중...' : isSubmitting ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              등록 중...
+            </>
+          ) : (
             <>
               {submitButtonText || '게시글 작성 완료'}
               <Send className="w-4 h-4" />
@@ -1414,11 +1640,15 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
 
       {/* Slide overlay for Widget configurations */}
       <AnimatePresence>
-        {activeWidget === 'attendance' && (
+        {editingWidget === 'attendance' && (
           <WidgetModal 
             title="출석체크 설정" 
-            onClose={() => setActiveWidget(null)}
-            onSave={() => setActiveWidget('attendance')}
+            onClose={() => setEditingWidget(null)}
+            onSave={() => {
+              if (!attendanceConfig.title.trim()) return toast.error('출석체크 제목을 입력해주세요.');
+              setEditingWidget(null);
+              toast.success('출석체크 위젯이 게시글에 첨부되었습니다.');
+            }}
           >
             <div className="space-y-4">
                <div className="space-y-2">
@@ -1433,11 +1663,17 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
           </WidgetModal>
         )}
 
-        {activeWidget === 'poll' && (
+        {editingWidget === 'poll' && (
           <WidgetModal 
             title="투표 설정" 
-            onClose={() => setActiveWidget(null)}
-            onSave={() => setActiveWidget('poll')}
+            onClose={() => setEditingWidget(null)}
+            onSave={() => {
+              if (!pollConfig.question.trim()) return toast.error('투표 질문을 입력해주세요.');
+              if (pollConfig.options.filter(o => o.trim()).length < 2) return toast.error('선택지를 2개 이상 입력해주세요.');
+              setPollConfig(prev => ({ ...prev, options: prev.options.filter(o => o.trim()) }));
+              setEditingWidget(null);
+              toast.success('투표가 게시글에 첨부되었습니다.');
+            }}
           >
             <div className="space-y-4">
                <div className="space-y-2">
@@ -1486,11 +1722,16 @@ export function PostEditor({ communityId, initialPost, onSuccess, onCancel, onSu
           </WidgetModal>
         )}
 
-        {activeWidget === 'todo' && (
+        {editingWidget === 'todo' && (
           <WidgetModal 
             title="할 일 목록 설정" 
-            onClose={() => setActiveWidget(null)}
-            onSave={() => setActiveWidget('todo')}
+            onClose={() => setEditingWidget(null)}
+            onSave={() => {
+              if (todoConfig.items.filter(i => i.trim()).length === 0) return toast.error('할 일 항목을 한 개 이상 입력해주세요.');
+              setTodoConfig(prev => ({ ...prev, items: prev.items.filter(i => i.trim()) }));
+              setEditingWidget(null);
+              toast.success('체크리스트가 게시글에 첨부되었습니다.');
+            }}
           >
             <div className="space-y-4">
                <div className="space-y-2">
