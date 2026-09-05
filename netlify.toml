@@ -83,6 +83,18 @@
   force = true
 
 [[redirects]]
+  from = "/api/admin/*"
+  to = "/.netlify/functions/core-api"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/core-api"
+  to = "/.netlify/functions/core-api"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200

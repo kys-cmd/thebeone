@@ -1837,6 +1837,74 @@ async function startServer() {
         return res.json({ status: "success", message: `Successfully reset password to '${newPassword}'` });
       }
 
+      // 6.1 ADMIN: admin-update-user-status (suspend, reactivate, withdraw)
+      if (action === "admin-update-user-status") {
+        const { userId, status, suspensionDays } = req.body;
+        if (!userId || !status) {
+          return res.status(400).json({ status: "error", message: "Required fields (userId, status) are missing" });
+        }
+
+        let suspensionUntil: string | null = null;
+        if (status === "active") {
+          try {
+            await supabaseAdmin.auth.admin.updateUserById(userId, {
+              ban_duration: "none",
+              user_metadata: { status: "active", suspended_until: null, suspension_reason: null }
+            });
+          } catch (authErr: any) {
+            console.warn("Supabase Auth unban note:", authErr?.message);
+          }
+
+          await supabaseAdmin
+            .from("profiles")
+            .update({ is_deleted: false, updated_at: new Date().toISOString() })
+            .eq("id", userId);
+
+          return res.json({
+            status: "success",
+            message: "활동 정지 설정이 성공적으로 취소되고 정상 회원으로 복구되었습니다.",
+            data: { status: "active", suspensionUntil: null }
+          });
+        } else if (status === "suspended") {
+          const days = Number(suspensionDays) || 7;
+          const untilDate = new Date();
+          untilDate.setDate(untilDate.getDate() + days);
+          suspensionUntil = untilDate.toISOString().split("T")[0];
+
+          const banHours = days >= 999 ? "876000h" : `${days * 24}h`;
+          try {
+            await supabaseAdmin.auth.admin.updateUserById(userId, {
+              ban_duration: banHours,
+              user_metadata: { status: "suspended", suspended_until: suspensionUntil }
+            });
+          } catch (authErr: any) {
+            console.warn("Supabase Auth ban note:", authErr?.message);
+          }
+
+          await supabaseAdmin
+            .from("profiles")
+            .update({ updated_at: new Date().toISOString() })
+            .eq("id", userId);
+
+          return res.json({
+            status: "success",
+            message: days >= 999 ? "영구 활동 정지가 설정되었습니다." : `${days}일간 활동 정지가 설정되었습니다.`,
+            data: { status: "suspended", suspensionUntil }
+          });
+        } else if (status === "withdrawn") {
+          await supabaseAdmin
+            .from("profiles")
+            .update({ is_deleted: true, updated_at: new Date().toISOString() })
+            .eq("id", userId);
+
+          return res.json({
+            status: "success",
+            message: "회원 탈퇴 처리가 완료되었습니다.",
+            data: { status: "withdrawn" }
+          });
+        }
+      }
+
       // 6.2 ADMIN: Delete specific auth user permanently from Supabase Authentication
       if (action === "admin-delete-auth-user") {
         const { userId } = req.body;

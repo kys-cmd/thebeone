@@ -161,23 +161,110 @@ export default function AdminUserManagement() {
     }
   };
 
+  const sendAdminPost = async (endpoint: string, payload: any) => {
+    const headers = await getAuthHeaders();
+
+    const actionMap: Record<string, string> = {
+      '/api/admin/reset-password': 'admin-reset-password',
+      '/api/admin/update-user-status': 'admin-update-user-status',
+    };
+    const action = payload.action || actionMap[endpoint];
+    const bodyWithAction = { ...payload, ...(action ? { action } : {}) };
+
+    let response: Response | null = null;
+    let lastError: any = null;
+
+    // 1. Try unified /api/core-api first (supported universally across Node/Express & Netlify functions)
+    try {
+      const res = await fetch('/api/core-api', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(bodyWithAction)
+      });
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        response = res;
+      } else if (res.status === 404 || res.status === 405 || contentType.includes('text/html')) {
+        console.warn('/api/core-api returned non-JSON/404, falling back to direct endpoint:', endpoint);
+      } else {
+        response = res;
+      }
+    } catch (e) {
+      lastError = e;
+    }
+
+    // 2. If /api/core-api returned non-JSON or failed, try direct endpoint
+    if (!response && endpoint !== '/api/core-api') {
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(bodyWithAction)
+        });
+      } catch (e) {
+        lastError = e;
+      }
+    }
+
+    if (!response) {
+      throw new Error(lastError?.message || '네트워크 연결 상태를 확인해주세요.');
+    }
+
+    const text = await response.text();
+    let data: any = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.error('Non-JSON server response:', text);
+      if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+        throw new Error(`API 통신 경로 오류 (HTTP ${response.status}): 서버 엔드포인트에서 HTML 페이지가 반환되었습니다.`);
+      }
+      throw new Error(`서버 응답 파싱 에러 (HTTP ${response.status})`);
+    }
+
+    if (!response.ok || data?.status === 'error') {
+      throw new Error(data?.message || `요청 처리에 실패했습니다. (HTTP ${response.status})`);
+    }
+
+    return data;
+  };
+
   const loadResetRequests = async () => {
     try {
       setIsRequestsLoading(true);
-      const headers = await getAuthHeaders();
-      const response = await fetch('/api/admin/reset-requests', { headers });
-      const result = await response.json();
-      if (result.status !== 'success') {
-        throw new Error(result.message || '요청 목록로드 실패');
+      let requestsData: any[] = [];
+      try {
+        const headers = await getAuthHeaders();
+        const response = await fetch('/api/admin/reset-requests', { headers });
+        const cType = response.headers.get('content-type') || '';
+        if (cType.includes('application/json')) {
+          const result = await response.json();
+          if (result.status === 'success') {
+            requestsData = result.data || [];
+          }
+        }
+      } catch (beErr) {
+        console.warn('API reset-requests load error, falling back to direct DB:', beErr);
       }
 
-      const requestsData = result.data || [];
+      // Fallback to direct supabase query if API returned empty/failed
+      if (requestsData.length === 0) {
+        const { data: dbData } = await supabase
+          .from('support_contents')
+          .select('*')
+          .eq('type', 'password_reset_request')
+          .eq('is_deleted', false)
+          .order('created_at', { ascending: false });
+        if (dbData && dbData.length > 0) {
+          requestsData = dbData;
+        }
+      }
 
       const mapped = requestsData.map((item: any) => {
         let meta = { userId: '', name: '', status: 'PENDING', requestedAt: item.created_at };
         try {
           if (item.content) {
-            meta = JSON.parse(item.content);
+            meta = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
           }
         } catch (e) {
           console.error('Failed to parse reset request content:', e);
@@ -203,21 +290,17 @@ export default function AdminUserManagement() {
 
   const handleResetRequestPassword = async (requestId: string, email: string, userId: string) => {
     try {
-      const headers = await getAuthHeaders();
-      const response = await fetch('/api/admin/reset-password', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ email, userId, requestId })
+      await sendAdminPost('/api/admin/reset-password', {
+        action: 'admin-reset-password',
+        email,
+        userId,
+        requestId,
+        password: '123456'
       });
-      const result = await response.json();
-      if (result.status === 'success') {
-        toast.success(`'${email}' 회원의 비밀번호가 '123456'으로 성공적으로 초기화되었습니다!`);
-        loadResetRequests();
-      } else {
-        toast.error(result.message || '비밀번호 초기화 전송에 실패했습니다.');
-      }
-    } catch (err) {
-      toast.error('비밀번호 초기화 요청 처리 중 오류가 발생했습니다.');
+      toast.success(`'${email}' 회원의 비밀번호가 '123456'으로 성공적으로 초기화되었습니다!`);
+      loadResetRequests();
+    } catch (err: any) {
+      toast.error(`비밀번호 초기화 요청 처리 중 오류: ${err.message || ''}`);
     }
   };
 
@@ -584,29 +667,25 @@ export default function AdminUserManagement() {
 
     try {
       setIsPasswordSubmitting(true);
-      const headers = await getAuthHeaders();
-      const response = await fetch('/api/admin/reset-password', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ userId: user.id, password: '123456' })
+      await sendAdminPost('/api/admin/reset-password', {
+        action: 'admin-reset-password',
+        userId: user.id,
+        email: user.email,
+        password: '123456'
       });
-      const result = await response.json();
-      if (result.status === 'success') {
-        const displayName = user.nickname || user.name;
-        toast.success(`'${displayName}' 회원의 비밀번호가 '123456'으로 성공적으로 초기화되었습니다!`);
-        
-        // 닫기 및 성공 팝업 모달 띄우기
-        setDefaultResetConfirmUser(null);
-        setIsPasswordChangeOpen(false);
-        setPasswordChangeSuccessData({
-          isOpen: true,
-          userName: displayName,
-          userEmail: user.email,
-          password: '123456'
-        });
-      } else {
-        toast.error(result.message || '비밀번호 초기화 처리에 실패했습니다.');
-      }
+
+      const displayName = user.nickname || user.name;
+      toast.success(`'${displayName}' 회원의 비밀번호가 '123456'으로 성공적으로 초기화되었습니다!`);
+      
+      // 닫기 및 성공 팝업 모달 띄우기
+      setDefaultResetConfirmUser(null);
+      setIsPasswordChangeOpen(false);
+      setPasswordChangeSuccessData({
+        isOpen: true,
+        userName: displayName,
+        userEmail: user.email,
+        password: '123456'
+      });
     } catch (err: any) {
       console.error('Password reset error:', err);
       toast.error(`비밀번호 초기화 요청 처리 중 오류: ${err.message || ''}`);
@@ -632,30 +711,25 @@ export default function AdminUserManagement() {
 
     try {
       setIsPasswordSubmitting(true);
-      const headers = await getAuthHeaders();
-      const response = await fetch('/api/admin/reset-password', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ userId: selectedUser.id, password: targetPassword })
+      await sendAdminPost('/api/admin/reset-password', {
+        action: 'admin-reset-password',
+        userId: selectedUser.id,
+        email: selectedUser.email,
+        password: targetPassword
       });
-      const result = await response.json();
       
-      if (result.status === 'success') {
-        const displayName = selectedUser.nickname || selectedUser.name;
-        toast.success(`'${displayName}' 회원의 비밀번호가 성공적으로 '${targetPassword}'(으)로 강제 변경되었습니다.`);
-        setIsPasswordChangeOpen(false);
-        setNewCustomPassword('123456');
+      const displayName = selectedUser.nickname || selectedUser.name;
+      toast.success(`'${displayName}' 회원의 비밀번호가 성공적으로 '${targetPassword}'(으)로 강제 변경되었습니다.`);
+      setIsPasswordChangeOpen(false);
+      setNewCustomPassword('123456');
 
-        // 변경 완료 확인 모달 팝업
-        setPasswordChangeSuccessData({
-          isOpen: true,
-          userName: displayName,
-          userEmail: selectedUser.email,
-          password: targetPassword
-        });
-      } else {
-        toast.error(result.message || '비밀번호 강제 변경에 실패했습니다.');
-      }
+      // 변경 완료 확인 모달 팝업
+      setPasswordChangeSuccessData({
+        isOpen: true,
+        userName: displayName,
+        userEmail: selectedUser.email,
+        password: targetPassword
+      });
     } catch (err: any) {
       console.error('Failed to change custom password:', err);
       toast.error(`비밀번호 처리 도중 예외가 발생했습니다: ${err.message || ''}`);
@@ -707,16 +781,12 @@ export default function AdminUserManagement() {
     try {
       // 1. Backend Server-side update (Supabase Auth Ban duration & Profile sync)
       try {
-        const headers = await getAuthHeaders();
-        const res = await fetch('/api/admin/update-user-status', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ userId, status, suspensionDays })
+        await sendAdminPost('/api/admin/update-user-status', {
+          action: 'admin-update-user-status',
+          userId,
+          status,
+          suspensionDays
         });
-        const resJson = await res.json();
-        if (resJson.status !== 'success') {
-          console.warn('Backend update-user-status warning:', resJson.message);
-        }
       } catch (beErr) {
         console.warn('Backend update-user-status fetch error:', beErr);
       }
