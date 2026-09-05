@@ -25,7 +25,11 @@ import {
   Smartphone,
   Trash2,
   MessageSquare,
-  Loader2
+  Loader2,
+  Copy,
+  Check,
+  RefreshCcw,
+  KeyRound
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -127,8 +131,17 @@ export default function AdminUserManagement() {
 
   // Password Override Control States (Admin Strong Privilege)
   const [isPasswordChangeOpen, setIsPasswordChangeOpen] = useState(false);
-  const [newCustomPassword, setNewCustomPassword] = useState('');
+  const [newCustomPassword, setNewCustomPassword] = useState('123456');
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
+
+  // Password Change Success Confirmation Modal State
+  const [passwordChangeSuccessData, setPasswordChangeSuccessData] = useState<{
+    isOpen: boolean;
+    userName: string;
+    userEmail: string;
+    password: string;
+  } | null>(null);
+  const [isCopiedPassword, setIsCopiedPassword] = useState(false);
 
   // Password Reset Request States
   const [resetRequests, setResetRequests] = useState<any[]>([]);
@@ -551,37 +564,69 @@ export default function AdminUserManagement() {
     });
   };
 
-  const handleResetPassword = async (userId: string) => {
+  const handleCopyPassword = (text: string) => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text);
+      setIsCopiedPassword(true);
+      toast.success(`비밀번호 '${text}'(이)가 클립보드에 복사되었습니다!`);
+      setTimeout(() => setIsCopiedPassword(false), 2500);
+    } else {
+      toast.info(`비밀번호: ${text}`);
+    }
+  };
+
+  const handleResetPassword = async (targetUser?: User | null) => {
+    const user = targetUser || selectedUser || defaultResetConfirmUser;
+    if (!user) {
+      toast.error('비밀번호를 초기화할 대상 회원이 없습니다.');
+      return;
+    }
+
     try {
+      setIsPasswordSubmitting(true);
       const headers = await getAuthHeaders();
       const response = await fetch('/api/admin/reset-password', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ userId })
+        body: JSON.stringify({ userId: user.id, password: '123456' })
       });
       const result = await response.json();
       if (result.status === 'success') {
-        toast.success("비밀번호가 '123456'으로 성공적으로 초기화되었습니다!");
+        const displayName = user.nickname || user.name;
+        toast.success(`'${displayName}' 회원의 비밀번호가 '123456'으로 성공적으로 초기화되었습니다!`);
+        
+        // 닫기 및 성공 팝업 모달 띄우기
+        setDefaultResetConfirmUser(null);
+        setIsPasswordChangeOpen(false);
+        setPasswordChangeSuccessData({
+          isOpen: true,
+          userName: displayName,
+          userEmail: user.email,
+          password: '123456'
+        });
       } else {
         toast.error(result.message || '비밀번호 초기화 처리에 실패했습니다.');
       }
-    } catch (err) {
-      toast.error('비밀번호 초기화 요청 처리 중 오류가 발생했습니다.');
+    } catch (err: any) {
+      console.error('Password reset error:', err);
+      toast.error(`비밀번호 초기화 요청 처리 중 오류: ${err.message || ''}`);
+    } finally {
+      setIsPasswordSubmitting(false);
     }
   };
 
-  const handleCustomPasswordChange = async () => {
+  const handleCustomPasswordChange = async (overridePassword?: string) => {
     if (!selectedUser) {
       toast.error('선택된 회원이 없습니다.');
       return;
     }
-    const targetPassword = newCustomPassword.trim();
+    const targetPassword = (overridePassword || newCustomPassword || '123456').trim();
     if (!targetPassword) {
       toast.error('변경할 새 비밀번호를 입력해주세요.');
       return;
     }
     if (targetPassword.length < 6) {
-      toast.error('비밀번호는 최소 6자 이상으로 견고하게 설정해야 합니다.');
+      toast.error('비밀번호는 최소 6자 이상이어야 합니다.');
       return;
     }
 
@@ -596,9 +641,18 @@ export default function AdminUserManagement() {
       const result = await response.json();
       
       if (result.status === 'success') {
-        toast.success(`'${selectedUser.nickname || selectedUser.name}' 회원의 비밀번호가 성공적으로 '${targetPassword}'(으)로 강제 변경되었습니다.`);
+        const displayName = selectedUser.nickname || selectedUser.name;
+        toast.success(`'${displayName}' 회원의 비밀번호가 성공적으로 '${targetPassword}'(으)로 강제 변경되었습니다.`);
         setIsPasswordChangeOpen(false);
-        setNewCustomPassword('');
+        setNewCustomPassword('123456');
+
+        // 변경 완료 확인 모달 팝업
+        setPasswordChangeSuccessData({
+          isOpen: true,
+          userName: displayName,
+          userEmail: selectedUser.email,
+          password: targetPassword
+        });
       } else {
         toast.error(result.message || '비밀번호 강제 변경에 실패했습니다.');
       }
@@ -1108,25 +1162,35 @@ export default function AdminUserManagement() {
                     <Label className="text-sm font-bold text-red-900 border-b border-red-200 pb-2 mb-3 block">비밀번호 강력 관리</Label>
                     <div className="flex flex-col gap-2">
                       <Button
+                        type="button"
                         variant="outline"
-                        className="w-full h-12 gap-2 bg-purple-50 border-purple-200 text-purple-900 hover:bg-purple-100 text-md font-bold"
+                        className="w-full h-12 gap-2 bg-rose-50 border-rose-200 text-rose-900 hover:bg-rose-100 text-sm font-black rounded-xl shadow-xs transition-all"
+                        onClick={() => handleResetPassword(selectedUser)}
+                        disabled={isPasswordSubmitting}
+                      >
+                        {isPasswordSubmitting ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-rose-600" />
+                        ) : (
+                          <RefreshCcw className="w-4 h-4 text-rose-600" />
+                        )}
+                        기본 임시 비밀번호 발급 ('123456')
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full h-12 gap-2 bg-purple-50 border-purple-200 text-purple-900 hover:bg-purple-100 text-sm font-black rounded-xl shadow-xs transition-all"
                         onClick={() => {
                           setNewCustomPassword('123456');
                           setIsPasswordChangeOpen(true);
                         }}
                       >
-                        <Key className="w-5 h-5 text-purple-600" /> 커스텀 비밀번호 직접 지정
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        className="w-full h-10 gap-2 text-gray-500 hover:text-red-900 hover:bg-red-50 text-xs font-semibold"
-                        onClick={() => {
-                          setDefaultResetConfirmUser(selectedUser);
-                        }}
-                      >
-                        기본 임시 비밀번호 발급 ('123456')
+                        <Key className="w-4 h-4 text-purple-600" />
+                        커스텀 비밀번호 직접 지정
                       </Button>
                     </div>
+                    <p className="text-[11px] text-gray-500 font-semibold px-1">
+                      * [기본 임시 비밀번호 발급] 클릭 시 즉시 <strong>'123456'</strong>으로 재설정되며 변경 완료 안내 창이 표시됩니다.
+                    </p>
                   </div>
                   <div className="space-y-3">
                     <Label className="text-sm font-bold text-red-900 border-b border-red-200 pb-2 mb-3 block">회원 상태 변경</Label>
@@ -1712,74 +1776,100 @@ export default function AdminUserManagement() {
 
       {/* Dynamic Custom Password Override Modal */}
       {isPasswordChangeOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-[24px] p-8 max-w-md w-full space-y-6 shadow-2xl border border-purple-100">
-            <div className="space-y-3">
-              <h3 className="text-xl font-black text-purple-700 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-[24px] p-7 max-w-md w-full space-y-5 shadow-2xl border border-purple-100">
+            <div className="space-y-2">
+              <h3 className="text-xl font-black text-purple-800 flex items-center gap-2">
                 <Key className="w-6 h-6 text-purple-600 shrink-0" />
-                회원 비밀번호 강력 강제 변경
+                회원 비밀번호 관리 및 재설정
               </h3>
-              <p className="text-sm text-gray-500 font-bold leading-relaxed bg-purple-50 p-4 rounded-2xl border border-purple-100">
-                선택한 회원(<strong>{selectedUser?.nickname || selectedUser?.name}</strong>)의 로그인 패스워드를 관리자 특별 권한으로 강제 수정합니다. 변경 후 사용자는 새 설정 비밀번호로만 로그인이 가능합니다.
-              </p>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-bold text-gray-700">새 비밀번호 입력</Label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs font-bold text-purple-700 hover:text-purple-900 hover:bg-purple-100/70 px-2 rounded-lg"
-                    onClick={() => setNewCustomPassword('123456')}
-                  >
-                    '123456' 자동 채우기
-                  </Button>
-                </div>
-                <Input
-                  type="text"
-                  placeholder="새 비밀번호 입력 (기본 임시 번호: 123456)"
-                  value={newCustomPassword}
-                  onChange={(e) => setNewCustomPassword(e.target.value)}
-                  className="h-12 text-md font-mono border-purple-200 focus:border-purple-400 focus:ring-purple-200 bg-purple-50/30"
-                />
-                <div className="p-3 bg-purple-50/80 rounded-xl border border-purple-100 text-xs text-purple-900 font-semibold space-y-1">
-                  <p className="flex items-center gap-1.5 font-bold text-purple-800">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                    임시 비밀번호 <strong>'123456'</strong>이 기본값으로 설정되어 있습니다.
-                  </p>
-                  <p className="text-[11px] text-purple-700/80 pl-5">
-                    이대로 [강제 비밀번호 변경]을 누르시면 즉시 '123456'으로 반영되며, 원하시는 다른 비밀번호로 타이핑하여 변경할 수도 있습니다.
-                  </p>
-                </div>
-              </div>
-              <p className="text-xs text-amber-600 font-medium">
-                ⚠️ 주의: 이 비밀번호 변경은 Supabase Auth에 도달하여 DB 비밀번호 해시데이터를 즉각 대체합니다.
+              <p className="text-xs text-gray-500 font-bold leading-relaxed bg-purple-50 p-3.5 rounded-xl border border-purple-100">
+                선택한 회원(<strong>{selectedUser?.nickname || selectedUser?.name}</strong>)의 로그인 비밀번호를 변경합니다.
               </p>
             </div>
-            <div className="flex gap-4 justify-end pt-2">
+
+            {/* Quick Option 1: One-click standard temporary password 123456 */}
+            <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50/70 rounded-2xl border border-purple-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-purple-950 flex items-center gap-1.5">
+                  <RefreshCcw className="w-3.5 h-3.5 text-purple-600" />
+                  기본 임시 비밀번호 원클릭 발급
+                </span>
+                <span className="text-xs font-mono font-black px-2 py-0.5 rounded-md bg-purple-200 text-purple-900">
+                  123456
+                </span>
+              </div>
+              <Button
+                type="button"
+                className="w-full h-11 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-xl shadow-xs gap-2 text-sm"
+                onClick={() => handleCustomPasswordChange('123456')}
+                disabled={isPasswordSubmitting}
+              >
+                {isPasswordSubmitting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                '123456'으로 즉시 발급 및 변경
+              </Button>
+            </div>
+
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-gray-200"></div>
+              <span className="flex-shrink mx-3 text-xs text-gray-400 font-bold">또는 직접 다른 번호 지정</span>
+              <div className="flex-grow border-t border-gray-200"></div>
+            </div>
+
+            {/* Option 2: Custom password input */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-gray-700">새 커스텀 비밀번호</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-[11px] font-bold text-purple-700 hover:text-purple-900 hover:bg-purple-100/70 px-2 rounded-lg"
+                  onClick={() => setNewCustomPassword('123456')}
+                >
+                  '123456' 채우기
+                </Button>
+              </div>
+              <Input
+                type="text"
+                placeholder="새 비밀번호 입력 (최소 6자 이상)"
+                value={newCustomPassword}
+                onChange={(e) => setNewCustomPassword(e.target.value)}
+                className="h-11 text-md font-mono border-gray-300 focus:border-purple-400 bg-white"
+              />
+              <p className="text-[11px] text-amber-600 font-medium">
+                ⚠️ 변경 시 Supabase 인증 데이터베이스에 즉시 동기화 반영됩니다.
+              </p>
+            </div>
+
+            <div className="flex gap-3 justify-end pt-1">
               <Button 
                 variant="outline" 
-                className="rounded-xl border-gray-200 font-bold px-5 h-11"
+                className="rounded-xl border-gray-200 font-bold px-4 h-10 text-sm"
                 onClick={() => {
                   setIsPasswordChangeOpen(false);
-                  setNewCustomPassword('');
+                  setNewCustomPassword('123456');
                 }}
                 disabled={isPasswordSubmitting}
               >
-                취소
+                닫기
               </Button>
               <Button 
-                className="rounded-xl bg-purple-600 hover:bg-purple-700 font-black px-5 h-11 text-white gap-2"
-                onClick={handleCustomPasswordChange}
+                className="rounded-xl bg-purple-600 hover:bg-purple-700 font-black px-4 h-10 text-white gap-1.5 text-sm"
+                onClick={() => handleCustomPasswordChange()}
                 disabled={isPasswordSubmitting}
               >
                 {isPasswordSubmitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    변경 진행 중...
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    변경 중...
                   </>
                 ) : (
-                  '강제 비밀번호 변경'
+                  '입력한 번호로 변경'
                 )}
               </Button>
             </div>
@@ -1789,35 +1879,99 @@ export default function AdminUserManagement() {
 
       {/* Default Password Reset Confirmation Modal */}
       {defaultResetConfirmUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-[24px] p-8 max-w-md w-full space-y-6 shadow-2xl border border-red-150">
-            <div className="space-y-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-[24px] p-7 max-w-md w-full space-y-5 shadow-2xl border border-red-100">
+            <div className="space-y-2">
               <h3 className="text-xl font-black text-rose-700 flex items-center gap-2">
-                <Key className="w-6 h-6 text-rose-600 shrink-0" />
-                기본 비밀번호('123456') 리셋 실행
+                <RefreshCcw className="w-6 h-6 text-rose-600 shrink-0" />
+                기본 비밀번호 ('123456') 리셋
               </h3>
-              <p className="text-sm text-gray-500 font-bold leading-relaxed bg-rose-50 p-4 rounded-2xl border border-rose-100">
-                선택한 회원(<strong>{defaultResetConfirmUser.nickname || defaultResetConfirmUser.name}</strong>)의 로그인 암호를 <strong>"123456"</strong>으로 즉시 초기화 실행하시겠습니까? 이 작업은 즉시 인증 DB를 변동시킵니다.
+              <p className="text-sm text-gray-600 font-bold leading-relaxed bg-rose-50 p-4 rounded-xl border border-rose-100">
+                선택한 회원(<strong>{defaultResetConfirmUser.nickname || defaultResetConfirmUser.name}</strong>)의 로그인 암호를 <strong>"123456"</strong>으로 즉시 초기화 실행하시겠습니까?
               </p>
             </div>
-            <div className="flex gap-4 justify-end pt-2">
+            <div className="flex gap-3 justify-end pt-2">
               <Button 
                 variant="outline" 
                 className="rounded-xl border-gray-200 font-bold px-5 h-11"
                 onClick={() => setDefaultResetConfirmUser(null)}
+                disabled={isPasswordSubmitting}
               >
                 취소
               </Button>
               <Button 
-                className="rounded-xl bg-rose-600 hover:bg-rose-700 font-black px-5 h-11 text-white"
-                onClick={() => {
-                  handleResetPassword(defaultResetConfirmUser.id);
-                  setDefaultResetConfirmUser(null);
-                }}
+                className="rounded-xl bg-rose-600 hover:bg-rose-700 font-black px-5 h-11 text-white gap-2"
+                onClick={() => handleResetPassword(defaultResetConfirmUser)}
+                disabled={isPasswordSubmitting}
               >
-                확인 및 초기화 진행
+                {isPasswordSubmitting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                '123456'으로 초기화 진행
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Password Change Success Confirmation Modal */}
+      {passwordChangeSuccessData && passwordChangeSuccessData.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-[28px] p-8 max-w-md w-full space-y-5 shadow-2xl border border-emerald-100 text-center animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+              <CheckCircle2 className="w-10 h-10" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-2xl font-black text-gray-900">
+                비밀번호 변경 완료!
+              </h3>
+              <p className="text-sm text-gray-600 font-medium">
+                <strong>{passwordChangeSuccessData.userName}</strong> ({passwordChangeSuccessData.userEmail}) 회원의 비밀번호가 성공적으로 변경되었습니다.
+              </p>
+            </div>
+
+            {/* Password Display Box */}
+            <div className="bg-emerald-50/80 p-5 rounded-2xl border border-emerald-200 space-y-2.5">
+              <p className="text-xs font-bold text-emerald-900">새로 설정된 비밀번호</p>
+              <div className="flex items-center justify-center gap-3 bg-white py-3 px-4 rounded-xl border border-emerald-200 shadow-xs">
+                <span className="font-mono text-2xl font-black tracking-wider text-emerald-800 select-all">
+                  {passwordChangeSuccessData.password}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2.5 text-xs font-bold text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100/60 rounded-lg gap-1.5"
+                  onClick={() => handleCopyPassword(passwordChangeSuccessData.password)}
+                >
+                  {isCopiedPassword ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>복사됨</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>복사</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-[11px] text-emerald-700 font-medium leading-tight">
+                * 인증 시스템에 즉시 반영되었습니다. 회원은 이제 이 비밀번호로 로그인할 수 있습니다.
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-base shadow-md cursor-pointer"
+              onClick={() => setPasswordChangeSuccessData(null)}
+            >
+              확인 및 창 닫기
+            </Button>
           </div>
         </div>
       )}

@@ -2696,11 +2696,12 @@ async function startServer() {
 
   // Admin API for Direct Password Reset (For CMS Admin Use)
   app.post("/api/admin/reset-password", async (req, res) => {
-    console.log("POST /api/admin/reset-password called");
+    console.log("POST /api/admin/reset-password called with body:", { ...req.body, password: req.body?.password ? '***' : undefined });
     try {
       if (req.headers.authorization) {
         const isAuthorized = await adminCheck(req.headers.authorization);
         if (!isAuthorized) {
+          console.warn("[ADMIN_AUTH] reset-password authorization failed for token, rejecting 403");
           return res.status(403).json({ status: "error", message: "Forbidden - Administrator access only" });
         }
       }
@@ -2769,7 +2770,9 @@ async function startServer() {
 
       return res.json({ 
         status: "success", 
-        message: `Successfully reset password to '${newPassword}'` 
+        message: `Successfully reset password to '${newPassword}'`,
+        newPassword,
+        userId: targetUserId
       });
     } catch (error: any) {
       console.error("Password reset error on admin server:", error);
