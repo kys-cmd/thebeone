@@ -136,10 +136,23 @@ export default function AdminUserManagement() {
 
   const [defaultResetConfirmUser, setDefaultResetConfirmUser] = useState<User | null>(null);
 
+  const getAuthHeaders = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      return {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+      };
+    } catch {
+      return { 'Content-Type': 'application/json' };
+    }
+  };
+
   const loadResetRequests = async () => {
     try {
       setIsRequestsLoading(true);
-      const response = await fetch('/api/admin/reset-requests');
+      const headers = await getAuthHeaders();
+      const response = await fetch('/api/admin/reset-requests', { headers });
       const result = await response.json();
       if (result.status !== 'success') {
         throw new Error(result.message || '요청 목록로드 실패');
@@ -177,9 +190,10 @@ export default function AdminUserManagement() {
 
   const handleResetRequestPassword = async (requestId: string, email: string, userId: string) => {
     try {
+      const headers = await getAuthHeaders();
       const response = await fetch('/api/admin/reset-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ email, userId, requestId })
       });
       const result = await response.json();
@@ -539,9 +553,10 @@ export default function AdminUserManagement() {
 
   const handleResetPassword = async (userId: string) => {
     try {
+      const headers = await getAuthHeaders();
       const response = await fetch('/api/admin/reset-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ userId })
       });
       const result = await response.json();
@@ -572,9 +587,10 @@ export default function AdminUserManagement() {
 
     try {
       setIsPasswordSubmitting(true);
+      const headers = await getAuthHeaders();
       const response = await fetch('/api/admin/reset-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ userId: selectedUser.id, password: targetPassword })
       });
       const result = await response.json();
@@ -635,18 +651,37 @@ export default function AdminUserManagement() {
 
   const handleStatusChange = async (userId: string, status: UserStatus, suspensionDays?: number) => {
     try {
+      // 1. Backend Server-side update (Supabase Auth Ban duration & Profile sync)
+      try {
+        const headers = await getAuthHeaders();
+        const res = await fetch('/api/admin/update-user-status', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ userId, status, suspensionDays })
+        });
+        const resJson = await res.json();
+        if (resJson.status !== 'success') {
+          console.warn('Backend update-user-status warning:', resJson.message);
+        }
+      } catch (beErr) {
+        console.warn('Backend update-user-status fetch error:', beErr);
+      }
+
+      // 2. Client-side profile service synchronization
       if (status === 'withdrawn') {
         await profileService.softDeleteProfile(userId);
       } else {
         await profileService.updateProfile(userId, { is_deleted: false }); // Reactive reactivate
       }
 
+      // 3. Update local state
       const updatedUsers = users.map(u => {
         if (u.id === userId) {
-          let suspensionUntil;
-          if (suspensionDays) {
+          let suspensionUntil: string | undefined = undefined;
+          if (status === 'suspended') {
+            const days = suspensionDays || 7;
             const date = new Date();
-            date.setDate(date.getDate() + suspensionDays);
+            date.setDate(date.getDate() + days);
             suspensionUntil = date.toISOString().split('T')[0];
           }
           const updated = { ...u, status, suspensionUntil };
@@ -660,11 +695,22 @@ export default function AdminUserManagement() {
       });
       setUsers(updatedUsers);
       
-      const statusMsg = status === 'suspended' ? '활동 정지' : status === 'withdrawn' ? '강제 탈퇴' : '정상 상태';
-      toast.info(`회원 상태가 ${statusMsg}로 변경되었습니다.`);
+      if (status === 'active') {
+        toast.success('활동 정지 설정이 취소되고 회원이 정상 상태로 복구되었습니다!');
+      } else if (status === 'suspended') {
+        const daysLabel = suspensionDays && suspensionDays >= 999 ? '영구' : `${suspensionDays || 7}일`;
+        toast.warning(`회원 계정에 ${daysLabel} 활동 정지가 설정되었습니다.`);
+      } else {
+        toast.info('회원 상태가 강제 탈퇴로 변경되었습니다.');
+      }
     } catch (error) {
+      console.error('Failed to change user status:', error);
       toast.error('회원 상태 변경에 실패했습니다.');
     }
+  };
+
+  const handleCancelSuspension = async (userId: string) => {
+    await handleStatusChange(userId, 'active');
   };
 
   const handleRoleChange = async (userId: string, role: UserRole) => {
@@ -1008,18 +1054,55 @@ export default function AdminUserManagement() {
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                   <div className="space-y-3">
-                    <Label className="text-sm font-bold text-red-900 border-b border-red-200 pb-2 mb-3 block">활동 정지 설정</Label>
-                    <Select onValueChange={(val: string) => handleStatusChange(selectedUser!.id, 'suspended', parseInt(val))}>
-                      <SelectTrigger className="bg-white h-12 text-lg">
-                        <SelectValue placeholder="기간 선택" />
+                    <div className="flex items-center justify-between border-b border-red-200 pb-2 mb-3">
+                      <Label className="text-sm font-bold text-red-900 block">활동 정지 설정</Label>
+                      {selectedUser.status === 'suspended' && (
+                        <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-200">
+                          현재 정지중
+                        </span>
+                      )}
+                    </div>
+                    <Select onValueChange={(val: string) => {
+                      if (val === 'cancel') {
+                        handleCancelSuspension(selectedUser!.id);
+                      } else {
+                        handleStatusChange(selectedUser!.id, 'suspended', parseInt(val));
+                      }
+                    }}>
+                      <SelectTrigger className="bg-white h-12 text-base font-bold">
+                        <SelectValue placeholder="정지 기간 선택 또는 취소" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="cancel" className="text-emerald-700 font-bold bg-emerald-50 focus:bg-emerald-100 cursor-pointer">
+                          ✅ 활동 정지 해제/취소 (정상 복구)
+                        </SelectItem>
                         <SelectItem value="3">3일 정지</SelectItem>
                         <SelectItem value="7">7일 정지</SelectItem>
                         <SelectItem value="30">30일 정지</SelectItem>
                         <SelectItem value="999">영구 정지</SelectItem>
                       </SelectContent>
                     </Select>
+
+                    {/* 활동 정지 설정 취소 전용 버튼 */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "w-full h-10 gap-1.5 border-emerald-300 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 text-xs font-black rounded-xl shadow-xs transition-all",
+                        selectedUser.status === 'suspended' && "ring-2 ring-emerald-500 bg-emerald-100 font-black text-emerald-950 shadow-md"
+                      )}
+                      onClick={() => handleCancelSuspension(selectedUser.id)}
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      활동 정지 설정 취소 (정상 복구)
+                    </Button>
+
+                    {selectedUser.status === 'suspended' && (
+                      <p className="text-[11px] text-orange-700 font-bold bg-orange-50/90 p-2 rounded-lg border border-orange-200 leading-tight">
+                        ⚠️ 현재 활동 정지 중
+                        {selectedUser.suspensionUntil ? ` (~${selectedUser.suspensionUntil})` : ''}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-3">
                     <Label className="text-sm font-bold text-red-900 border-b border-red-200 pb-2 mb-3 block">비밀번호 강력 관리</Label>
@@ -1028,7 +1111,7 @@ export default function AdminUserManagement() {
                         variant="outline"
                         className="w-full h-12 gap-2 bg-purple-50 border-purple-200 text-purple-900 hover:bg-purple-100 text-md font-bold"
                         onClick={() => {
-                          setNewCustomPassword('');
+                          setNewCustomPassword('123456');
                           setIsPasswordChangeOpen(true);
                         }}
                       >
@@ -1639,15 +1722,35 @@ export default function AdminUserManagement() {
               <p className="text-sm text-gray-500 font-bold leading-relaxed bg-purple-50 p-4 rounded-2xl border border-purple-100">
                 선택한 회원(<strong>{selectedUser?.nickname || selectedUser?.name}</strong>)의 로그인 패스워드를 관리자 특별 권한으로 강제 수정합니다. 변경 후 사용자는 새 설정 비밀번호로만 로그인이 가능합니다.
               </p>
-              <div className="space-y-2">
-                <Label className="text-sm font-bold text-gray-700">새 강력한 비밀번호 입력</Label>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-bold text-gray-700">새 비밀번호 입력</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs font-bold text-purple-700 hover:text-purple-900 hover:bg-purple-100/70 px-2 rounded-lg"
+                    onClick={() => setNewCustomPassword('123456')}
+                  >
+                    '123456' 자동 채우기
+                  </Button>
+                </div>
                 <Input
                   type="text"
-                  placeholder="새 비밀번호 입력 (최소 6자 이상)"
+                  placeholder="새 비밀번호 입력 (기본 임시 번호: 123456)"
                   value={newCustomPassword}
                   onChange={(e) => setNewCustomPassword(e.target.value)}
-                  className="h-12 text-md border-purple-100 focus:border-purple-300"
+                  className="h-12 text-md font-mono border-purple-200 focus:border-purple-400 focus:ring-purple-200 bg-purple-50/30"
                 />
+                <div className="p-3 bg-purple-50/80 rounded-xl border border-purple-100 text-xs text-purple-900 font-semibold space-y-1">
+                  <p className="flex items-center gap-1.5 font-bold text-purple-800">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                    임시 비밀번호 <strong>'123456'</strong>이 기본값으로 설정되어 있습니다.
+                  </p>
+                  <p className="text-[11px] text-purple-700/80 pl-5">
+                    이대로 [강제 비밀번호 변경]을 누르시면 즉시 '123456'으로 반영되며, 원하시는 다른 비밀번호로 타이핑하여 변경할 수도 있습니다.
+                  </p>
+                </div>
               </div>
               <p className="text-xs text-amber-600 font-medium">
                 ⚠️ 주의: 이 비밀번호 변경은 Supabase Auth에 도달하여 DB 비밀번호 해시데이터를 즉각 대체합니다.

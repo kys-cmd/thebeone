@@ -79,6 +79,10 @@ import { supabase } from '@/lib/supabase';
 import { PostEditor } from '@/components/community/PostEditor';
 import { PostList } from '@/components/community/PostList';
 import { ChatRoomView } from '@/components/community/ChatRoomView';
+import { ThreadsHeader } from '@/components/community/ThreadsHeader';
+import { ThreadsComposer } from '@/components/community/ThreadsComposer';
+import { NoticeListView } from '@/components/community/NoticeListView';
+import { CalendarScheduleView } from '@/components/community/CalendarScheduleView';
 import { type Post, type Message, Comment as CommunityComment, type ChatRoom } from '@/types';
 import DOMPurify from 'dompurify';
 
@@ -235,6 +239,7 @@ export default function CommunityPage() {
   const communityIdFromQuery = searchParams.get('id');
 
   const [activeMenu, setActiveMenu] = useState<string>('home-latest'); 
+  const [showSearch, setShowSearch] = useState<boolean>(false);
   const [notices, setNotices] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
   const [expandedNoticeId, setExpandedNoticeId] = useState<string | null>(null);
@@ -1932,519 +1937,47 @@ export default function CommunityPage() {
   const mobileDisplayCommunities = myJoinedCommunities.length > 0 ? myJoinedCommunities : allCommunitiesReady.slice(0, 7);
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] pt-[50px] md:pt-[50px] pb-20 md:pb-32 overflow-x-hidden font-sans">
-      <div className="container mx-auto px-4">
-        
-        {/* ==========================================================
-            📱 1. MOBILE VIEW (Renders strictly on mobile <= 767px)
-           ========================================================== */}
-        <div className="block md:hidden pb-12">
-          {/* A. If selectedCommunity is null (Home feed screen) */}
-          {!selectedCommunity ? (
-            <div className="space-y-6">
-              {/* Band Header Style */}
-              <div className="flex items-center justify-between px-1">
-                <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-1.5">
-                  커뮤니티
-                  <span className="text-purple-600 text-sm font-bold bg-purple-50 px-2 py-0.5 rounded-full ml-1.5">
-                    {myJoinedCommunities.length}
-                  </span>
-                </h2>
-              </div>
+    <div className="min-h-screen bg-[#fafaf9] pt-[50px] pb-24 overflow-x-hidden font-sans">
+      {/* 1. Threads Sticky Top Navigation Header */}
+      <ThreadsHeader
+        user={user}
+        activeMenu={activeMenu}
+        onMenuClick={handleMenuClick}
+        selectedCommunity={selectedCommunity}
+        onBackToFeed={() => {
+          setSelectedCommunity(null);
+          setActiveMenu('home-latest');
+          setSearchParams({});
+        }}
+        allCommunities={allCommunitiesReady}
+        myJoinedCommunities={myJoinedCommunities}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        showSearch={showSearch}
+        onToggleSearch={() => setShowSearch(prev => !prev)}
+        onOpenChat={() => {
+          if (user) {
+            const width = 1000;
+            const height = 800;
+            const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2);
+            const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2);
+            window.open(
+              '/chat?popup=true',
+              'BOneChatWindow',
+              `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,status=no,location=no,scrollbars=yes,resizable=yes`
+            );
+          } else {
+            toast.error('로그인이 필요한 서비스입니다.');
+            navigate('/auth/login');
+          }
+        }}
+        onOpenSettings={() => setShowSettingsModal(true)}
+        onOpenInvite={() => setShowInviteModal(true)}
+      />
 
-              {/* Squircle Grid (Circular Card style matching Naver Band app) */}
-              <div className="grid grid-cols-4 gap-y-5 gap-x-2.5 pt-2 pb-6 border-b border-slate-100">
-                {mobileDisplayCommunities.map((comm, idx) => {
-                  const gradientColors = [
-                    'from-purple-500 to-indigo-600 text-white',
-                    'from-sky-400 to-blue-500 text-white',
-                    'from-emerald-400 to-teal-500 text-white',
-                    'from-amber-400 to-orange-500 text-white',
-                    'from-rose-400 to-pink-500 text-white',
-                    'from-indigo-400 to-violet-500 text-white'
-                  ];
-                  const colorClass = gradientColors[idx % gradientColors.length];
-                  const hasDot = idx === 1 || idx === 3;
-
-                  return (
-                    <div 
-                      key={comm.id} 
-                      onClick={() => handleMenuClick(comm.id)}
-                      className="flex flex-col items-center cursor-pointer group text-center"
-                    >
-                      <div className="relative w-16 h-16 rounded-[22px] overflow-hidden bg-slate-50 border border-slate-200/65 shadow-xs transition-transform active:scale-95 flex items-center justify-center">
-                        {comm.banner_url ? (
-                          <img 
-                            src={comm.banner_url} 
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover" 
-                            alt={comm.name} 
-                          />
-                        ) : (
-                          <div className={`w-full h-full bg-gradient-to-br ${colorClass} flex items-center justify-center font-black text-lg select-none`}>
-                            {comm.name ? comm.name[0] : 'B'}
-                          </div>
-                        )}
-                        {hasDot && (
-                          <div className="absolute top-1.5 right-1.5 w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-xs" />
-                        )}
-                      </div>
-                      <span className="text-[10px] font-black text-slate-700 mt-2 line-clamp-2 max-w-[72px] leading-tight select-none">
-                        {comm.name}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Active Feeds Divider Bar */}
-              <div className="pt-2">
-                <h3 className="text-sm font-black text-slate-800 bg-slate-50 border-y border-slate-200/50 py-3 px-4 -mx-4 text-left shadow-2xs select-none">
-                  💬 커뮤니티 게시글
-                </h3>
-              </div>
-
-              {/* Feeds List Container */}
-              <div className="space-y-4 pt-2">
-                {feedPosts.length === 0 ? (
-                  <div className="py-20 text-center bg-white rounded-3xl border border-slate-100/60 shadow-2xs">
-                    <p className="text-xs text-slate-400 font-extrabold">
-                      아직 등록된 게시글이 없네요. 첫번째 게시글을 남겨보세요!
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-0 text-left">
-                    <PostList 
-                      posts={feedPosts}
-                      isLoading={loading}
-                      currentUserId={user?.id}
-                      isAdmin={isAdmin}
-                      postComments={postComments}
-                      onLike={handleToggleLike}
-                      onCommentToggle={handleToggleComments}
-                      onCommentSubmit={handleAddComment}
-                      onJoinAttendance={handleJoinAttendance}
-                      onToggleTodo={handleToggleTodo}
-                      onVotePoll={handleVotePoll}
-                      onDelete={handleDeletePost}
-                      onEdit={handleEditPost}
-                      accessibleCommunityIds={accessibleCommunityIds}
-                      isFeedMode={true}
-                      allCommunities={allCommunitiesReady}
-                      onCardClick={(post) => handlePostClick(post)}
-                      editingPostId={editingPost?.id}
-                      onEditCancel={() => setEditingPost(null)}
-                      onEditSuccess={(updatedPost) => {
-                        setPosts(prev => prev.map(p => p.id === updatedPost.id ? { ...p, ...updatedPost } : p));
-                        setEditingPost(null);
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            /* B. If a specific community is active (Detailed Page) */
-            <div className="space-y-5">
-              {/* Back Button to list */}
-              <div className="pb-2 text-left">
-                <button 
-                  onClick={() => handleMenuClick('home-latest')}
-                  className="flex items-center gap-1.5 text-xs font-black text-slate-600 hover:text-purple-600 bg-white shadow-xs border border-slate-200 px-3.5 py-2.5 rounded-full transition-all"
-                >
-                  <ArrowLeft className="w-4 h-4 text-slate-500" />
-                  <span>커뮤니티로 돌아가기</span>
-                </button>
-              </div>
-
-              {/* Selected Community Active Info Panel */}
-              {selectedCommunity && hasActiveAccess && (
-                <div className="space-y-5">
-                  <div className="bg-white rounded-[24px] overflow-hidden shadow-xs border border-slate-100 text-left">
-                    <div className="h-32 relative">
-                      <img 
-                        src={selectedCommunity.banner_url || "https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=800&q=80"} 
-                        className="w-full h-full object-cover" 
-                        alt="" 
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-900/10 to-transparent flex items-end p-4">
-                        <div className="leading-tight text-white space-y-0.5">
-                          <span className="text-[8px] bg-purple-600 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-widest text-white shadow-xs">
-                            {(SECTION_TITLES[selectedCommunity.type as keyof typeof SECTION_TITLES] || '비원아카데미 전용공간')}
-                          </span>
-                          <h2 className="text-base font-black mt-1 tracking-tight text-white drop-shadow-xs">
-                            {selectedCommunity.name}
-                          </h2>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Tab bar for mobile card detail tab */}
-                  <div className="flex border-b border-slate-200 select-none">
-                    {(['posts', 'missions', 'members'] as const).map((tab) => {
-                      const tabLabels = { posts: '게시글', missions: '미션', members: '멤버' };
-                      return (
-                        <button
-                          key={tab}
-                          onClick={() => {
-                            setCommunityDetailTab(tab);
-                            setEditorInitialData(null);
-                          }}
-                          className={cn(
-                            "flex-1 py-3 text-xs font-black text-center relative border-b-2 transition-all cursor-pointer border-none bg-transparent outline-none",
-                            communityDetailTab === tab ? "text-purple-650 font-extrabold border-b-2 border-purple-600" : "text-slate-400 hover:text-slate-600"
-                          )}
-                        >
-                          {tabLabels[tab]}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Render content depending on active content panel tab */}
-                  <div className="text-left">
-                    {communityDetailTab === 'posts' && (
-                      <div className="space-y-4">
-                        {canWritePost ? (
-                          isPostEditorExpanded ? (
-                            <div className="bg-white rounded-2xl overflow-hidden border border-slate-150 shadow-md">
-                              <PostEditor 
-                                communityId={selectedCommunity.id}
-                                key={editorInitialData ? 'mobile-with-data' : 'mobile-empty'}
-                                initialPost={editorInitialData}
-                                onCancel={() => setIsPostEditorExpanded(false)}
-                                onSuccess={(newp) => {
-                                  setPosts(prev => [newp, ...prev]);
-                                  setEditorInitialData(null);
-                                  setIsPostEditorExpanded(false);
-                                  toast.success('새 글이 성공적으로 등록되었습니다! 🚀');
-                                }} 
-                              />
-                            </div>
-                          ) : (
-                            <div 
-                              onClick={() => setIsPostEditorExpanded(true)}
-                              className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-xs hover:border-purple-300 hover:shadow-sm transition-all cursor-pointer flex items-center justify-between gap-3 select-none animate-fade-in"
-                            >
-                              <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <Avatar className="w-8 h-8 border border-slate-100 shrink-0">
-                                  <AvatarImage src={user?.avatar_url || ''} />
-                                  <AvatarFallback className="bg-purple-600 text-white font-black text-[10px]">
-                                    {(user?.nickname || user?.name || 'ME').charAt(0).toUpperCase()}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="bg-slate-50/70 border border-slate-100/80 rounded-xl py-1.5 px-3 flex-1 text-left">
-                                  <span className="text-slate-400 font-extrabold text-xs tracking-tight block truncate">
-                                    새로운 소식을 회원들과 나눠보세요... ✍️
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        ) : (
-                          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-[11px] text-slate-400 font-extrabold">
-                            🔒 커뮤니티 게시글은 관리자만 작성할 수 있습니다.
-                          </div>
-                        )}
-
-                        <PostList 
-                          posts={posts.filter(p => p.community_id === selectedCommunity.id && p.type !== 'mission_template')}
-                          isLoading={loading}
-                          currentUserId={user?.id}
-                          isAdmin={isAdmin}
-                          postComments={postComments}
-                          onLike={handleToggleLike}
-                          onCommentToggle={handleToggleComments}
-                          onCommentSubmit={handleAddComment}
-                          onJoinAttendance={handleJoinAttendance}
-                          onToggleTodo={handleToggleTodo}
-                          onVotePoll={handleVotePoll}
-                          onDelete={handleDeletePost}
-                          onEdit={handleEditPost}
-                          onTogglePin={handleTogglePin}
-                          accessibleCommunityIds={accessibleCommunityIds}
-                        />
-                      </div>
-                    )}
-
-                    {communityDetailTab === 'missions' && (
-                      <div className="space-y-4">
-                        {isAdmin && (
-                          <Button 
-                            onClick={() => setIsMissionModalOpen(true)}
-                            className="w-full h-11 bg-purple-600 text-white font-black text-xs rounded-xl"
-                          >
-                            새 미션 챌린지 생성
-                          </Button>
-                        )}
-
-                        <PostList 
-                          posts={posts.filter(p => p.community_id === selectedCommunity.id && p.type === 'mission_template')}
-                          isLoading={loading}
-                          currentUserId={user?.id}
-                          isAdmin={isAdmin}
-                          postComments={postComments}
-                          onLike={handleToggleLike}
-                          onCommentToggle={handleToggleComments}
-                          onCommentSubmit={handleAddComment}
-                          onJoinAttendance={handleJoinAttendance}
-                          onToggleTodo={handleToggleTodo}
-                          onVotePoll={handleVotePoll}
-                          onDelete={handleDeletePost}
-                          onEdit={handleEditPost}
-                          onTogglePin={handleTogglePin}
-                          accessibleCommunityIds={accessibleCommunityIds}
-                        />
-                      </div>
-                    )}
-
-                    {communityDetailTab === 'members' && (
-                      <div className="bg-white rounded-2xl p-4 border border-slate-100 space-y-3">
-                        <h4 className="text-xs font-black text-slate-800">멤버 리스트</h4>
-                        <div className="space-y-2">
-                          {communityMembers.map((member) => (
-                            <div key={member.id} className="flex items-center gap-2 py-1 border-b border-slate-50 last:border-none">
-                              <Avatar className="w-8 h-8 rounded-full border border-slate-100">
-                                <AvatarImage src={member.avatar_url} />
-                                <AvatarFallback className="text-[10px] bg-slate-100 font-bold">
-                                  {member.nickname ? member.nickname[0] : '회'}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-black text-slate-800 truncate">{member.nickname || member.name}</p>
-                                <p className="text-[9px] text-slate-400 truncate">{member.email}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {selectedCommunity && !hasActiveAccess && (
-                <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm text-center">
-                  <Lock className="w-7 h-7 text-purple-600 mx-auto mb-3" />
-                  <h3 className="text-sm font-black text-slate-800">{selectedCommunity.name}</h3>
-                  <p className="text-[11px] text-slate-500 font-medium my-2">가입 후 이용이 가능한 전용 페이지입니다.</p>
-                  {isPendingApproval ? (
-                    <Badge className="bg-amber-100 text-amber-700 border-none font-bold py-1 px-3 text-xs">승인 대기 중</Badge>
-                  ) : (
-                    <Button onClick={handleApplyToJoin} className="bg-purple-600 text-white font-black text-xs rounded-xl h-9 px-4">가입 신청</Button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* ==========================================================
-            🖥️ 2. DESKTOP VIEW (Renders strictly on desktop >= 768px)
-           ========================================================== */}
-        <div className="hidden md:grid grid-cols-12 gap-6 items-start">
-          
-          {/* 1. LEFT SIDEBAR MENU (Weolbu Style Category Channel Menu) */}
-          <div className="lg:col-span-3 space-y-4 text-left">
-            {/* User welcome & creation trigger */}
-            <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
-              <div className="flex items-center gap-3">
-                <Avatar className="w-11 h-11 border-2 border-purple-50 rounded-xl shadow-sm shrink-0">
-                  <AvatarImage src={user?.avatar_url || ''} />
-                  <AvatarFallback className="bg-purple-600 text-white font-extrabold text-sm rounded-xl">
-                    {(user?.nickname || user?.name || '회')[0]}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 leading-tight">
-                  <span className="text-xs uppercase font-black text-purple-650 tracking-wider">비원커뮤니티</span>
-                  <h3 className="text-base font-black text-slate-800 truncate">
-                    {user ? `${user.nickname || user.name || '회원'}님` : '로그인이 필요합니다'}
-                  </h3>
-                </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  if (user) {
-                    const width = 1000;
-                    const height = 800;
-                    const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2);
-                    const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2);
-                    window.open(
-                      '/chat?popup=true',
-                      'BOneChatWindow',
-                      `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,status=no,location=no,scrollbars=yes,resizable=yes`
-                    );
-                  } else {
-                    toast.error('로그인이 필요한 서비스입니다.');
-                    navigate('/auth/login');
-                  }
-                }}
-                className="w-full h-11 bg-purple-600 hover:bg-purple-700 text-white font-black text-sm rounded-xl shadow transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <MessageSquareIcon className="w-4 h-4 shrink-0" /> 채팅
-              </button>
-            </div>
-
-            {/* Main Navigation List: Major Menu Bundle */}
-            <div className="bg-white rounded-2xl border border-slate-100 p-4 space-y-1 shadow-sm">
-              <div className="space-y-1">
-                <button 
-                  onClick={() => handleMenuClick('home-latest')}
-                  className={cn(
-                    "w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center",
-                    activeMenu === 'home-latest' ? "bg-purple-50 text-purple-700 font-black shadow-sm" : "text-slate-700 hover:bg-slate-50 hover:text-slate-900 bg-transparent"
-                  )}
-                >
-                  <span>커뮤니티 홈</span>
-                </button>
-                <button 
-                  onClick={() => handleMenuClick('notice')}
-                  className={cn(
-                    "w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center",
-                    activeMenu === 'notice' ? "bg-purple-50 text-purple-700 font-black shadow-sm" : "text-slate-700 hover:bg-slate-50 hover:text-slate-900 bg-transparent"
-                  )}
-                >
-                  <span>공지사항</span>
-                </button>
-                <button 
-                  onClick={() => handleMenuClick('schedule')}
-                  className={cn(
-                    "w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center",
-                    activeMenu === 'schedule' ? "bg-purple-50 text-purple-700 font-black shadow-sm" : "text-slate-700 hover:bg-slate-50 hover:text-slate-900 bg-transparent"
-                  )}
-                >
-                  <span>강의 일정</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Channels Navigation List: Categories Bundle */}
-            <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-6 shadow-sm">
-              {/* Category: 정규강의 */}
-              <div>
-                <h4 className="px-3 mb-2.5 text-[13px] font-black text-slate-800 leading-none">
-                  정규강의
-                </h4>
-                <div className="ml-3 border-l border-slate-100 pl-3 space-y-1 max-h-52 overflow-y-auto pr-1 no-scrollbar">
-                  {[
-                    ...sections.course,
-                    ...sections.special_online,
-                    ...sections.special_offline,
-                    ...sections.beone_exclusive_online,
-                    ...sections.beone_exclusive_offline
-                  ].length === 0 ? (
-                    <span className="text-xs text-slate-400 font-medium px-2.5 block py-1 font-bold">참여 중인 커뮤니티가 없습니다</span>
-                  ) : (
-                    [
-                      ...sections.course,
-                      ...sections.special_online,
-                      ...sections.special_offline,
-                      ...sections.beone_exclusive_online,
-                      ...sections.beone_exclusive_offline
-                    ].map((comm) => (
-                      <button
-                        key={comm.id}
-                        onClick={() => handleMenuClick(comm.id)}
-                        className={cn(
-                          "w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold transition-all block truncate border-none",
-                          activeMenu === comm.id ? "bg-purple-50 text-purple-700 font-black shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 bg-transparent"
-                        )}
-                      >
-                        {comm.name}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <hr className="border-slate-100/60 my-1" />
-
-              {/* Category: 비원 시즌 */}
-              <div>
-                <h4 className="px-3 mb-2.5 text-[13px] font-black text-slate-800 leading-none">
-                  비원 시즌
-                </h4>
-                <div className="ml-3 border-l border-slate-100 pl-3 space-y-1 max-h-40 overflow-y-auto pr-1 no-scrollbar">
-                  {!sections.season || sections.season.length === 0 ? (
-                    <span className="text-xs text-slate-400 font-medium px-2.5 block py-1 font-bold">참여 중인 커뮤니티가 없습니다</span>
-                  ) : (
-                    sections.season.map((comm) => (
-                      <button
-                        key={comm.id}
-                        onClick={() => handleMenuClick(comm.id)}
-                        className={cn(
-                          "w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold transition-all block truncate",
-                          activeMenu === comm.id ? "bg-purple-50 text-purple-700 font-black shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 bg-transparent"
-                        )}
-                      >
-                        {comm.name}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <hr className="border-slate-100/60 my-1" />
-
-              {/* Category: 일반 커뮤니티 */}
-              <div>
-                <h4 className="px-3 mb-2.5 text-[13px] font-black text-slate-800 leading-none">
-                  일반 커뮤니티
-                </h4>
-                <div className="ml-3 border-l border-slate-100 pl-3 space-y-1 max-h-48 overflow-y-auto pr-1 no-scrollbar">
-                  {!sections.board || sections.board.length === 0 ? (
-                    <span className="text-xs text-slate-400 font-medium px-2.5 block py-1 font-bold">참여 중인 커뮤니티가 없습니다</span>
-                  ) : (
-                    sections.board.map((comm) => (
-                      <button
-                        key={comm.id}
-                        onClick={() => handleMenuClick(comm.id)}
-                        className={cn(
-                          "w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold transition-all block truncate",
-                          activeMenu === comm.id ? "bg-purple-50 text-purple-700 font-black shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 bg-transparent"
-                        )}
-                      >
-                        {comm.name}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <hr className="border-slate-100/60 my-1" />
-
-              {/* Category: 기타 커뮤니티 */}
-              <div>
-                <h4 className="px-3 mb-2.5 text-[13px] font-black text-slate-800 leading-none">
-                  기타 커뮤니티
-                </h4>
-                <div className="ml-3 border-l border-slate-100 pl-3 space-y-1 max-h-40 overflow-y-auto pr-1 no-scrollbar">
-                  {!sections.other || sections.other.length === 0 ? (
-                    <span className="text-xs text-slate-400 font-medium px-2.5 block py-1 font-bold">참여 중인 커뮤니티가 없습니다</span>
-                  ) : (
-                    sections.other.map((comm) => (
-                      <button
-                        key={comm.id}
-                        onClick={() => handleMenuClick(comm.id)}
-                        className={cn(
-                          "w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold transition-all block truncate",
-                          activeMenu === comm.id ? "bg-purple-50 text-purple-700 font-black shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 bg-transparent"
-                        )}
-                      >
-                        {comm.name}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 2. MIDDLE POST FEED SECTION (Weolbu Dynamic Central Column) */}
-          <div className="lg:col-span-9 space-y-5">
-            {loading ? (
+      {/* 2. Main Center-Aligned Threads Timeline */}
+      <main className="max-w-[640px] mx-auto px-3 sm:px-4 pt-4 space-y-4">
+        {loading ? (
               <div className="space-y-5 animate-pulse text-left">
                 {/* Skeleton notice banner */}
                 <div className="bg-amber-50/40 border border-slate-100 rounded-2xl p-4 flex items-center justify-between">
@@ -3522,12 +3055,7 @@ export default function CommunityPage() {
             )}
             </>
           )}
-          </div>
-
-
-
-        </div>
-      </div>
+      </main>
 
       {/* Floating Detailed Overlay Dialog Popup to read or write detailed threads cleanly */}
       <Dialog open={!!selectedDetailPost} onOpenChange={(open) => !open && setSelectedDetailPost(null)}>
