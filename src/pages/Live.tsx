@@ -39,8 +39,14 @@ export default function LivePage() {
   const [newMessage, setNewMessage] = useState('');
   const [isLive, setIsLive] = useState(false);
   const [activeSession, setActiveSession] = useState<LiveSession | null>(null);
-  const [config, setConfig] = useState<SiteConfig | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState<SiteConfig | null>(() => {
+    try {
+      const cached = localStorage.getItem('beone_live_config');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return null;
+  });
+  const [loading, setLoading] = useState(false);
   const [showMobileInfo, setShowMobileInfo] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -350,10 +356,6 @@ export default function LivePage() {
     
     setMessages((prev) => [...prev, msg]);
   };
-
-  if (loading) {
-    return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
-  }
 
   const isSuperAdmin = user?.role === 'super_admin';
   const displayEmbedCode = useMemo(() => {
