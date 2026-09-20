@@ -11,7 +11,7 @@ import {
   Play, Zap, Wifi, Lock, LogIn, Settings,
   ChevronLeft, Home, ArrowDown, ChevronDown, ChevronUp
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store/useAuthStore';
 import { cmsService, SiteConfig } from '@/services/cmsService';
 import { toast } from 'sonner';
@@ -19,7 +19,10 @@ import { supabase } from '@/lib/supabase';
 
 interface ChatMessage {
   id: string;
-  user: string;
+  user: string; // 실명 (Real Name)
+  nickname?: string;
+  role?: string;
+  avatar?: string;
   text: string;
   time: string;
 }
@@ -279,9 +282,16 @@ export default function LivePage() {
     e.preventDefault();
     if (!newMessage.trim() || !user || config?.live_chat_enabled === false) return;
     
+    // 비원Live 채팅방: 회원의 실명을 닉네임(채팅 참여자명)으로 표시
+    const realName = user.name?.trim() || (user as any).full_name?.trim() || user.nickname?.trim() || '회원';
+    const nickname = user.nickname?.trim() && user.nickname.trim() !== realName ? user.nickname.trim() : undefined;
+
     const msg: ChatMessage = {
       id: Date.now().toString(),
-      user: user.name || '비회원',
+      user: realName,
+      nickname,
+      role: user.role,
+      avatar: user.avatar_url || undefined,
       text: newMessage.trim(),
       time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
     };
@@ -507,12 +517,24 @@ export default function LivePage() {
                  messages.map((msg) => (
                    <div key={msg.id} className="flex gap-2.5 sm:gap-3 group items-start">
                       <Avatar className="w-7 h-7 sm:w-8 sm:h-8 border border-gray-100 flex-shrink-0 font-black">
-                        <AvatarFallback className="bg-purple-100 text-purple-700 text-[11px] sm:text-xs">{msg.user[0] || 'U'}</AvatarFallback>
+                        {msg.avatar && <AvatarImage src={msg.avatar} alt={msg.user} />}
+                        <AvatarFallback className="bg-purple-100 text-purple-700 text-[11px] sm:text-xs">
+                          {(msg.user || '회')[0]}
+                        </AvatarFallback>
                       </Avatar>
                       <div className="space-y-0.5 sm:space-y-1 min-w-0 flex-1">
-                         <div className="flex items-center gap-2">
+                         <div className="flex items-center gap-1.5 flex-wrap">
                            <p className="text-xs font-black text-gray-900 truncate">{msg.user}</p>
-                           <span className="text-[10px] font-medium text-gray-400 shrink-0">{msg.time}</span>
+                           {msg.nickname && msg.nickname !== msg.user && (
+                             <span className="text-[10px] text-gray-400 font-medium truncate">({msg.nickname})</span>
+                           )}
+                           {msg.role === 'super_admin' && (
+                             <span className="text-[9px] font-black bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full shrink-0">관리자</span>
+                           )}
+                           {msg.role === 'admin' && (
+                             <span className="text-[9px] font-black bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full shrink-0">운영진</span>
+                           )}
+                           <span className="text-[10px] font-medium text-gray-400 shrink-0 ml-auto">{msg.time}</span>
                          </div>
                          <p className="text-xs sm:text-sm text-gray-800 leading-relaxed bg-gray-50 border border-gray-100/80 p-2.5 sm:p-3 rounded-2xl rounded-tl-sm w-fit max-w-full break-words">
                            {msg.text}
@@ -559,14 +581,27 @@ export default function LivePage() {
                    라이브가 시작되면 실시간 채팅이 활성화됩니다.
                  </div>
                ) : (
-                 <form onSubmit={handleSendMessage} className="relative group flex items-center">
-                   <div className="relative flex-1 min-w-0">
-                     <Input 
-                       value={newMessage}
-                       onChange={(e) => setNewMessage(e.target.value)}
-                       placeholder="메시지를 입력하세요..." 
-                       className="h-10 sm:h-12 bg-gray-50 border-gray-200 rounded-xl pl-3 sm:pl-4 pr-11 text-xs sm:text-sm font-bold focus-visible:ring-2 focus-visible:ring-red-500 transition-all"
-                     />
+                 <div className="space-y-1.5">
+                   <div className="flex items-center justify-between px-1 text-[11px] text-gray-500">
+                     <div className="flex items-center gap-1.5 truncate">
+                       <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                       <span className="truncate">
+                         <strong className="text-gray-900 font-bold">{user.name?.trim() || user.nickname || '회원'}</strong>
+                         {user.nickname && user.nickname !== user.name?.trim() && (
+                           <span className="text-gray-400 font-normal"> ({user.nickname})</span>
+                         )}
+                         <span className="text-purple-600 font-bold ml-1">(실명 참여)</span>
+                       </span>
+                     </div>
+                   </div>
+                   <form onSubmit={handleSendMessage} className="relative group flex items-center">
+                     <div className="relative flex-1 min-w-0">
+                       <Input 
+                         value={newMessage}
+                         onChange={(e) => setNewMessage(e.target.value)}
+                         placeholder={`${user.name?.trim() || '회원'} 님, 메시지를 입력하세요...`}
+                         className="h-10 sm:h-12 bg-gray-50 border-gray-200 rounded-xl pl-3 sm:pl-4 pr-11 text-xs sm:text-sm font-bold focus-visible:ring-2 focus-visible:ring-red-500 transition-all"
+                       />
                      <Button 
                        type="submit"
                        size="icon" 
@@ -577,6 +612,7 @@ export default function LivePage() {
                      </Button>
                    </div>
                  </form>
+                 </div>
                )}
             </div>
           </div>
