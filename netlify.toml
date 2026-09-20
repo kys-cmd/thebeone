@@ -95,6 +95,42 @@
   force = true
 
 [[redirects]]
+  from = "/api/live/status"
+  to = "/.netlify/functions/live?action=status"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/live/sessions"
+  to = "/.netlify/functions/live?action=sessions"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/live/start"
+  to = "/.netlify/functions/live?action=start"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/live/stop-all"
+  to = "/.netlify/functions/live?action=stop-all"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/live/stop"
+  to = "/.netlify/functions/live?action=stop"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/live/*"
+  to = "/.netlify/functions/live"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
