@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { CheckCircle2, XCircle, Loader2, Mail, ShieldAlert, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
+import { safeResponseJson } from '@/lib/safeFetch';
 
 // KG Inicis resultCode - Korean clear description helper
 function analyzeInicisCode(code: string | null | undefined): { title: string; desc: string; solution: string } {
@@ -238,12 +239,12 @@ export default function PaymentCallback() {
         })
       });
 
-      const resData = await response.json();
-      if (response.ok && resData.status === 'success') {
+      const resData = await safeResponseJson(response, null);
+      if (response.ok && resData?.status === 'success') {
         setAlertStatus('success');
         setAlertMessage(resData.message || '결제 실패 경보가 관리자(kys@k-learn.co.kr) 채널로 즉시 발송되었습니다.');
       } else {
-        throw new Error(resData.message || '통신 응답 규격이 실재하지 않습니다.');
+        throw new Error(resData?.message || '통신 응답 규격이 실재하지 않습니다.');
       }
 
     } catch (alertErr: any) {

@@ -30,6 +30,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
+import { safeResponseJson } from '@/lib/safeFetch';
 
 export default function AdminSalesManagement() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -79,7 +80,7 @@ export default function AdminSalesManagement() {
           action: 'sync-all-communities'
         })
       });
-      const result = await response.json();
+      const result = await safeResponseJson(response);
       if (result.status === 'success') {
         toast.success(`전체 동기화 성공: 만료 권한 ${result.expiredCount || 0}건 자동 수거, 신규 커뮤니티 권한 ${result.createdMembershipsCount || 0}건 가입 동기화 완료!`);
         fetchOrders();
@@ -114,7 +115,7 @@ export default function AdminSalesManagement() {
           orderId
         })
       });
-      const result = await response.json();
+      const result = await safeResponseJson(response);
       if (result.status === 'success') {
         toast.success('주문 정보가 PAID 로 자동 갱신되었으며, 복식부기 및 수강/커뮤니티 연동 권한이 재처리되었습니다!');
         fetchOrders();
@@ -150,7 +151,7 @@ export default function AdminSalesManagement() {
           courseId
         })
       });
-      const result = await response.json();
+      const result = await safeResponseJson(response);
       if (result.status === 'success') {
         toast.success(result.message || '권한 및 커뮤니티 가입이 정상 동기화되었습니다.');
         fetchOrders();
@@ -209,7 +210,7 @@ export default function AdminSalesManagement() {
         })
       });
 
-      const result = await response.json();
+      const result = await safeResponseJson(response);
       if (result.status === 'success') {
         toast.success(result.message || '이니시스 실시간 연계 승인 취소 및 환불 처리가 완료되었습니다.');
         fetchOrders();

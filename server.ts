@@ -5060,7 +5060,13 @@ async function startServer() {
       server: { middlewareMode: true },
       appType: "spa",
     });
-    app.use(vite.middlewares);
+    // Ensure that API requests are not intercepted by Vite middleware
+    app.use((req, res, next) => {
+      if (req.url.startsWith('/api/') || req.url === '/api') {
+        return next();
+      }
+      vite.middlewares(req, res, next);
+    });
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));

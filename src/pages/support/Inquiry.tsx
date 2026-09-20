@@ -8,6 +8,7 @@ import { MessageCircle, FileUp, ShieldCheck, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/useAuthStore';
 import { supabase } from '@/lib/supabase';
+import { safeResponseJson } from '@/lib/safeFetch';
 
 export default function InquiryPage() {
   const { user } = useAuthStore();
@@ -63,7 +64,7 @@ export default function InquiryPage() {
         })
       });
 
-      const result = await response.json();
+      const result = await safeResponseJson(response);
       if (result.status === 'success') {
         toast.success(result.message);
         // 입력 박스 리셋 (사용자 기본 정보는 유지하고 제목, 본문만 리셋)

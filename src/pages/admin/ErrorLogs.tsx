@@ -26,6 +26,7 @@ import { logger, ErrorLog } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
+import { safeResponseJson } from '@/lib/safeFetch';
 
 // Helper to pretti-print JSON details nicely
 const PrettyJson = ({ data }: { data: any }) => {
@@ -91,7 +92,7 @@ export default function ErrorLogs() {
         })
       });
 
-      const result = await response.json();
+      const result = await safeResponseJson(response);
       if (result.status === 'success') {
         setApiLogs(result.logs || []);
         setApiLogsCount(result.count || 0);
@@ -230,7 +231,7 @@ ${ticks}
         })
       });
 
-      const result = await response.json();
+      const result = await safeResponseJson(response);
       if (result.status === 'success') {
         toast.success('결제 및 환불 통신 데이터베이스 로그가 초기화되었습니다.');
         fetchApiLogs();

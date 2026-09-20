@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { safeResponseJson } from '@/lib/safeFetch';
 
 export interface LessonProgress {
   id?: string;
@@ -90,7 +91,7 @@ export const accessService = {
         })
       });
 
-      const result = await response.json();
+      const result = await safeResponseJson(response, { allowed: false });
       return !!result.allowed;
     } catch (e) {
       console.error('Error verifying lesson access via central API:', e);

@@ -22,8 +22,9 @@ import { supabase } from '@/lib/supabase';
 
 interface ChatMessage {
   id: string;
-  user: string; // 실명 (Real Name)
+  user: string; // 작성자 표시명 (닉네임 우선, 없을 시 실명)
   nickname?: string;
+  realName?: string;
   role?: string;
   avatar?: string;
   text: string;
@@ -295,14 +296,16 @@ export default function LivePage() {
     e.preventDefault();
     if (!newMessage.trim() || !user || config?.live_chat_enabled === false) return;
     
-    // 비원Live 채팅방: 회원의 실명을 닉네임(채팅 참여자명)으로 표시
-    const realName = user.name?.trim() || (user as any).full_name?.trim() || user.nickname?.trim() || '회원';
-    const nickname = user.nickname?.trim() && user.nickname.trim() !== realName ? user.nickname.trim() : undefined;
+    // 비원Live 채팅방: 닉네임 우선 적용, 닉네임이 없을 경우 실명(Real Name)으로 대체
+    const realName = user.name?.trim() || (user as any).full_name?.trim() || '';
+    const userNickname = user.nickname?.trim() || '';
+    const displayName = userNickname || realName || '회원';
 
     const msg: ChatMessage = {
       id: Date.now().toString(),
-      user: realName,
-      nickname,
+      user: displayName,
+      nickname: userNickname || undefined,
+      realName: realName || undefined,
       role: user.role,
       avatar: user.avatar_url || undefined,
       text: newMessage.trim(),
@@ -586,16 +589,20 @@ export default function LivePage() {
                  messages.map((msg) => (
                    <div key={msg.id} className="flex gap-2.5 sm:gap-3 group items-start">
                       <Avatar className="w-7 h-7 sm:w-8 sm:h-8 border border-gray-100 flex-shrink-0 font-black">
-                        {msg.avatar && <AvatarImage src={msg.avatar} alt={msg.user} />}
+                        {msg.avatar && <AvatarImage src={msg.avatar} alt={msg.nickname?.trim() || msg.user || '회원'} />}
                         <AvatarFallback className="bg-purple-100 text-purple-700 text-[11px] sm:text-xs">
-                          {(msg.user || '회')[0]}
+                          {(msg.nickname?.trim() || msg.user || msg.realName || '회')[0]}
                         </AvatarFallback>
                       </Avatar>
                       <div className="space-y-0.5 sm:space-y-1 min-w-0 flex-1">
                          <div className="flex items-center gap-1.5 flex-wrap">
-                           <p className="text-xs font-black text-gray-900 truncate">{msg.user}</p>
-                           {msg.nickname && msg.nickname !== msg.user && (
-                             <span className="text-[10px] text-gray-400 font-medium truncate">({msg.nickname})</span>
+                           {/* 닉네임 우선 표시, 닉네임이 없을 경우 실명 대체 */}
+                           <p className="text-xs font-black text-gray-900 truncate">
+                             {msg.nickname?.trim() || msg.user || msg.realName || '회원'}
+                           </p>
+                           {/* 닉네임으로 표시 중이고 실명이 다른 경우 참고용 표기 */}
+                           {msg.nickname?.trim() && msg.realName && msg.realName !== msg.nickname.trim() && (
+                             <span className="text-[10px] text-gray-400 font-medium truncate">({msg.realName})</span>
                            )}
                            {msg.role === 'super_admin' && (
                              <span className="text-[9px] font-black bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full shrink-0">관리자</span>
@@ -650,27 +657,31 @@ export default function LivePage() {
                    라이브가 시작되면 실시간 채팅이 활성화됩니다.
                  </div>
                ) : (
-                 <div className="space-y-1.5">
-                   <div className="flex items-center justify-between px-1 text-[11px] text-gray-500">
-                     <div className="flex items-center gap-1.5 truncate">
-                       <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
-                       <span className="truncate">
-                         <strong className="text-gray-900 font-bold">{user.name?.trim() || user.nickname || '회원'}</strong>
-                         {user.nickname && user.nickname !== user.name?.trim() && (
-                           <span className="text-gray-400 font-normal"> ({user.nickname})</span>
-                         )}
-                         <span className="text-purple-600 font-bold ml-1">(실명 참여)</span>
-                       </span>
-                     </div>
-                   </div>
-                   <form onSubmit={handleSendMessage} className="relative group flex items-center">
-                     <div className="relative flex-1 min-w-0">
-                       <Input 
-                         value={newMessage}
-                         onChange={(e) => setNewMessage(e.target.value)}
-                         placeholder={`${user.name?.trim() || '회원'} 님, 메시지를 입력하세요...`}
-                         className="h-10 sm:h-12 bg-gray-50 border-gray-200 rounded-xl pl-3 sm:pl-4 pr-11 text-xs sm:text-sm font-bold focus-visible:ring-2 focus-visible:ring-red-500 transition-all"
-                       />
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between px-1 text-[11px] text-gray-500">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                        <span className="truncate">
+                          <strong className="text-gray-900 font-bold">
+                            {user.nickname?.trim() || user.name?.trim() || (user as any).full_name?.trim() || '회원'}
+                          </strong>
+                          {user.nickname?.trim() && (user.name?.trim() || (user as any).full_name?.trim()) && (
+                            <span className="text-gray-400 font-normal"> ({user.name?.trim() || (user as any).full_name?.trim()})</span>
+                          )}
+                          <span className="text-purple-600 font-bold ml-1">
+                            {user.nickname?.trim() ? '(닉네임 참여)' : '(실명 참여)'}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                    <form onSubmit={handleSendMessage} className="relative group flex items-center">
+                      <div className="relative flex-1 min-w-0">
+                        <Input 
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          placeholder={`${user.nickname?.trim() || user.name?.trim() || '회원'} 님, 메시지를 입력하세요...`}
+                          className="h-10 sm:h-12 bg-gray-50 border-gray-200 rounded-xl pl-3 sm:pl-4 pr-11 text-xs sm:text-sm font-bold focus-visible:ring-2 focus-visible:ring-red-500 transition-all"
+                        />
                      <Button 
                        type="submit"
                        size="icon" 

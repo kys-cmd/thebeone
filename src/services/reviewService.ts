@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { safeResponseJson } from '@/lib/safeFetch';
 
 export interface Review {
   id: string;
@@ -141,10 +142,10 @@ export const reviewService = {
             isBest: isBest
           })
         });
-        const result = await response.json();
-        if (response.ok && result.status === 'success') {
+        const result = await safeResponseJson(response, null);
+        if (response.ok && result?.status === 'success') {
           return;
-        } else if (result.message) {
+        } else if (result?.message) {
           throw new Error(result.message);
         }
       }

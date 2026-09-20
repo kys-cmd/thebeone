@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { safeResponseJson } from '@/lib/safeFetch';
 
 export const purchaseService = {
   /**
@@ -43,7 +44,7 @@ export const purchaseService = {
         })
       });
 
-      const result = await response.json();
+      const result = await safeResponseJson(response);
       if (result.status === 'success') {
         return result.order;
       } else {
@@ -140,7 +141,7 @@ export const purchaseService = {
       })
     });
 
-    const result = await response.json();
+    const result = await safeResponseJson(response);
     if (result.status === 'success') {
       return true;
     } else {

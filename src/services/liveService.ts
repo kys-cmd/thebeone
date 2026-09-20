@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { safeResponseJson } from '@/lib/safeFetch';
 
 export interface LiveSession {
   id: string; // DB primary key (support_contents id)
@@ -53,17 +54,19 @@ export const liveService = {
     try {
       const res = await fetch('/api/live/status');
       if (res.ok) {
-        const data = await res.json();
-        if (!data.isLive) {
-          this.clearLiveCache();
-        } else {
-          try {
-            localStorage.setItem('beone_live_config', JSON.stringify(data.config || { live_is_active: true }));
-          } catch (e) {
-            // ignore
+        const data = await safeResponseJson<LiveStatusResponse | null>(res, null);
+        if (data) {
+          if (!data.isLive) {
+            this.clearLiveCache();
+          } else {
+            try {
+              localStorage.setItem('beone_live_config', JSON.stringify(data.config || { live_is_active: true }));
+            } catch (e) {
+              // ignore
+            }
           }
+          return data;
         }
-        return data;
       }
     } catch (apiErr) {
       console.warn('[liveService] Failed to fetch /api/live/status, using Supabase fallback:', apiErr);
@@ -164,7 +167,8 @@ export const liveService = {
     try {
       const res = await fetch('/api/live/sessions');
       if (res.ok) {
-        return await res.json();
+        const parsed = await safeResponseJson<{ activeSessions: LiveSession[]; historySessions: LiveSession[] } | null>(res, null);
+        if (parsed) return parsed;
       }
     } catch (e) {
       console.warn('[liveService] /api/live/sessions failed, using Supabase fallback:', e);
@@ -242,7 +246,7 @@ export const liveService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params)
       });
-      const json = await res.json();
+      const json = await safeResponseJson(res);
       return json;
     } catch (err: any) {
       console.error('[liveService] startLive error:', err);
@@ -264,7 +268,7 @@ export const liveService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params)
       });
-      const json = await res.json();
+      const json = await safeResponseJson(res);
       this.clearLiveCache();
       return json;
     } catch (err: any) {
@@ -287,7 +291,7 @@ export const liveService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params || {})
       });
-      const json = await res.json();
+      const json = await safeResponseJson(res);
       this.clearLiveCache();
       return json;
     } catch (err: any) {

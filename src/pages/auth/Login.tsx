@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/useAuthStore';
 import { PROFILE_COMPLETION_PATH, isProfileIncomplete } from '@/lib/profile';
 import { toast } from 'sonner';
+import { safeResponseJson } from '@/lib/safeFetch';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -43,13 +44,13 @@ export default function Login() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: findIdName.trim(), mobile: findIdPhone.trim() })
       });
-      const result = await response.json();
-      if (response.ok && result.status === 'success') {
+      const result = await safeResponseJson(response, null);
+      if (response.ok && result?.status === 'success') {
         setFoundEmails(result.emails || []);
         setFindIdStep('result');
         toast.success('등록된 회원의 이메일 주소를 찾았습니다!');
       } else {
-        toast.error(result.message || '일치하는 정보의 회원을 찾을 수 없습니다.');
+        toast.error(result?.message || '일치하는 정보의 회원을 찾을 수 없습니다.');
       }
     } catch (error: any) {
       console.error('[Find ID] Request failed:', error);
@@ -195,12 +196,12 @@ export default function Login() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail })
       });
-      const result = await response.json();
-      if (response.ok && result.status === 'success') {
+      const result = await safeResponseJson(response, null);
+      if (response.ok && result?.status === 'success') {
         toast.success(result.message);
         setForgotStep('code');
       } else {
-        toast.error(result.message || '인증번호 발송에 실패했습니다.');
+        toast.error(result?.message || '인증번호 발송에 실패했습니다.');
       }
     } catch (error: any) {
       console.error('[OTP Debug] Send OTP failed:', error);
@@ -221,14 +222,14 @@ export default function Login() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail, code: verificationCode })
       });
-      const result = await response.json();
-      if (response.ok && result.status === 'success') {
+      const result = await safeResponseJson(response, null);
+      if (response.ok && result?.status === 'success') {
         toast.success(result.message);
         setTempToken(result.tempToken);
         setForgotStep('password');
         setDemoOtpNotice(null);
       } else {
-        toast.error(result.message || '인증번호 확인에 실패했습니다.');
+        toast.error(result?.message || '인증번호 확인에 실패했습니다.');
       }
     } catch (error: any) {
       console.error('[OTP Debug] Verify OTP failed:', error);
@@ -254,8 +255,8 @@ export default function Login() {
           password: newPassword
         })
       });
-      const result = await response.json();
-      if (response.ok && result.status === 'success') {
+      const result = await safeResponseJson(response, null);
+      if (response.ok && result?.status === 'success') {
         toast.success(result.message);
         // Clear all states
         setForgotStep('email');

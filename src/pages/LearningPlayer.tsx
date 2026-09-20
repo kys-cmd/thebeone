@@ -23,6 +23,7 @@ import { Course, CurriculumItem } from '@/types';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { safeResponseJson } from '@/lib/safeFetch';
 import { 
   Accordion, 
   AccordionContent, 
@@ -162,7 +163,7 @@ export default function LearningPlayer() {
                 watchedTime: Math.floor(curTime)
               })
             });
-            const result = await response.json();
+            const result = await safeResponseJson(response, { status: 'ok' });
             if (result.status === 'db_table_missing' && isMounted) {
               const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
               if (isAdmin) {
