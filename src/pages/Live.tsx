@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import { cmsService, SiteConfig } from '@/services/cmsService';
 import { liveService, LiveSession } from '@/services/liveService';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { LiveVideoPlayer } from '@/components/LiveVideoPlayer';
 
 interface ChatMessage {
   id: string;
@@ -64,30 +65,57 @@ export default function LivePage() {
     try {
       const status = await liveService.getLiveStatus();
       if (status.isLive && status.activeSession) {
-        setIsLive(true);
-        setActiveSession(status.activeSession);
+        setIsLive((prev) => (prev !== true ? true : prev));
+        setActiveSession((prev) => {
+          if (prev?.session_id === status.activeSession?.session_id && prev?.is_active === status.activeSession?.is_active) {
+            return prev;
+          }
+          return status.activeSession;
+        });
+
         const code = status.activeSession.embed_code || status.config?.live_embed_code || DEFAULT_VIMEO_EMBED;
         const title = status.activeSession.title || status.config?.live_title || '비원아카데미 라이브';
-        setEmbedCode(code);
-        setLiveTitle(title);
-        setChatEnabled(status.activeSession.chat_enabled !== false);
-        setStartTime(status.activeSession.start_time_custom || status.activeSession.started_at || '');
-        setConfig((prev) => ({
-          ...(prev || {}),
-          live_is_active: true,
-          live_embed_code: code,
-          live_title: title,
-          live_chat_enabled: status.activeSession?.chat_enabled !== false,
-          live_start_time: status.activeSession?.started_at || ''
-        }));
+        
+        setEmbedCode((prev) => (prev !== code ? code : prev));
+        setLiveTitle((prev) => (prev !== title ? title : prev));
+        setChatEnabled((prev) => {
+          const nextChat = status.activeSession?.chat_enabled !== false;
+          return prev !== nextChat ? nextChat : prev;
+        });
+        setStartTime((prev) => {
+          const nextTime = status.activeSession?.start_time_custom || status.activeSession?.started_at || '';
+          return prev !== nextTime ? nextTime : prev;
+        });
+
+        setConfig((prev) => {
+          if (
+            prev?.live_is_active === true &&
+            prev?.live_embed_code === code &&
+            prev?.live_title === title &&
+            prev?.live_chat_enabled === (status.activeSession?.chat_enabled !== false)
+          ) {
+            return prev;
+          }
+          return {
+            ...(prev || {}),
+            live_is_active: true,
+            live_embed_code: code,
+            live_title: title,
+            live_chat_enabled: status.activeSession?.chat_enabled !== false,
+            live_start_time: status.activeSession?.started_at || ''
+          };
+        });
       } else {
-        setIsLive(false);
-        setActiveSession(null);
+        setIsLive((prev) => (prev !== false ? false : prev));
+        setActiveSession((prev) => (prev !== null ? null : prev));
         liveService.clearLiveCache();
-        setConfig((prev) => ({
-          ...(prev || {}),
-          live_is_active: false
-        }));
+        setConfig((prev) => {
+          if (prev?.live_is_active === false) return prev;
+          return {
+            ...(prev || {}),
+            live_is_active: false
+          };
+        });
       }
     } catch (error) {
       console.error('Error fetching live status:', error);
@@ -328,7 +356,9 @@ export default function LivePage() {
   }
 
   const isSuperAdmin = user?.role === 'super_admin';
-  const displayEmbedCode = config?.live_embed_code || DEFAULT_VIMEO_EMBED;
+  const displayEmbedCode = useMemo(() => {
+    return config?.live_embed_code || DEFAULT_VIMEO_EMBED;
+  }, [config?.live_embed_code]);
   const displayTitle = config?.live_title || '비원아카데미 라이브';
   const chatIsDisabledByAdmin = config?.live_chat_enabled === false;
 
@@ -468,10 +498,7 @@ export default function LivePage() {
           <div className="lg:col-span-3 flex flex-col shrink-0 lg:shrink space-y-0 lg:space-y-6 relative bg-black z-20">
             <div className="relative aspect-video w-full bg-gray-900 lg:rounded-[32px] overflow-hidden shadow-2xl border-b lg:border border-white/10 flex flex-col items-center justify-center">
               {/* The Live Video Player: Always visible to everyone without requiring login */}
-              <div 
-                className="w-full h-full [&>div]:w-full [&>div]:h-full [&>div]:!p-0 [&_iframe]:w-full [&_iframe]:h-full [&_iframe]:absolute [&_iframe]:inset-0" 
-                dangerouslySetInnerHTML={{ __html: displayEmbedCode }} 
-              />
+              <LiveVideoPlayer embedCode={displayEmbedCode} />
               <div className="absolute top-3 left-3 sm:top-6 sm:left-6 z-10 flex items-center gap-3 pointer-events-none">
                 {isLive ? (
                   <Badge className="bg-red-600 text-white border-none font-black px-2.5 py-1 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl flex items-center gap-1.5 animate-pulse text-xs sm:text-sm shadow-lg">
