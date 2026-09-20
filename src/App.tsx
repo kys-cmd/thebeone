@@ -150,19 +150,21 @@ function PublicLayout() {
   }
 
   const isChatRoomOnMobile = location.pathname === '/chat' && !!new URLSearchParams(location.search).get('room');
+  const isLiveOnMobile = location.pathname.startsWith('/live');
+  const isDedicatedMobileView = isChatRoomOnMobile || isLiveOnMobile;
 
   return (
     <>
-      <div className={isChatRoomOnMobile ? "hidden md:block" : "block"}>
+      <div className={isDedicatedMobileView ? "hidden md:block" : "block"}>
         <Header />
       </div>
-      <main className={`flex-1 ${isChatRoomOnMobile ? "pb-0" : "pb-16 md:pb-0"}`}>
+      <main className={`flex-1 ${isDedicatedMobileView ? "pb-0 flex flex-col" : "pb-16 md:pb-0"}`}>
         <Outlet />
       </main>
-      <div className={isChatRoomOnMobile ? "hidden md:block" : "block"}>
+      <div className={isDedicatedMobileView ? "hidden md:block" : "block"}>
         <Footer />
       </div>
-      <div className={isChatRoomOnMobile ? "hidden md:block" : "block"}>
+      <div className={isDedicatedMobileView ? "hidden md:block" : "block"}>
         <MobileBottomNav />
       </div>
     </>

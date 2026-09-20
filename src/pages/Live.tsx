@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { 
   Send, MessageSquare, Heart, Share2, 
-  Play, Zap, Wifi, Lock, LogIn, Settings
+  Play, Zap, Wifi, Lock, LogIn, Settings,
+  ChevronLeft, Home, ArrowDown, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -28,9 +29,11 @@ export default function LivePage() {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [isLive, setIsLive] = useState(false);
+  const [isLive, setIsLive] = useState(true);
   const [config, setConfig] = useState<SiteConfig | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showMobileInfo, setShowMobileInfo] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // Admin Modal State
@@ -44,17 +47,68 @@ export default function LivePage() {
   const DEFAULT_VIMEO_EMBED = '<div style="padding:56.25% 0 0 0;position:relative;"><iframe src="https://vimeo.com/event/5897209/embed" frameborder="0" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;"></iframe></div>';
 
   useEffect(() => {
+    // 1. Initial cached values for instant zero-flicker display
+    try {
+      const cached = localStorage.getItem('beone_live_config');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.live_embed_code) setEmbedCode(parsed.live_embed_code);
+        if (parsed.live_title) setLiveTitle(parsed.live_title);
+        if (typeof parsed.live_is_active === 'boolean') setIsLive(parsed.live_is_active);
+        if (typeof parsed.live_chat_enabled === 'boolean') setChatEnabled(parsed.live_chat_enabled);
+        if (parsed.live_start_time) setStartTime(parsed.live_start_time);
+      }
+    } catch (e) {
+      console.warn('Failed to parse cached live config:', e);
+    }
+
     const fetchLiveStatus = async () => {
       try {
-        const fetchedConfig = await cmsService.getSiteConfig();
-        setConfig(fetchedConfig);
-        setIsLive(fetchedConfig.live_is_active === true);
-        
-        // Initialize admin modal inputs
-        setEmbedCode(fetchedConfig.live_embed_code || DEFAULT_VIMEO_EMBED);
-        setLiveTitle(fetchedConfig.live_title || '비원아카데미 라이브');
-        setChatEnabled(fetchedConfig.live_chat_enabled !== false);
-        setStartTime(fetchedConfig.live_start_time || '');
+        // First try to fetch from support_contents (publicly readable persistent table)
+        const { data: liveData } = await supabase
+          .from('support_contents')
+          .select('*')
+          .eq('type', 'live_config')
+          .maybeSingle();
+
+        if (liveData && liveData.content) {
+          try {
+            const parsed = JSON.parse(liveData.content);
+            const active = parsed.live_is_active !== false;
+            setIsLive(active);
+            setEmbedCode(parsed.live_embed_code || DEFAULT_VIMEO_EMBED);
+            setLiveTitle(parsed.live_title || liveData.title || '비원아카데미 라이브');
+            setChatEnabled(parsed.live_chat_enabled !== false);
+            setStartTime(parsed.live_start_time || '');
+            setConfig((prev) => ({
+              ...(prev || {}),
+              live_is_active: active,
+              live_embed_code: parsed.live_embed_code || DEFAULT_VIMEO_EMBED,
+              live_title: parsed.live_title || liveData.title || '비원아카데미 라이브',
+              live_chat_enabled: parsed.live_chat_enabled !== false,
+              live_start_time: parsed.live_start_time || ''
+            }));
+            localStorage.setItem('beone_live_config', JSON.stringify({
+              live_is_active: active,
+              live_embed_code: parsed.live_embed_code || DEFAULT_VIMEO_EMBED,
+              live_title: parsed.live_title || liveData.title || '비원아카데미 라이브',
+              live_chat_enabled: parsed.live_chat_enabled !== false,
+              live_start_time: parsed.live_start_time || ''
+            }));
+          } catch (err) {
+            console.error('Error parsing live config json:', err);
+          }
+        } else {
+          // Fallback to siteConfig
+          const fetchedConfig = await cmsService.getSiteConfig();
+          setConfig(fetchedConfig);
+          // Default to true so live content is immediately visible
+          setIsLive(fetchedConfig.live_is_active !== false);
+          setEmbedCode(fetchedConfig.live_embed_code || DEFAULT_VIMEO_EMBED);
+          setLiveTitle(fetchedConfig.live_title || '비원아카데미 라이브');
+          setChatEnabled(fetchedConfig.live_chat_enabled !== false);
+          setStartTime(fetchedConfig.live_start_time || '');
+        }
       } catch (error) {
         console.error('Error fetching live status:', error);
       } finally {
@@ -68,9 +122,17 @@ export default function LivePage() {
 
     channel
       .on('broadcast', { event: 'live_status_change' }, (payload) => {
-        setIsLive(payload.payload.isLive);
-        if (payload.payload.config) {
+        if (payload?.payload?.isLive !== undefined) {
+          setIsLive(payload.payload.isLive);
+        }
+        if (payload?.payload?.config) {
           setConfig(payload.payload.config);
+          if (payload.payload.config.live_embed_code) {
+            setEmbedCode(payload.payload.config.live_embed_code);
+          }
+          if (payload.payload.config.live_title) {
+            setLiveTitle(payload.payload.config.live_title);
+          }
         }
       })
       .on('broadcast', { event: 'new_message' }, (payload) => {
@@ -83,24 +145,74 @@ export default function LivePage() {
     };
   }, []);
 
-  useEffect(() => {
+  const handleChatScroll = () => {
+    if (!chatContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 60;
+    setShowScrollBottom(!isNearBottom);
+  };
+
+  const scrollToBottom = () => {
     if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+      setShowScrollBottom(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!showScrollBottom && chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, showScrollBottom]);
 
   const handleStartLiveConfirm = async () => {
     try {
-      if (!config) return;
       const updatedConfig = { 
-        ...config, 
+        ...(config || {}), 
         live_is_active: true,
         live_embed_code: embedCode || DEFAULT_VIMEO_EMBED,
         live_title: liveTitle || '비원아카데미 라이브',
         live_chat_enabled: chatEnabled,
         live_start_time: startTime || new Date().toISOString()
       };
-      await cmsService.saveSiteConfig(updatedConfig);
+
+      // Persist in support_contents as 'live_config'
+      try {
+        const { data: existing } = await supabase
+          .from('support_contents')
+          .select('id')
+          .eq('type', 'live_config')
+          .maybeSingle();
+
+        if (existing?.id) {
+          await supabase
+            .from('support_contents')
+            .update({
+              title: updatedConfig.live_title,
+              content: JSON.stringify(updatedConfig),
+              active: true,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existing.id);
+        } else {
+          await supabase
+            .from('support_contents')
+            .insert([{
+              type: 'live_config',
+              title: updatedConfig.live_title,
+              content: JSON.stringify(updatedConfig),
+              active: true,
+              is_deleted: false
+            }]);
+        }
+      } catch (dbErr) {
+        console.warn('DB persistence warning:', dbErr);
+      }
+
+      localStorage.setItem('beone_live_config', JSON.stringify(updatedConfig));
       setConfig(updatedConfig);
       setIsLive(true);
       setShowSettingsModal(false);
@@ -112,17 +224,45 @@ export default function LivePage() {
       });
       toast.success('라이브가 시작되었습니다.');
     } catch (error) {
+      console.error('Error starting live:', error);
       toast.error('라이브 시작 중 오류가 발생했습니다.');
     }
   };
 
   const handleStopLive = async () => {
     try {
-      if (!config) return;
-      const updatedConfig = { ...config, live_is_active: false };
-      await cmsService.saveSiteConfig(updatedConfig);
+      const updatedConfig = { 
+        ...(config || {}), 
+        live_is_active: false,
+        live_embed_code: embedCode || DEFAULT_VIMEO_EMBED,
+        live_title: liveTitle || '비원아카데미 라이브'
+      };
+
+      try {
+        const { data: existing } = await supabase
+          .from('support_contents')
+          .select('id')
+          .eq('type', 'live_config')
+          .maybeSingle();
+
+        if (existing?.id) {
+          await supabase
+            .from('support_contents')
+            .update({
+              content: JSON.stringify(updatedConfig),
+              active: false,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existing.id);
+        }
+      } catch (dbErr) {
+        console.warn('DB persistence warning on stop:', dbErr);
+      }
+
+      localStorage.setItem('beone_live_config', JSON.stringify(updatedConfig));
       setConfig(updatedConfig);
       setIsLive(false);
+
       await supabase.channel('b1_live_room').send({
         type: 'broadcast',
         event: 'live_status_change',
@@ -130,6 +270,7 @@ export default function LivePage() {
       });
       toast.success('라이브가 종료되었습니다.');
     } catch (error) {
+      console.error('Error stopping live:', error);
       toast.error('라이브 종료 중 오류가 발생했습니다.');
     }
   };
@@ -141,7 +282,7 @@ export default function LivePage() {
     const msg: ChatMessage = {
       id: Date.now().toString(),
       user: user.name || '비회원',
-      text: newMessage,
+      text: newMessage.trim(),
       time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
     };
     
@@ -166,12 +307,66 @@ export default function LivePage() {
   const chatIsDisabledByAdmin = config?.live_chat_enabled === false;
 
   return (
-    <div className="min-h-screen bg-black pt-20 pb-32">
-      <div className="container mx-auto px-4 py-8">
-        
-        {/* Admin Controls */}
+    <div className="h-[100dvh] md:h-[calc(100dvh-5rem)] lg:h-auto lg:min-h-screen bg-black flex flex-col lg:block lg:pt-20 lg:pb-32 overflow-hidden lg:overflow-visible">
+      {/* Mobile Dedicated Top Navigation Bar (lg:hidden) */}
+      <div className="lg:hidden shrink-0 h-11 bg-black/95 backdrop-blur border-b border-white/10 px-3 flex items-center justify-between z-30 text-white">
+        <div className="flex items-center gap-1.5">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => navigate(-1)} 
+            className="text-white hover:bg-white/10 h-8 w-8 rounded-lg"
+            title="뒤로가기"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </Button>
+          <div className="flex items-center gap-1.5 font-black text-sm tracking-tight">
+            <span className="bg-gradient-to-r from-red-500 to-purple-400 bg-clip-text text-transparent">비원Live</span>
+            {isLive && (
+              <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {isLive ? (
+            <Badge className="bg-red-600 text-white border-none font-bold text-[11px] px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+              <Wifi className="w-3 h-3" /> LIVE
+            </Badge>
+          ) : (
+            <Badge className="bg-gray-800 text-gray-400 border-none font-bold text-[11px] px-2 py-0.5 rounded-full">
+              준비중
+            </Badge>
+          )}
+
+          {isSuperAdmin && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setShowSettingsModal(true)} 
+              className="text-white hover:bg-white/10 h-8 w-8 rounded-lg"
+              title="라이브 방송 설정"
+            >
+              <Settings className="w-4 h-4 text-red-400" />
+            </Button>
+          )}
+
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => navigate('/')} 
+            className="text-white hover:bg-white/10 h-8 w-8 rounded-lg"
+            title="홈으로"
+          >
+            <Home className="w-4 h-4 text-gray-300" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-0 lg:px-4 py-0 lg:py-8 flex-1 flex flex-col lg:block min-h-0">
+        {/* Admin Controls (Desktop) */}
         {isSuperAdmin && (
-          <div className="mb-6 bg-white/10 p-6 rounded-2xl flex items-center justify-between border border-white/10">
+          <div className="hidden lg:flex mb-6 bg-white/10 p-6 rounded-2xl items-center justify-between border border-white/10">
             <div className="text-white">
               <h3 className="font-bold">비원아카데미 라이브</h3>
               <p className="text-sm text-gray-400">현재 상태: {isLive ? '진행 중' : '종료됨'}</p>
@@ -184,49 +379,88 @@ export default function LivePage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-200px)] min-h-[600px]">
-          {/* Main Video Area */}
-          <div className="lg:col-span-3 flex flex-col space-y-6 relative">
-            <div className="relative aspect-video bg-gray-900 rounded-[32px] overflow-hidden shadow-2xl border border-white/5 flex flex-col items-center justify-center">
-              
-              {!isLive ? (
-                <div className="text-center space-y-4">
-                  <Wifi className="w-16 h-16 text-gray-600 mx-auto" />
-                  <h2 className="text-3xl font-black text-white">라이브 준비중</h2>
-                  <p className="text-gray-400">라이브가 진행되면 안내드리겠습니다.</p>
-                </div>
-              ) : (
-                <>
-                  <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: displayEmbedCode }} />
-                  <div className="absolute top-6 left-6 z-10 flex items-center gap-4 pointer-events-none">
-                     <Badge className="bg-red-600 text-white border-none font-black px-4 py-2 rounded-2xl flex items-center gap-2 animate-pulse text-sm">
-                        <Wifi className="w-5 h-5" /> LIVE
-                     </Badge>
-                  </div>
-                </>
-              )}
+        {/* Main Content Layout: Mobile flex-col with sticky video + full-height chat; Desktop 4-col grid */}
+        <div className="flex flex-col lg:grid lg:grid-cols-4 gap-0 lg:gap-6 flex-1 min-h-0 lg:h-[calc(100vh-200px)] lg:min-h-[600px]">
+          
+          {/* Main Video Area: Pinned at top on mobile, 3-col on desktop */}
+          <div className="lg:col-span-3 flex flex-col shrink-0 lg:shrink space-y-0 lg:space-y-6 relative bg-black z-20">
+            <div className="relative aspect-video w-full bg-gray-900 lg:rounded-[32px] overflow-hidden shadow-2xl border-b lg:border border-white/10 flex flex-col items-center justify-center">
+              {/* The Live Video Player: Always visible to everyone without requiring login */}
+              <div 
+                className="w-full h-full [&>div]:w-full [&>div]:h-full [&>div]:!p-0 [&_iframe]:w-full [&_iframe]:h-full [&_iframe]:absolute [&_iframe]:inset-0" 
+                dangerouslySetInnerHTML={{ __html: displayEmbedCode }} 
+              />
+              <div className="absolute top-3 left-3 sm:top-6 sm:left-6 z-10 flex items-center gap-3 pointer-events-none">
+                {isLive ? (
+                  <Badge className="bg-red-600 text-white border-none font-black px-2.5 py-1 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl flex items-center gap-1.5 animate-pulse text-xs sm:text-sm shadow-lg">
+                    <Wifi className="w-3.5 h-3.5 sm:w-5 sm:h-5" /> LIVE
+                  </Badge>
+                ) : (
+                  <Badge className="bg-gray-900/90 text-gray-300 border border-white/20 font-bold px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl text-xs sm:text-sm shadow-lg backdrop-blur-md flex items-center gap-1.5">
+                    <Wifi className="w-3.5 h-3.5 text-gray-400" /> 방송 준비중
+                  </Badge>
+                )}
+              </div>
+            </div>
 
-              {/* Login Overlay for Non-members when Live */}
-              {isLive && !user && (
-                <div className="absolute inset-0 z-20 bg-black/80 backdrop-blur-sm flex items-center justify-center">
-                  <div className="text-center space-y-6 p-8 bg-gray-900 rounded-3xl border border-white/10 max-w-md w-full mx-4">
-                    <Lock className="w-12 h-12 text-red-500 mx-auto" />
-                    <div>
-                      <h3 className="text-2xl font-black text-white mb-2">비원아카데미 라이브</h3>
-                      <p className="text-gray-400">로그인 시 시청하실 수 있습니다.</p>
-                    </div>
-                    <Button 
-                      className="w-full h-14 text-lg font-bold bg-white text-black hover:bg-gray-200 rounded-xl"
-                      onClick={() => navigate('/auth/login')}
-                    >
-                      <LogIn className="w-5 h-5 mr-2" /> 로그인하고 시청하기
-                    </Button>
-                  </div>
+            {/* Mobile Compact Title & Info Bar (lg:hidden) */}
+            <div className="lg:hidden bg-gray-950 border-b border-white/10 shrink-0">
+              <div className="px-3 py-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                  <h1 className="text-xs sm:text-sm font-bold text-white truncate">
+                    {displayTitle}
+                  </h1>
+                </div>
+                
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button 
+                    onClick={() => setShowMobileInfo(!showMobileInfo)}
+                    className="flex items-center gap-1 text-[11px] font-bold text-gray-400 hover:text-white bg-white/5 px-2 py-1 rounded-md transition-colors"
+                  >
+                    <span>정보</span>
+                    {showMobileInfo ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </button>
+
+                  {isSuperAdmin && (
+                    isLive ? (
+                      <Button 
+                        size="sm" 
+                        onClick={handleStopLive} 
+                        variant="destructive" 
+                        className="h-6 text-[11px] font-bold px-2 rounded-md"
+                      >
+                        종료
+                      </Button>
+                    ) : (
+                      <Button 
+                        size="sm" 
+                        onClick={() => setShowSettingsModal(true)} 
+                        className="h-6 text-[11px] font-bold px-2 bg-red-600 hover:bg-red-700 text-white rounded-md"
+                      >
+                        시작
+                      </Button>
+                    )
+                  )}
+                </div>
+              </div>
+
+              {/* Collapsible Info Details on Mobile */}
+              {showMobileInfo && (
+                <div className="px-3 pb-2.5 pt-0.5 text-xs text-gray-300 space-y-1 border-t border-white/5 bg-gray-900/90">
+                  <p className="font-medium text-white">{displayTitle}</p>
+                  <p className="text-[11px] text-gray-400">비원아카데미 실시간 라이브 채널에 오신 것을 환영합니다.</p>
+                  {config?.live_start_time && (
+                    <p className="text-[10px] text-purple-400">
+                      시작 시간: {new Date(config.live_start_time).toLocaleString('ko-KR')}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
 
-            <div className="bg-white/5 backdrop-blur-md p-8 rounded-[32px] border border-white/10 flex items-center justify-between">
+            {/* Desktop Title Banner (hidden lg:flex) */}
+            <div className="hidden lg:flex bg-white/5 backdrop-blur-md p-8 rounded-[32px] border border-white/10 items-center justify-between">
               <div className="space-y-2">
                  <h1 className="text-2xl font-black text-white tracking-tighter">
                    {displayTitle}
@@ -239,83 +473,111 @@ export default function LivePage() {
             </div>
           </div>
 
-          {/* Chat Area */}
-          <div className="lg:col-span-1 flex flex-col bg-white rounded-[32px] overflow-hidden shadow-2xl border border-gray-100 relative">
-            {!user && isLive && (
-              <div className="absolute inset-0 z-10 bg-white/80 backdrop-blur-[2px] flex items-center justify-center p-6 text-center">
-                <div className="font-bold text-gray-500 flex flex-col items-center gap-3">
-                  <Lock className="w-8 h-8 text-gray-400" />
-                  <span>로그인 후 채팅에 참여할 수 있습니다.</span>
-                </div>
-              </div>
-            )}
+          {/* Chat Area: Fills 100% of remaining height on mobile; 1-col sidebar on desktop */}
+          <div className="lg:col-span-1 flex-1 min-h-0 flex flex-col bg-white lg:rounded-[32px] overflow-hidden shadow-2xl border-t lg:border border-gray-100 relative">
             
-            {chatIsDisabledByAdmin && isLive && user && (
-              <div className="absolute inset-0 z-10 bg-white/80 backdrop-blur-[2px] flex items-center justify-center p-6 text-center">
-                <div className="font-bold text-gray-500 flex flex-col items-center gap-3">
-                  <Lock className="w-8 h-8 text-gray-400" />
-                  <span>관리자에 의해 채팅이 비활성화되었습니다.</span>
-                </div>
-              </div>
-            )}
-            
-            <div className="p-6 border-b flex items-center justify-between bg-gray-50/50">
-               <div className="flex items-center gap-3">
-                 <MessageSquare className="w-5 h-5 text-red-600" />
-                 <h2 className="font-black text-gray-900 tracking-tight">실시간 채팅</h2>
+            {/* Chat Header */}
+            <div className="px-4 py-2.5 sm:py-3.5 border-b flex items-center justify-between bg-gray-50/90 shrink-0">
+               <div className="flex items-center gap-2 sm:gap-2.5">
+                 <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
+                 <h2 className="font-black text-xs sm:text-sm lg:text-base text-gray-900 tracking-tight">실시간 채팅</h2>
+                 {messages.length > 0 && (
+                   <span className="text-[11px] font-bold text-gray-400">({messages.length})</span>
+                 )}
                </div>
                {isLive ? (
-                 <Badge className="bg-green-100 text-green-600 border-none font-black px-2">ON AIR</Badge>
+                 <Badge className="bg-green-100 text-green-700 border-none font-black text-[11px] px-2 py-0.5">ON AIR</Badge>
                ) : (
-                 <Badge className="bg-gray-100 text-gray-500 border-none font-black px-2">OFF</Badge>
+                 <Badge className="bg-gray-100 text-gray-500 border-none font-black text-[11px] px-2 py-0.5">OFF</Badge>
                )}
             </div>
 
+            {/* Scrollable Chat Messages Container */}
             <div 
               ref={chatContainerRef}
-              className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar"
+              onScroll={handleChatScroll}
+              className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 no-scrollbar"
             >
                {messages.length === 0 ? (
-                 <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-3">
-                   <MessageSquare className="w-10 h-10 opacity-20" />
-                   <p className="font-bold text-sm">첫 메시지를 남겨보세요!</p>
+                 <div className="h-full min-h-[120px] flex flex-col items-center justify-center text-gray-400 space-y-2">
+                   <MessageSquare className="w-8 h-8 opacity-20" />
+                   <p className="font-bold text-xs sm:text-sm">첫 메시지를 남겨보세요!</p>
                  </div>
                ) : (
                  messages.map((msg) => (
-                   <div key={msg.id} className="flex gap-4 group">
-                      <Avatar className="w-8 h-8 border-2 border-white flex-shrink-0 font-black">
-                        <AvatarFallback className="bg-purple-100 text-purple-700 text-xs">{msg.user[0]}</AvatarFallback>
+                   <div key={msg.id} className="flex gap-2.5 sm:gap-3 group items-start">
+                      <Avatar className="w-7 h-7 sm:w-8 sm:h-8 border border-gray-100 flex-shrink-0 font-black">
+                        <AvatarFallback className="bg-purple-100 text-purple-700 text-[11px] sm:text-xs">{msg.user[0] || 'U'}</AvatarFallback>
                       </Avatar>
-                      <div className="space-y-1 w-full">
-                         <div className="flex items-center justify-between">
-                           <p className="text-xs font-black text-gray-900">{msg.user}</p>
-                           <span className="text-[10px] font-bold text-gray-400">{msg.time}</span>
+                      <div className="space-y-0.5 sm:space-y-1 min-w-0 flex-1">
+                         <div className="flex items-center gap-2">
+                           <p className="text-xs font-black text-gray-900 truncate">{msg.user}</p>
+                           <span className="text-[10px] font-medium text-gray-400 shrink-0">{msg.time}</span>
                          </div>
-                         <p className="text-sm text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-2xl rounded-tl-sm w-full break-words">{msg.text}</p>
+                         <p className="text-xs sm:text-sm text-gray-800 leading-relaxed bg-gray-50 border border-gray-100/80 p-2.5 sm:p-3 rounded-2xl rounded-tl-sm w-fit max-w-full break-words">
+                           {msg.text}
+                         </p>
                       </div>
                    </div>
                  ))
                )}
             </div>
 
-            <div className="p-4 border-t bg-white">
-               <form onSubmit={handleSendMessage} className="relative group">
-                 <Input 
-                   value={newMessage}
-                   onChange={(e) => setNewMessage(e.target.value)}
-                   disabled={!isLive || !user}
-                   placeholder={isLive ? (user ? "메시지를 입력하세요..." : "로그인 후 이용 가능합니다.") : "라이브가 시작되면 채팅이 활성화됩니다."} 
-                   className="h-12 bg-gray-50 border-none rounded-xl pl-4 pr-12 font-bold focus-visible:ring-2 focus-visible:ring-red-600 transition-all disabled:opacity-50"
-                 />
-                 <Button 
-                   type="submit"
-                   size="icon" 
-                   disabled={!isLive || !user || !newMessage.trim()}
-                   className="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 bg-red-600 rounded-lg hover:bg-red-700 transition-all disabled:opacity-50"
-                 >
-                   <Send className="w-4 h-4 text-white" />
-                 </Button>
-               </form>
+            {/* Floating Scroll to Bottom Button */}
+            {showScrollBottom && (
+              <button
+                onClick={scrollToBottom}
+                className="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-20 bg-gray-900/90 hover:bg-black text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 transition-all"
+              >
+                <ArrowDown className="w-3.5 h-3.5" />
+                <span>최신 메시지</span>
+              </button>
+            )}
+
+            {/* Chat Input Bar */}
+            <div className="p-2.5 sm:p-3 lg:p-4 border-t bg-white shrink-0">
+               {!user ? (
+                 <div className="flex items-center justify-between gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+                   <div className="flex items-center gap-1.5 text-xs text-gray-500 font-bold min-w-0 truncate">
+                     <Lock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                     <span className="truncate">로그인 후 채팅에 참여할 수 있습니다.</span>
+                   </div>
+                   <Button 
+                     size="sm" 
+                     onClick={() => navigate('/auth/login')}
+                     className="h-7 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-lg shrink-0 px-2.5"
+                   >
+                     <LogIn className="w-3 h-3 mr-1" /> 로그인
+                   </Button>
+                 </div>
+               ) : chatIsDisabledByAdmin ? (
+                 <div className="text-center py-2 text-xs font-bold text-gray-400 bg-gray-50 rounded-xl">
+                   관리자에 의해 실시간 채팅이 비활성화되었습니다.
+                 </div>
+               ) : !isLive ? (
+                 <div className="text-center py-2 text-xs font-bold text-gray-400 bg-gray-50 rounded-xl">
+                   라이브가 시작되면 실시간 채팅이 활성화됩니다.
+                 </div>
+               ) : (
+                 <form onSubmit={handleSendMessage} className="relative group flex items-center">
+                   <div className="relative flex-1 min-w-0">
+                     <Input 
+                       value={newMessage}
+                       onChange={(e) => setNewMessage(e.target.value)}
+                       placeholder="메시지를 입력하세요..." 
+                       className="h-10 sm:h-12 bg-gray-50 border-gray-200 rounded-xl pl-3 sm:pl-4 pr-11 text-xs sm:text-sm font-bold focus-visible:ring-2 focus-visible:ring-red-500 transition-all"
+                     />
+                     <Button 
+                       type="submit"
+                       size="icon" 
+                       disabled={!newMessage.trim()}
+                       className="absolute right-1 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-9 sm:h-9 bg-red-600 rounded-lg hover:bg-red-700 transition-all disabled:opacity-40"
+                     >
+                       <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                     </Button>
+                   </div>
+                 </form>
+               )}
             </div>
           </div>
         </div>
