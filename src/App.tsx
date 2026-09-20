@@ -56,6 +56,7 @@ import AdminReviewManagement from './pages/admin/ReviewManagement';
 import AdminSupportInquiries from './pages/admin/SupportInquiries';
 import AdminErrorLogs from './pages/admin/ErrorLogs';
 import AdminFontDemo from './pages/admin/FontDemo';
+import AdminLiveManagement from './pages/admin/LiveManagement';
 import { Outlet } from 'react-router-dom';
 
 /**
@@ -263,6 +264,7 @@ function AppContent() {
           </RequireCompleteProfile>
         }>
           <Route index element={<AdminDashboard />} />
+          <Route path="live" element={<AdminLiveManagement />} />
           <Route path="courses" element={<AdminCourseManagement />} />
           <Route path="courses/edit/:id" element={<AdminCourseEditor />} />
           <Route path="instructors" element={<AdminInstructorManagement />} />

@@ -9,11 +9,14 @@ import { Switch } from '@/components/ui/switch';
 import { 
   Send, MessageSquare, Heart, Share2, 
   Play, Zap, Wifi, Lock, LogIn, Settings,
-  ChevronLeft, Home, ArrowDown, ChevronDown, ChevronUp
+  ChevronLeft, Home, ArrowDown, ChevronDown, ChevronUp,
+  AlertTriangle, Radio, Square, ExternalLink, CheckCircle2,
+  Clock, User, RefreshCw
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store/useAuthStore';
 import { cmsService, SiteConfig } from '@/services/cmsService';
+import { liveService, LiveSession } from '@/services/liveService';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 
@@ -32,15 +35,20 @@ export default function LivePage() {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [isLive, setIsLive] = useState(true);
+  const [isLive, setIsLive] = useState(false);
+  const [activeSession, setActiveSession] = useState<LiveSession | null>(null);
   const [config, setConfig] = useState<SiteConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [showMobileInfo, setShowMobileInfo] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Admin Modal State
+  // Admin Modal & Conflict States
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [conflictingSessions, setConflictingSessions] = useState<LiveSession[]>([]);
+  const [actionLoading, setActionLoading] = useState(false);
+
   const [embedCode, setEmbedCode] = useState('');
   const [liveTitle, setLiveTitle] = useState('');
   const [chatEnabled, setChatEnabled] = useState(true);
@@ -49,75 +57,47 @@ export default function LivePage() {
   // default vimeo embed provided by user
   const DEFAULT_VIMEO_EMBED = '<div style="padding:56.25% 0 0 0;position:relative;"><iframe src="https://vimeo.com/event/5897209/embed" frameborder="0" allow="autoplay; fullscreen; picture-in-picture; encrypted-media; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;"></iframe></div>';
 
-  useEffect(() => {
-    // 1. Initial cached values for instant zero-flicker display
+  const isAdmin = Boolean(user && (user.role === 'admin' || user.role === 'super_admin'));
+
+  const fetchLiveStatus = async () => {
     try {
-      const cached = localStorage.getItem('beone_live_config');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed.live_embed_code) setEmbedCode(parsed.live_embed_code);
-        if (parsed.live_title) setLiveTitle(parsed.live_title);
-        if (typeof parsed.live_is_active === 'boolean') setIsLive(parsed.live_is_active);
-        if (typeof parsed.live_chat_enabled === 'boolean') setChatEnabled(parsed.live_chat_enabled);
-        if (parsed.live_start_time) setStartTime(parsed.live_start_time);
+      const status = await liveService.getLiveStatus();
+      if (status.isLive && status.activeSession) {
+        setIsLive(true);
+        setActiveSession(status.activeSession);
+        const code = status.activeSession.embed_code || status.config?.live_embed_code || DEFAULT_VIMEO_EMBED;
+        const title = status.activeSession.title || status.config?.live_title || '비원아카데미 라이브';
+        setEmbedCode(code);
+        setLiveTitle(title);
+        setChatEnabled(status.activeSession.chat_enabled !== false);
+        setStartTime(status.activeSession.start_time_custom || status.activeSession.started_at || '');
+        setConfig((prev) => ({
+          ...(prev || {}),
+          live_is_active: true,
+          live_embed_code: code,
+          live_title: title,
+          live_chat_enabled: status.activeSession?.chat_enabled !== false,
+          live_start_time: status.activeSession?.started_at || ''
+        }));
+      } else {
+        setIsLive(false);
+        setActiveSession(null);
+        liveService.clearLiveCache();
+        setConfig((prev) => ({
+          ...(prev || {}),
+          live_is_active: false
+        }));
       }
-    } catch (e) {
-      console.warn('Failed to parse cached live config:', e);
+    } catch (error) {
+      console.error('Error fetching live status:', error);
+      setIsLive(false);
+      setActiveSession(null);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const fetchLiveStatus = async () => {
-      try {
-        // First try to fetch from support_contents (publicly readable persistent table)
-        const { data: liveData } = await supabase
-          .from('support_contents')
-          .select('*')
-          .eq('type', 'live_config')
-          .maybeSingle();
-
-        if (liveData && liveData.content) {
-          try {
-            const parsed = JSON.parse(liveData.content);
-            const active = parsed.live_is_active !== false;
-            setIsLive(active);
-            setEmbedCode(parsed.live_embed_code || DEFAULT_VIMEO_EMBED);
-            setLiveTitle(parsed.live_title || liveData.title || '비원아카데미 라이브');
-            setChatEnabled(parsed.live_chat_enabled !== false);
-            setStartTime(parsed.live_start_time || '');
-            setConfig((prev) => ({
-              ...(prev || {}),
-              live_is_active: active,
-              live_embed_code: parsed.live_embed_code || DEFAULT_VIMEO_EMBED,
-              live_title: parsed.live_title || liveData.title || '비원아카데미 라이브',
-              live_chat_enabled: parsed.live_chat_enabled !== false,
-              live_start_time: parsed.live_start_time || ''
-            }));
-            localStorage.setItem('beone_live_config', JSON.stringify({
-              live_is_active: active,
-              live_embed_code: parsed.live_embed_code || DEFAULT_VIMEO_EMBED,
-              live_title: parsed.live_title || liveData.title || '비원아카데미 라이브',
-              live_chat_enabled: parsed.live_chat_enabled !== false,
-              live_start_time: parsed.live_start_time || ''
-            }));
-          } catch (err) {
-            console.error('Error parsing live config json:', err);
-          }
-        } else {
-          // Fallback to siteConfig
-          const fetchedConfig = await cmsService.getSiteConfig();
-          setConfig(fetchedConfig);
-          // Default to true so live content is immediately visible
-          setIsLive(fetchedConfig.live_is_active !== false);
-          setEmbedCode(fetchedConfig.live_embed_code || DEFAULT_VIMEO_EMBED);
-          setLiveTitle(fetchedConfig.live_title || '비원아카데미 라이브');
-          setChatEnabled(fetchedConfig.live_chat_enabled !== false);
-          setStartTime(fetchedConfig.live_start_time || '');
-        }
-      } catch (error) {
-        console.error('Error fetching live status:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  useEffect(() => {
     fetchLiveStatus();
 
     // Setup Supabase Realtime for Status & Chat
@@ -125,17 +105,23 @@ export default function LivePage() {
 
     channel
       .on('broadcast', { event: 'live_status_change' }, (payload) => {
-        if (payload?.payload?.isLive !== undefined) {
-          setIsLive(payload.payload.isLive);
-        }
-        if (payload?.payload?.config) {
-          setConfig(payload.payload.config);
-          if (payload.payload.config.live_embed_code) {
-            setEmbedCode(payload.payload.config.live_embed_code);
+        if (payload?.payload?.isLive === false) {
+          setIsLive(false);
+          setActiveSession(null);
+          liveService.clearLiveCache();
+          setConfig((prev) => ({
+            ...(prev || {}),
+            live_is_active: false
+          }));
+        } else if (payload?.payload?.isLive === true) {
+          setIsLive(true);
+          if (payload?.payload?.config) {
+            const cfg = payload.payload.config;
+            setConfig(cfg);
+            if (cfg.live_embed_code) setEmbedCode(cfg.live_embed_code);
+            if (cfg.live_title) setLiveTitle(cfg.live_title);
           }
-          if (payload.payload.config.live_title) {
-            setLiveTitle(payload.payload.config.live_title);
-          }
+          fetchLiveStatus();
         }
       })
       .on('broadcast', { event: 'new_message' }, (payload) => {
@@ -143,7 +129,13 @@ export default function LivePage() {
       })
       .subscribe();
 
+    // Regular polling every 20s to ensure multi-admin sync
+    const interval = setInterval(() => {
+      fetchLiveStatus();
+    }, 20000);
+
     return () => {
+      clearInterval(interval);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -171,110 +163,131 @@ export default function LivePage() {
     }
   }, [messages, showScrollBottom]);
 
-  const handleStartLiveConfirm = async () => {
+  // When admin clicks "라이브 진행하기"
+  const handleOpenStartLive = async () => {
     try {
-      const updatedConfig = { 
-        ...(config || {}), 
-        live_is_active: true,
-        live_embed_code: embedCode || DEFAULT_VIMEO_EMBED,
-        live_title: liveTitle || '비원아카데미 라이브',
-        live_chat_enabled: chatEnabled,
-        live_start_time: startTime || new Date().toISOString()
-      };
-
-      // Persist in support_contents as 'live_config'
-      try {
-        const { data: existing } = await supabase
-          .from('support_contents')
-          .select('id')
-          .eq('type', 'live_config')
-          .maybeSingle();
-
-        if (existing?.id) {
-          await supabase
-            .from('support_contents')
-            .update({
-              title: updatedConfig.live_title,
-              content: JSON.stringify(updatedConfig),
-              active: true,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existing.id);
-        } else {
-          await supabase
-            .from('support_contents')
-            .insert([{
-              type: 'live_config',
-              title: updatedConfig.live_title,
-              content: JSON.stringify(updatedConfig),
-              active: true,
-              is_deleted: false
-            }]);
-        }
-      } catch (dbErr) {
-        console.warn('DB persistence warning:', dbErr);
+      setActionLoading(true);
+      const currentStatus = await liveService.getLiveStatus();
+      if (currentStatus.isLive && currentStatus.activeSession) {
+        // Another broadcast is active! Prompt conflict resolution
+        setConflictingSessions([currentStatus.activeSession]);
+        setShowConflictModal(true);
+      } else {
+        setLiveTitle('비원아카데미 라이브 특강');
+        setEmbedCode(DEFAULT_VIMEO_EMBED);
+        setChatEnabled(true);
+        setShowSettingsModal(true);
       }
-
-      localStorage.setItem('beone_live_config', JSON.stringify(updatedConfig));
-      setConfig(updatedConfig);
-      setIsLive(true);
-      setShowSettingsModal(false);
-      
-      await supabase.channel('b1_live_room').send({
-        type: 'broadcast',
-        event: 'live_status_change',
-        payload: { isLive: true, config: updatedConfig }
-      });
-      toast.success('라이브가 시작되었습니다.');
-    } catch (error) {
-      console.error('Error starting live:', error);
-      toast.error('라이브 시작 중 오류가 발생했습니다.');
+    } catch (e) {
+      console.error('Check status error:', e);
+      setShowSettingsModal(true);
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  const handleStopLive = async () => {
+  // Start Live execution (with conflict resolution)
+  const handleStartLiveConfirm = async (forceOverwrite = false) => {
+    if (!user) {
+      toast.error('로그인이 필요합니다.');
+      return;
+    }
+
     try {
-      const updatedConfig = { 
-        ...(config || {}), 
-        live_is_active: false,
-        live_embed_code: embedCode || DEFAULT_VIMEO_EMBED,
-        live_title: liveTitle || '비원아카데미 라이브'
-      };
+      setActionLoading(true);
+      const adminRealName = user.name?.trim() || (user as any).full_name?.trim() || user.nickname?.trim() || '관리자';
 
-      try {
-        const { data: existing } = await supabase
-          .from('support_contents')
-          .select('id')
-          .eq('type', 'live_config')
-          .maybeSingle();
+      const result = await liveService.startLive({
+        title: liveTitle.trim() || '비원아카데미 라이브',
+        embedCode: embedCode.trim() || DEFAULT_VIMEO_EMBED,
+        chatEnabled,
+        startTime,
+        adminId: user.id,
+        adminName: adminRealName,
+        adminEmail: user.email || '',
+        adminNickname: user.nickname || undefined,
+        forceTerminateExisting: forceOverwrite
+      });
 
-        if (existing?.id) {
-          await supabase
-            .from('support_contents')
-            .update({
-              content: JSON.stringify(updatedConfig),
-              active: false,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existing.id);
-        }
-      } catch (dbErr) {
-        console.warn('DB persistence warning on stop:', dbErr);
+      if (result.conflict) {
+        setShowSettingsModal(false);
+        setConflictingSessions(result.activeSessions || []);
+        setShowConflictModal(true);
+        return;
       }
 
-      localStorage.setItem('beone_live_config', JSON.stringify(updatedConfig));
-      setConfig(updatedConfig);
-      setIsLive(false);
+      if (result.success) {
+        toast.success('라이브가 시작되었습니다.');
+        setShowSettingsModal(false);
+        setShowConflictModal(false);
+        await fetchLiveStatus();
+      } else {
+        toast.error(result.message || '라이브 시작 중 오류가 발생했습니다.');
+      }
+    } catch (error: any) {
+      console.error('Error starting live:', error);
+      toast.error(error.message || '라이브 시작 중 오류가 발생했습니다.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
-      await supabase.channel('b1_live_room').send({
-        type: 'broadcast',
-        event: 'live_status_change',
-        payload: { isLive: false, config: updatedConfig }
+  // Stop Live execution (Clears DB session & all client caches)
+  const handleStopLive = async () => {
+    try {
+      setActionLoading(true);
+      const adminRealName = user?.name?.trim() || (user as any)?.full_name?.trim() || user?.nickname?.trim() || '관리자';
+
+      const res = await liveService.stopLive({
+        sessionId: activeSession?.id,
+        adminId: user?.id,
+        adminName: adminRealName,
+        adminEmail: user?.email
       });
-      toast.success('라이브가 종료되었습니다.');
+
+      if (res.success) {
+        liveService.clearLiveCache();
+        setIsLive(false);
+        setActiveSession(null);
+        setShowConflictModal(false);
+        toast.success('라이브가 종료되었습니다. 캐시가 초기화되었습니다.');
+      } else {
+        toast.error(res.message || '라이브 종료 실패');
+      }
     } catch (error) {
       console.error('Error stopping live:', error);
       toast.error('라이브 종료 중 오류가 발생했습니다.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Stop all active broadcasts (used from conflict modal or stop-all)
+  const handleStopAllLive = async () => {
+    try {
+      setActionLoading(true);
+      const adminRealName = user?.name?.trim() || (user as any)?.full_name?.trim() || user?.nickname?.trim() || '관리자';
+
+      const res = await liveService.stopAllLive({
+        adminId: user?.id,
+        adminName: adminRealName,
+        adminEmail: user?.email
+      });
+
+      if (res.success) {
+        liveService.clearLiveCache();
+        setIsLive(false);
+        setActiveSession(null);
+        setShowConflictModal(false);
+        toast.success('기존에 있던 모든 라이브 방송이 종료되었습니다.');
+      } else {
+        toast.error(res.message || '전체 라이브 종료 실패');
+      }
+    } catch (err) {
+      console.error('Stop all error:', err);
+      toast.error('라이브 방송 종료 중 오류가 발생했습니다.');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -349,11 +362,11 @@ export default function LivePage() {
             </Badge>
           )}
 
-          {isSuperAdmin && (
+          {isAdmin && (
             <Button 
               variant="ghost" 
               size="icon" 
-              onClick={() => setShowSettingsModal(true)} 
+              onClick={handleOpenStartLive} 
               className="text-white hover:bg-white/10 h-8 w-8 rounded-lg"
               title="라이브 방송 설정"
             >
@@ -375,17 +388,73 @@ export default function LivePage() {
 
       <div className="container mx-auto px-0 lg:px-4 py-0 lg:py-8 flex-1 flex flex-col lg:block min-h-0">
         {/* Admin Controls (Desktop) */}
-        {isSuperAdmin && (
-          <div className="hidden lg:flex mb-6 bg-white/10 p-6 rounded-2xl items-center justify-between border border-white/10">
-            <div className="text-white">
-              <h3 className="font-bold">비원아카데미 라이브</h3>
-              <p className="text-sm text-gray-400">현재 상태: {isLive ? '진행 중' : '종료됨'}</p>
+        {isAdmin && (
+          <div className="hidden lg:flex mb-6 bg-gradient-to-r from-gray-900 via-gray-900 to-black p-5 rounded-3xl items-center justify-between border border-white/15 shadow-xl">
+            <div className="text-white space-y-1">
+              <div className="flex items-center gap-2.5">
+                <span className="text-sm font-black tracking-tight text-white flex items-center gap-2">
+                  <Radio className="w-4 h-4 text-red-500 animate-pulse" /> 비원아카데미 라이브 관리 모드
+                </span>
+                {isLive ? (
+                  <Badge className="bg-red-600 text-white font-black text-xs px-2.5 py-0.5 rounded-full animate-pulse">
+                    LIVE 송출 중
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-gray-400 border-white/20 font-bold text-xs">
+                    방송 준비중
+                  </Badge>
+                )}
+              </div>
+
+              {isLive && activeSession ? (
+                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400 pt-0.5">
+                  <span className="flex items-center gap-1 font-bold text-gray-300">
+                    <User className="w-3.5 h-3.5 text-purple-400" />
+                    시작 관리자: <strong className="text-white font-black">{activeSession.admin_name || '관리자'}</strong>
+                    <span className="text-[11px] text-gray-400 font-mono">({activeSession.admin_email || '계정'})</span>
+                  </span>
+                  <span className="flex items-center gap-1 text-gray-300">
+                    <Clock className="w-3.5 h-3.5 text-blue-400" />
+                    시작 시간: <span className="font-bold text-white">{new Date(activeSession.started_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                  </span>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">현재 송출 중인 라이브 방송이 없습니다.</p>
+              )}
             </div>
-            {isLive ? (
-              <Button onClick={handleStopLive} variant="destructive" className="font-bold">라이브 종료하기</Button>
-            ) : (
-              <Button onClick={() => setShowSettingsModal(true)} className="bg-red-600 hover:bg-red-700 font-bold">라이브 진행하기</Button>
-            )}
+
+            <div className="flex items-center gap-3">
+              {/* Link to Admin Live Management Page */}
+              <Button
+                variant="outline"
+                onClick={() => navigate('/admin/live')}
+                className="rounded-xl border-white/20 bg-white/5 hover:bg-white/10 text-white text-xs font-bold h-11 px-4 flex items-center gap-1.5"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>라이브 관리 페이지 (어드민)</span>
+              </Button>
+
+              {isLive ? (
+                <Button 
+                  onClick={handleStopLive} 
+                  variant="destructive" 
+                  disabled={actionLoading}
+                  className="rounded-xl font-black bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/30 h-11 px-5 flex items-center gap-2"
+                >
+                  <Square className="w-4 h-4 fill-white" />
+                  <span>{actionLoading ? '종료 중...' : '라이브 방송 종료하기'}</span>
+                </Button>
+              ) : (
+                <Button 
+                  onClick={handleOpenStartLive} 
+                  disabled={actionLoading}
+                  className="rounded-xl bg-red-600 hover:bg-red-700 font-black text-white shadow-lg shadow-red-600/30 h-11 px-5 flex items-center gap-2"
+                >
+                  <Play className="w-4 h-4 fill-white" />
+                  <span>라이브 진행하기</span>
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -432,7 +501,7 @@ export default function LivePage() {
                     {showMobileInfo ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                   </button>
 
-                  {isSuperAdmin && (
+                  {isAdmin && (
                     isLive ? (
                       <Button 
                         size="sm" 
@@ -445,7 +514,7 @@ export default function LivePage() {
                     ) : (
                       <Button 
                         size="sm" 
-                        onClick={() => setShowSettingsModal(true)} 
+                        onClick={handleOpenStartLive} 
                         className="h-6 text-[11px] font-bold px-2 bg-red-600 hover:bg-red-700 text-white rounded-md"
                       >
                         시작
@@ -681,15 +750,98 @@ export default function LivePage() {
                 variant="outline" 
                 className="flex-1 h-14 rounded-2xl border-gray-200 font-bold hover:bg-gray-50"
                 onClick={() => setShowSettingsModal(false)}
+                disabled={actionLoading}
               >
                 취소
               </Button>
               <Button 
                 className="flex-1 h-14 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-black text-lg shadow-xl shadow-red-200"
-                onClick={handleStartLiveConfirm}
+                onClick={() => handleStartLiveConfirm(false)}
+                disabled={actionLoading}
               >
-                방송 시작하기
+                {actionLoading ? '시작 처리 중...' : '방송 시작하기'}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Conflict Resolution Modal */}
+      {showConflictModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white rounded-[32px] p-8 max-w-lg w-full space-y-6 shadow-2xl relative border-2 border-amber-500/30">
+            <div className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="w-6 h-6 animate-bounce" />
+              <span className="font-black text-xs tracking-wider uppercase">라이브 방송 중복 감지</span>
+            </div>
+
+            <div>
+              <h3 className="text-2xl font-black text-gray-900">이미 진행 중인 라이브 방송이 있습니다</h3>
+              <p className="text-xs font-bold text-gray-500 mt-1">
+                다른 관리자 계정에서 시작했거나 이전 세션의 라이브 방송이 송출 중입니다.
+              </p>
+            </div>
+
+            {/* Current Active Broadcast details */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
+              <p className="text-xs font-black text-amber-900">현재 송출 중인 방송 정보</p>
+              {(conflictingSessions.length > 0 ? conflictingSessions : (activeSession ? [activeSession] : [])).map((act) => (
+                <div key={act.id} className="bg-white p-3.5 rounded-xl border border-amber-100 space-y-1.5 shadow-sm text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-sm text-gray-900">{act.title}</span>
+                    <Badge className="bg-red-600 text-white text-[10px] font-bold">송출중</Badge>
+                  </div>
+                  <div className="text-gray-600 flex items-center gap-2">
+                    <span className="font-bold text-gray-400">진행 관리자:</span>
+                    <span className="font-black text-gray-900">{act.admin_name || '관리자'}</span>
+                    <span className="text-gray-500 font-mono text-[11px]">({act.admin_email || '이메일 없음'})</span>
+                  </div>
+                  <div className="text-gray-600 flex items-center gap-2">
+                    <span className="font-bold text-gray-400">시작 시간:</span>
+                    <span className="font-bold text-gray-800">
+                      {act.started_at ? new Date(act.started_at).toLocaleString('ko-KR') : '-'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs font-bold text-gray-600 leading-relaxed bg-gray-50 p-4 rounded-2xl border border-gray-100">
+              기존 방송이 켜져 있는 상태에서 새로 방송을 시작하면 방송이 엉킬 수 있습니다. 기존에 진행 중인 라이브 방송을 종료하시겠습니까?
+            </p>
+
+            <div className="space-y-3 pt-2">
+              <Button
+                className="w-full h-12 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-black shadow-lg shadow-purple-200 flex items-center justify-center gap-2"
+                onClick={() => {
+                  setShowConflictModal(false);
+                  handleStartLiveConfirm(true);
+                }}
+                disabled={actionLoading}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>기존 방송 종료 후 새 방송 시작하기</span>
+              </Button>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="destructive"
+                  className="flex-1 h-12 rounded-2xl font-black bg-rose-600 hover:bg-rose-700 text-white"
+                  onClick={handleStopAllLive}
+                  disabled={actionLoading}
+                >
+                  <span>기존 방송만 종료하기</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="flex-1 h-12 rounded-2xl border-gray-200 font-bold hover:bg-gray-50"
+                  onClick={() => setShowConflictModal(false)}
+                  disabled={actionLoading}
+                >
+                  <span>취소</span>
+                </Button>
+              </div>
             </div>
           </div>
         </div>

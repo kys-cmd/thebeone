@@ -18,7 +18,8 @@ import {
   BarChart,
   AlertTriangle,
   Type,
-  GraduationCap
+  GraduationCap,
+  Radio
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +28,7 @@ import { Input } from '@/components/ui/input';
 
 const ADMIN_MENUS = [
   { icon: <Activity className="w-5 h-5" />, label: '대시보드', path: '/admin' },
+  { icon: <Radio className="w-5 h-5" />, label: '라이브 방송 관리', path: '/admin/live' },
   { icon: <BookOpen className="w-5 h-5" />, label: '강의 관리', path: '/admin/courses' },
   { icon: <Users className="w-5 h-5" />, label: '강사 관리', path: '/admin/instructors' },
   { icon: <Users className="w-5 h-5" />, label: '회원 관리', path: '/admin/users' },

@@ -271,6 +271,594 @@ async function startServer() {
     }
   });
 
+  // ==========================================
+  // BEONE LIVE STREAMING MANAGEMENT ENDPOINTS
+  // ==========================================
+  async function broadcastLiveStatus(isLive: boolean, liveConfig: any) {
+    if (!supabaseAdmin) return;
+    try {
+      const channel = supabaseAdmin.channel('b1_live_room');
+      await new Promise<void>((resolve) => {
+        channel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            channel.send({
+              type: 'broadcast',
+              event: 'live_status_change',
+              payload: { isLive, config: liveConfig }
+            }).then(() => {
+              setTimeout(() => {
+                supabaseAdmin?.removeChannel(channel);
+                resolve();
+              }, 300);
+            }).catch(() => {
+              supabaseAdmin?.removeChannel(channel);
+              resolve();
+            });
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            supabaseAdmin?.removeChannel(channel);
+            resolve();
+          }
+        });
+        setTimeout(() => {
+          supabaseAdmin?.removeChannel(channel);
+          resolve();
+        }, 2000);
+      });
+    } catch (err) {
+      console.warn('[Broadcast] Error broadcasting live status:', err);
+    }
+  }
+
+  // 1. Get Live Status
+  app.get("/api/live/status", async (req, res) => {
+    try {
+      if (!supabaseAdmin) {
+        return res.json({ isLive: false, activeSession: null, config: { live_is_active: false } });
+      }
+
+      // Check for any active live session
+      const { data: activeRows, error: sErr } = await supabaseAdmin
+        .from("support_contents")
+        .select("*")
+        .eq("type", "live_session")
+        .eq("active", true)
+        .eq("is_deleted", false)
+        .order("created_at", { ascending: false });
+
+      if (sErr) {
+        console.error("[Live Status] Error querying active sessions:", sErr);
+      }
+
+      if (activeRows && activeRows.length > 0) {
+        const topRow = activeRows[0];
+        let parsed: any = {};
+        try {
+          parsed = JSON.parse(topRow.content);
+        } catch {
+          parsed = {};
+        }
+
+        const activeSession = {
+          id: topRow.id,
+          session_id: parsed.session_id || topRow.id,
+          title: topRow.title || parsed.title || "비원아카데미 라이브",
+          embed_code: parsed.embed_code || "",
+          chat_enabled: parsed.chat_enabled !== false,
+          is_active: true,
+          started_at: parsed.started_at || topRow.created_at,
+          start_time_custom: parsed.start_time_custom || "",
+          admin_id: parsed.admin_id || "",
+          admin_name: parsed.admin_name || "",
+          admin_email: parsed.admin_email || "",
+          admin_nickname: parsed.admin_nickname || "",
+          created_at: topRow.created_at
+        };
+
+        const config = {
+          live_is_active: true,
+          live_title: activeSession.title,
+          live_embed_code: activeSession.embed_code,
+          live_chat_enabled: activeSession.chat_enabled,
+          live_start_time: activeSession.started_at,
+          admin_id: activeSession.admin_id,
+          admin_name: activeSession.admin_name,
+          admin_email: activeSession.admin_email,
+          admin_nickname: activeSession.admin_nickname
+        };
+
+        return res.json({
+          isLive: true,
+          activeSession,
+          config
+        });
+      }
+
+      // If no active session found, check live_config. If live_config is marked true but no session exists, auto-heal to false
+      const { data: cfgRow } = await supabaseAdmin
+        .from("support_contents")
+        .select("*")
+        .eq("type", "live_config")
+        .maybeSingle();
+
+      if (cfgRow && cfgRow.content) {
+        try {
+          const parsed = JSON.parse(cfgRow.content);
+          if (parsed.live_is_active === true) {
+            // Auto-heal stale config when no active session actually exists
+            await supabaseAdmin
+              .from("support_contents")
+              .update({
+                content: JSON.stringify({ ...parsed, live_is_active: false }),
+                active: false,
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", cfgRow.id);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      return res.json({
+        isLive: false,
+        activeSession: null,
+        config: { live_is_active: false }
+      });
+    } catch (err: any) {
+      console.error("[Live Status] Error:", err);
+      return res.status(500).json({ isLive: false, error: err.message });
+    }
+  });
+
+  // 2. Get All Sessions (Active list + History)
+  app.get("/api/live/sessions", async (req, res) => {
+    try {
+      if (!supabaseAdmin) {
+        return res.json({ activeSessions: [], historySessions: [] });
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from("support_contents")
+        .select("*")
+        .eq("type", "live_session")
+        .eq("is_deleted", false)
+        .order("created_at", { ascending: false })
+        .limit(60);
+
+      if (error) {
+        console.error("[Live Sessions] Query error:", error);
+        return res.status(500).json({ error: error.message });
+      }
+
+      const activeSessions: any[] = [];
+      const historySessions: any[] = [];
+
+      (data || []).forEach((row) => {
+        let parsed: any = {};
+        try {
+          parsed = JSON.parse(row.content);
+        } catch {
+          parsed = {};
+        }
+
+        const session = {
+          id: row.id,
+          session_id: parsed.session_id || row.id,
+          title: row.title || parsed.title || "라이브 방송",
+          embed_code: parsed.embed_code || "",
+          chat_enabled: parsed.chat_enabled !== false,
+          is_active: row.active && parsed.is_active !== false,
+          started_at: parsed.started_at || row.created_at,
+          start_time_custom: parsed.start_time_custom || "",
+          ended_at: parsed.ended_at || null,
+          admin_id: parsed.admin_id || "",
+          admin_name: parsed.admin_name || "",
+          admin_email: parsed.admin_email || "",
+          admin_nickname: parsed.admin_nickname || "",
+          ended_by_id: parsed.ended_by_id || null,
+          ended_by_name: parsed.ended_by_name || null,
+          ended_by_email: parsed.ended_by_email || null,
+          created_at: row.created_at
+        };
+
+        if (session.is_active) {
+          activeSessions.push(session);
+        } else {
+          historySessions.push(session);
+        }
+      });
+
+      return res.json({ activeSessions, historySessions });
+    } catch (err: any) {
+      console.error("[Live Sessions] Error:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 3. Start Live Stream (With conflict detection & optional termination of previous)
+  app.post("/api/live/start", async (req, res) => {
+    try {
+      if (!supabaseAdmin) {
+        return res.status(500).json({ success: false, message: "DB 연결을 확인해주세요." });
+      }
+
+      const {
+        title,
+        embedCode,
+        chatEnabled,
+        startTime,
+        adminId,
+        adminName,
+        adminEmail,
+        adminNickname,
+        forceTerminateExisting
+      } = req.body;
+
+      // Check if another live session is already active
+      const { data: existingActive } = await supabaseAdmin
+        .from("support_contents")
+        .select("*")
+        .eq("type", "live_session")
+        .eq("active", true)
+        .eq("is_deleted", false);
+
+      const activeSessions: any[] = [];
+      (existingActive || []).forEach((row) => {
+        let parsed: any = {};
+        try {
+          parsed = JSON.parse(row.content);
+        } catch {
+          parsed = {};
+        }
+        activeSessions.push({
+          id: row.id,
+          session_id: parsed.session_id || row.id,
+          title: row.title || parsed.title || "진행 중인 라이브 방송",
+          embed_code: parsed.embed_code || "",
+          chat_enabled: parsed.chat_enabled !== false,
+          is_active: true,
+          started_at: parsed.started_at || row.created_at,
+          admin_id: parsed.admin_id || "",
+          admin_name: parsed.admin_name || "",
+          admin_email: parsed.admin_email || "",
+          admin_nickname: parsed.admin_nickname || ""
+        });
+      });
+
+      // If active sessions exist and user hasn't explicitly chosen to force terminate them
+      if (activeSessions.length > 0 && !forceTerminateExisting) {
+        return res.status(409).json({
+          success: false,
+          conflict: true,
+          activeSessions,
+          message: "현재 이미 진행 중인 라이브 방송이 있습니다. 기존 방송을 종료하고 새로 시작하시겠습니까?"
+        });
+      }
+
+      const nowIso = new Date().toISOString();
+
+      // If force terminating previous active sessions
+      if (activeSessions.length > 0) {
+        for (const act of existingActive || []) {
+          let prevContent: any = {};
+          try {
+            prevContent = JSON.parse(act.content);
+          } catch {
+            prevContent = {};
+          }
+          prevContent.is_active = false;
+          prevContent.ended_at = nowIso;
+          prevContent.ended_by_id = adminId || "system";
+          prevContent.ended_by_name = adminName || "관리자";
+          prevContent.ended_by_email = adminEmail || "";
+
+          await supabaseAdmin
+            .from("support_contents")
+            .update({
+              content: JSON.stringify(prevContent),
+              active: false,
+              updated_at: nowIso
+            })
+            .eq("id", act.id);
+        }
+      }
+
+      // Create new live session record
+      const newSessionId = crypto.randomUUID();
+      const newSessionData = {
+        session_id: newSessionId,
+        title: title || "비원아카데미 라이브",
+        embed_code: embedCode,
+        chat_enabled: chatEnabled !== false,
+        is_active: true,
+        started_at: nowIso,
+        start_time_custom: startTime || "",
+        admin_id: adminId || "",
+        admin_name: adminName || "관리자",
+        admin_email: adminEmail || "",
+        admin_nickname: adminNickname || ""
+      };
+
+      const { data: insertedRows, error: insertErr } = await supabaseAdmin
+        .from("support_contents")
+        .insert([{
+          type: "live_session",
+          title: newSessionData.title,
+          content: JSON.stringify(newSessionData),
+          active: true,
+          is_deleted: false
+        }])
+        .select();
+
+      if (insertErr) {
+        console.error("[Live Start] Insert error:", insertErr);
+        return res.status(500).json({ success: false, message: insertErr.message });
+      }
+
+      // Update singleton live_config
+      const configPayload = {
+        live_is_active: true,
+        active_session_id: newSessionId,
+        live_title: newSessionData.title,
+        live_embed_code: newSessionData.embed_code,
+        live_chat_enabled: newSessionData.chat_enabled,
+        live_start_time: newSessionData.started_at,
+        admin_id: newSessionData.admin_id,
+        admin_name: newSessionData.admin_name,
+        admin_email: newSessionData.admin_email,
+        admin_nickname: newSessionData.admin_nickname,
+        updated_at: nowIso
+      };
+
+      const { data: existingCfg } = await supabaseAdmin
+        .from("support_contents")
+        .select("id")
+        .eq("type", "live_config")
+        .maybeSingle();
+
+      if (existingCfg?.id) {
+        await supabaseAdmin
+          .from("support_contents")
+          .update({
+            title: configPayload.live_title,
+            content: JSON.stringify(configPayload),
+            active: true,
+            updated_at: nowIso
+          })
+          .eq("id", existingCfg.id);
+      } else {
+        await supabaseAdmin
+          .from("support_contents")
+          .insert([{
+            type: "live_config",
+            title: configPayload.live_title,
+            content: JSON.stringify(configPayload),
+            active: true,
+            is_deleted: false
+          }]);
+      }
+
+      // Realtime notification
+      await broadcastLiveStatus(true, configPayload);
+
+      return res.json({
+        success: true,
+        session: {
+          id: insertedRows?.[0]?.id,
+          ...newSessionData
+        },
+        config: configPayload
+      });
+    } catch (err: any) {
+      console.error("[Live Start] Error:", err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // 4. Stop Single Live Stream
+  app.post("/api/live/stop", async (req, res) => {
+    try {
+      if (!supabaseAdmin) {
+        return res.status(500).json({ success: false, message: "DB 연결을 확인해주세요." });
+      }
+
+      const { sessionId, adminId, adminName, adminEmail } = req.body;
+      const nowIso = new Date().toISOString();
+
+      if (sessionId) {
+        // Query specific session by id or session_id
+        let targetId = sessionId;
+        const { data: targetRows } = await supabaseAdmin
+          .from("support_contents")
+          .select("*")
+          .eq("type", "live_session")
+          .eq("id", sessionId);
+
+        if (targetRows && targetRows.length > 0) {
+          const row = targetRows[0];
+          let parsed: any = {};
+          try {
+            parsed = JSON.parse(row.content);
+          } catch {
+            parsed = {};
+          }
+          parsed.is_active = false;
+          parsed.ended_at = nowIso;
+          parsed.ended_by_id = adminId || "";
+          parsed.ended_by_name = adminName || "관리자";
+          parsed.ended_by_email = adminEmail || "";
+
+          await supabaseAdmin
+            .from("support_contents")
+            .update({
+              content: JSON.stringify(parsed),
+              active: false,
+              updated_at: nowIso
+            })
+            .eq("id", row.id);
+        }
+      } else {
+        // Stop all active sessions
+        const { data: allActive } = await supabaseAdmin
+          .from("support_contents")
+          .select("*")
+          .eq("type", "live_session")
+          .eq("active", true);
+
+        for (const row of allActive || []) {
+          let parsed: any = {};
+          try {
+            parsed = JSON.parse(row.content);
+          } catch {
+            parsed = {};
+          }
+          parsed.is_active = false;
+          parsed.ended_at = nowIso;
+          parsed.ended_by_id = adminId || "";
+          parsed.ended_by_name = adminName || "관리자";
+          parsed.ended_by_email = adminEmail || "";
+
+          await supabaseAdmin
+            .from("support_contents")
+            .update({
+              content: JSON.stringify(parsed),
+              active: false,
+              updated_at: nowIso
+            })
+            .eq("id", row.id);
+        }
+      }
+
+      // Check if any other active sessions remain
+      const { data: remainingActive } = await supabaseAdmin
+        .from("support_contents")
+        .select("id")
+        .eq("type", "live_session")
+        .eq("active", true)
+        .eq("is_deleted", false);
+
+      const hasRemaining = remainingActive && remainingActive.length > 0;
+
+      if (!hasRemaining) {
+        // Update singleton live_config to inactive
+        const { data: cfgRow } = await supabaseAdmin
+          .from("support_contents")
+          .select("*")
+          .eq("type", "live_config")
+          .maybeSingle();
+
+        if (cfgRow) {
+          let parsed: any = {};
+          try {
+            parsed = JSON.parse(cfgRow.content);
+          } catch {
+            parsed = {};
+          }
+          parsed.live_is_active = false;
+          parsed.active_session_id = null;
+          parsed.ended_at = nowIso;
+
+          await supabaseAdmin
+            .from("support_contents")
+            .update({
+              content: JSON.stringify(parsed),
+              active: false,
+              updated_at: nowIso
+            })
+            .eq("id", cfgRow.id);
+        }
+
+        // Broadcast to all viewers that live is off
+        await broadcastLiveStatus(false, { live_is_active: false });
+      }
+
+      return res.json({ success: true, hasRemaining });
+    } catch (err: any) {
+      console.error("[Live Stop] Error:", err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // 5. Stop ALL Live Streams (Clear All)
+  app.post("/api/live/stop-all", async (req, res) => {
+    try {
+      if (!supabaseAdmin) {
+        return res.status(500).json({ success: false, message: "DB 연결을 확인해주세요." });
+      }
+
+      const { adminId, adminName, adminEmail } = req.body;
+      const nowIso = new Date().toISOString();
+
+      // Find all live_session records where active = true
+      const { data: activeRows } = await supabaseAdmin
+        .from("support_contents")
+        .select("*")
+        .eq("type", "live_session")
+        .eq("active", true);
+
+      let count = 0;
+      for (const row of activeRows || []) {
+        let parsed: any = {};
+        try {
+          parsed = JSON.parse(row.content);
+        } catch {
+          parsed = {};
+        }
+        parsed.is_active = false;
+        parsed.ended_at = nowIso;
+        parsed.ended_by_id = adminId || "";
+        parsed.ended_by_name = adminName || "관리자";
+        parsed.ended_by_email = adminEmail || "";
+
+        await supabaseAdmin
+          .from("support_contents")
+          .update({
+            content: JSON.stringify(parsed),
+            active: false,
+            updated_at: nowIso
+          })
+          .eq("id", row.id);
+        count++;
+      }
+
+      // Update singleton live_config
+      const { data: cfgRow } = await supabaseAdmin
+        .from("support_contents")
+        .select("*")
+        .eq("type", "live_config")
+        .maybeSingle();
+
+      if (cfgRow) {
+        let parsed: any = {};
+        try {
+          parsed = JSON.parse(cfgRow.content);
+        } catch {
+          parsed = {};
+        }
+        parsed.live_is_active = false;
+        parsed.active_session_id = null;
+        parsed.ended_at = nowIso;
+
+        await supabaseAdmin
+          .from("support_contents")
+          .update({
+            content: JSON.stringify(parsed),
+            active: false,
+            updated_at: nowIso
+          })
+          .eq("id", cfgRow.id);
+      }
+
+      // Broadcast termination event to all viewers & clients
+      await broadcastLiveStatus(false, { live_is_active: false });
+
+      return res.json({ success: true, count, message: "모든 라이브 방송이 성공적으로 종료되었습니다." });
+    } catch (err: any) {
+      console.error("[Live Stop All] Error:", err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   // Basic API verification with full diagnosis capability (Task 1 Debugger)
   app.get("/api/test", async (req, res) => {
     const isAuthorized = await adminCheck(req.headers.authorization);
