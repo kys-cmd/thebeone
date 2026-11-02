@@ -54,14 +54,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { ko } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { extractVimeoId } from "@/lib/vimeo";
@@ -118,11 +116,13 @@ const toLocalDatetimeString = (isoString?: string | null) => {
 };
 
 const fromLocalDatetimeString = (value: string) => {
-  if (!value) return new Date().toISOString();
+  if (!value) return "";
   try {
-    return new Date(value).toISOString();
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return "";
+    return d.toISOString();
   } catch (e) {
-    return new Date().toISOString();
+    return "";
   }
 };
 
@@ -323,8 +323,21 @@ export default function AdminCourseEditor() {
     let customExpiresAt: string | null = null;
     if (isCustomStudentExpiry) {
       if (customStudentExpiryType === 'days') {
-        const expiresAtDate = new Date();
+        const now = new Date();
+        const startDate = courseInfo.start_date ? new Date(courseInfo.start_date) : null;
+        const baseDate = (startDate && !isNaN(startDate.getTime()) && now < startDate)
+          ? new Date(startDate)
+          : now;
+        const expiresAtDate = new Date(baseDate);
         expiresAtDate.setDate(expiresAtDate.getDate() + customStudentExpiryDays);
+        const endTimeStr = layout?.duration_end_time || "23:59";
+        const [hours, minutes] = endTimeStr.split(":").map(Number);
+        expiresAtDate.setHours(
+          !isNaN(hours) ? hours : 23,
+          !isNaN(minutes) ? minutes : 59,
+          59,
+          999
+        );
         customExpiresAt = expiresAtDate.toISOString();
       } else if (customStudentExpiryType === 'date') {
         if (!customStudentExpiryDate) {
@@ -500,6 +513,12 @@ export default function AdminCourseEditor() {
     setCurriculum([...curriculum, newSection]);
   };
 
+  const isOfflineCourse = 
+    courseInfo.category === 'special_offline' || 
+    courseInfo.category === 'beone_exclusive_offline' || 
+    courseInfo.category === 'offline' || 
+    Boolean(courseInfo.category && courseInfo.category.includes('offline'));
+
   const handleAddLesson = (sectionId: string) => {
     setCurriculum(
       curriculum.map((sec) => {
@@ -510,7 +529,7 @@ export default function AdminCourseEditor() {
               ...sec.items,
               {
                 id: crypto.randomUUID(),
-                title: "새 강의",
+                title: isOfflineCourse ? "새 커리큘럼 세션" : "새 강의",
                 vimeo_id: "",
                 duration: "00:00",
                 is_free: false,
@@ -635,6 +654,10 @@ export default function AdminCourseEditor() {
 
       const payload: Partial<Course> = {
         ...courseInfo,
+        start_date: courseInfo.start_date ? courseInfo.start_date : null,
+        end_date: courseInfo.end_date ? courseInfo.end_date : null,
+        reg_start_date: courseInfo.reg_start_date ? courseInfo.reg_start_date : null,
+        reg_end_date: courseInfo.reg_end_date ? courseInfo.reg_end_date : null,
         instructor_id: finalInstructorId,
         curriculum,
         layout,
@@ -1039,6 +1062,52 @@ export default function AdminCourseEditor() {
                       </div>
                     </div>
                 )}
+
+                    <div className="space-y-3 lg:col-span-2 pt-2 border-t border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <Label className="flex items-center gap-2 font-bold text-gray-900">
+                          <CalendarIcon className="w-4 h-4 text-purple-600" />
+                          강의 일정 설정 (강의 시작일 / 강의 종료일)
+                        </Label>
+                        {courseInfo.is_duration_based && (
+                          <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">
+                            기간제 강의 적용 중 ({courseInfo.duration_days || 0}일)
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-gray-600">강의 시작일 (개시일)</Label>
+                          <Input
+                            type="datetime-local"
+                            value={toLocalDatetimeString(courseInfo.start_date)}
+                            onChange={(e) =>
+                              setCourseInfo({
+                                ...courseInfo,
+                                start_date: fromLocalDatetimeString(e.target.value),
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-gray-600">강의 종료일</Label>
+                          <Input
+                            type="datetime-local"
+                            value={toLocalDatetimeString(courseInfo.end_date)}
+                            onChange={(e) =>
+                              setCourseInfo({
+                                ...courseInfo,
+                                end_date: fromLocalDatetimeString(e.target.value),
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 leading-relaxed">
+                        * 기간제 강의일 경우: <strong>① 강의 개시일(시작일) 전 결제 회원</strong>은 강의 개시일부터 수강 가능 일수가 카운팅되며, <strong>② 강의 개시일 후 결제 회원</strong>은 결제일 기준으로 수강 가능 일수가 설정됩니다.
+                      </p>
+                    </div>
+
                     <div className="space-y-4 lg:col-span-2">
                       <Label>썸네일 이미지 URL</Label>
                       <div className="flex gap-2">
@@ -1096,11 +1165,26 @@ export default function AdminCourseEditor() {
 
 <TabsContent value="curriculum" className="mt-6 space-y-6">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-bold">커리큘럼</h3>
+                  <div className="space-y-0.5">
+                    <h3 className="text-lg font-bold">커리큘럼</h3>
+                    {isOfflineCourse && (
+                      <p className="text-xs text-purple-700 font-medium">
+                        오프라인 강좌는 동영상 없이 세션/아젠다 텍스트만 상세페이지에 깔끔하게 노출됩니다.
+                      </p>
+                    )}
+                  </div>
                   <Button onClick={handleAddSection} size="sm">
                     <Plus className="w-4 h-4 mr-2" /> 섹션 추가
                   </Button>
                 </div>
+
+                {isOfflineCourse && (
+                  <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-4 text-xs text-purple-900 font-medium flex items-center gap-2">
+                    <span className="font-bold shrink-0 text-purple-700">💡 오프라인 강좌 커리큘럼:</span>
+                    <span>오프라인 현장 강좌는 동영상 링크나 시간(00:00) 입력이 불필요하며, 커리큘럼 내용만 입력하시면 상세페이지에 순수 텍스트 목록으로 제공됩니다.</span>
+                  </div>
+                )}
+
                 {curriculum.map((section) => (
                   <Card
                     key={section.id}
@@ -1116,8 +1200,8 @@ export default function AdminCourseEditor() {
                             setCurriculum(
                               curriculum.map((s) =>
                                 s.id === section.id
-                                  ? { ...s, title: e.target.value }
-                                  : s,
+                                    ? { ...s, title: e.target.value }
+                                    : s,
                               ),
                             )
                           }
@@ -1130,7 +1214,7 @@ export default function AdminCourseEditor() {
                           onClick={() => handleAddLesson(section.id)}
                           className="text-purple-600 hover:text-purple-700 font-bold"
                         >
-                          <Plus className="w-4 h-4 mr-1" /> 강의 추가
+                          <Plus className="w-4 h-4 mr-1" /> {isOfflineCourse ? "세션 추가" : "강의 추가"}
                         </Button>
                         <Button
                           variant="ghost"
@@ -1145,74 +1229,101 @@ export default function AdminCourseEditor() {
                     <CardContent className="p-0 divide-y">
                       {section.items.map((item) => (
                         <div key={item.id} className="p-4 space-y-4 group">
-                          <div className="flex justify-between items-start gap-4">
-                            <div className="flex-1 grid grid-cols-2 gap-4">
-                              <Input
-                                placeholder="강의 제목"
-                                value={item.title}
-                                onChange={(e) => {
-                                  setCurriculum(
-                                    curriculum.map((s) => {
-                                      if (s.id === section.id) {
-                                        return {
-                                          ...s,
-                                          items: s.items.map((i) =>
-                                            i.id === item.id
-                                              ? { ...i, title: e.target.value }
-                                              : i,
-                                          ),
-                                        };
-                                      }
-                                      return s;
-                                    }),
-                                  );
-                                }}
-                              />
-                              <Input
-                                placeholder="Vimeo 동영상 주소 또는 ID"
-                                value={item.vimeo_id}
-                                onChange={async (e) => {
-                                  const vId = extractVimeoId(e.target.value);
-                                  const duration = await fetchVimeoDuration(vId);
-                                  setCurriculum(
-                                    curriculum.map((s) => {
-                                      if (s.id === section.id) {
-                                        return {
-                                          ...s,
-                                          items: s.items.map((i) =>
-                                            i.id === item.id
-                                              ? { ...i, vimeo_id: vId, duration }
-                                              : i,
-                                          ),
-                                        };
-                                      }
-                                      return s;
-                                    }),
-                                  );
-                                }}
-                              />
-                              <Input
-                                placeholder="길이 (예: 12:34)"
-                                value={item.duration || ""}
-                                onChange={(e) => {
-                                  setCurriculum(
-                                    curriculum.map((s) => {
-                                      if (s.id === section.id) {
-                                        return {
-                                          ...s,
-                                          items: s.items.map((i) =>
-                                            i.id === item.id
-                                              ? { ...i, duration: e.target.value }
-                                              : i,
-                                          ),
-                                        };
-                                      }
-                                      return s;
-                                    }),
-                                  );
-                                }}
-                              />
-                            </div>
+                          <div className="flex justify-between items-center gap-4">
+                            {isOfflineCourse ? (
+                              <div className="flex-1">
+                                <Input
+                                  placeholder="오프라인 세션 / 커리큘럼 내용 입력"
+                                  value={item.title}
+                                  className="bg-white font-bold text-sm"
+                                  onChange={(e) => {
+                                    setCurriculum(
+                                      curriculum.map((s) => {
+                                        if (s.id === section.id) {
+                                          return {
+                                            ...s,
+                                            items: s.items.map((i) =>
+                                              i.id === item.id
+                                                ? { ...i, title: e.target.value }
+                                                : i,
+                                            ),
+                                          };
+                                        }
+                                        return s;
+                                      }),
+                                    );
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex-1 grid grid-cols-2 gap-4">
+                                <Input
+                                  placeholder="강의 제목"
+                                  value={item.title}
+                                  onChange={(e) => {
+                                    setCurriculum(
+                                      curriculum.map((s) => {
+                                        if (s.id === section.id) {
+                                          return {
+                                            ...s,
+                                            items: s.items.map((i) =>
+                                              i.id === item.id
+                                                ? { ...i, title: e.target.value }
+                                                : i,
+                                            ),
+                                          };
+                                        }
+                                        return s;
+                                      }),
+                                    );
+                                  }}
+                                />
+                                <Input
+                                  placeholder="Vimeo 동영상 주소 또는 ID"
+                                  value={item.vimeo_id}
+                                  onChange={async (e) => {
+                                    const vId = extractVimeoId(e.target.value);
+                                    const duration = await fetchVimeoDuration(vId);
+                                    setCurriculum(
+                                      curriculum.map((s) => {
+                                        if (s.id === section.id) {
+                                          return {
+                                            ...s,
+                                            items: s.items.map((i) =>
+                                              i.id === item.id
+                                                ? { ...i, vimeo_id: vId, duration }
+                                                : i,
+                                            ),
+                                          };
+                                        }
+                                        return s;
+                                      }),
+                                    );
+                                  }}
+                                />
+                                <Input
+                                  placeholder="길이 (예: 12:34)"
+                                  value={item.duration || ""}
+                                  onChange={(e) => {
+                                    setCurriculum(
+                                      curriculum.map((s) => {
+                                        if (s.id === section.id) {
+                                          return {
+                                            ...s,
+                                            items: s.items.map((i) =>
+                                              i.id === item.id
+                                                ? { ...i, duration: e.target.value }
+                                                : i,
+                                            ),
+                                          };
+                                        }
+                                        return s;
+                                      }),
+                                    );
+                                  }}
+                                />
+                              </div>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1229,7 +1340,7 @@ export default function AdminCourseEditor() {
                                   })
                                 );
                               }}
-                              className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                             >
                               <X className="w-4 h-4" />
                             </Button>
@@ -1660,7 +1771,7 @@ export default function AdminCourseEditor() {
                       <div className="flex items-center justify-between">
                         <Label className="flex items-center gap-2"><Clock className="w-4 h-4 text-blue-600" /> 수강 기간 (강의 시청 가능 기간)</Label>
                         <div className="flex items-center gap-2">
-                          <Label className="text-sm cursor-pointer" htmlFor="is_duration_based">기간제 강의 (결제일 기준)</Label>
+                          <Label className="text-sm cursor-pointer" htmlFor="is_duration_based">기간제 강의 (수강 가능 일수 설정)</Label>
                           <Switch 
                             id="is_duration_based"
                             checked={courseInfo.is_duration_based}
@@ -1669,14 +1780,46 @@ export default function AdminCourseEditor() {
                         </div>
                       </div>
 
-                      {courseInfo.is_duration_based ? (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-gray-600 px-1">강의 시작일 (강의 개시일)</p>
+                          <Input
+                            type="datetime-local"
+                            value={toLocalDatetimeString(courseInfo.start_date)}
+                            onChange={(e) =>
+                              setCourseInfo({
+                                ...courseInfo,
+                                start_date: fromLocalDatetimeString(e.target.value),
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-gray-600 px-1">강의 종료일</p>
+                          <Input
+                            type="datetime-local"
+                            value={toLocalDatetimeString(courseInfo.end_date)}
+                            onChange={(e) =>
+                              setCourseInfo({
+                                ...courseInfo,
+                                end_date: fromLocalDatetimeString(e.target.value),
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      {courseInfo.is_duration_based && (
                         <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 flex flex-col gap-6">
                           <div className="flex items-center justify-between gap-6">
-                            <div className="space-y-1">
+                            <div className="space-y-1.5">
                               <p className="font-bold text-blue-900">기간제 수강 설정</p>
-                              <p className="text-sm text-blue-700">결제(승인)일로부터 설정된 일수만큼 수강이 가능합니다.</p>
+                              <div className="text-xs text-blue-800 space-y-1 leading-relaxed">
+                                <p>• <strong>강의 개시일 전 결제 회원:</strong> 강의가 개시되는 날(강의 시작일)부터 수강 가능 일수에 맞게 날짜를 카운팅합니다.</p>
+                                <p>• <strong>강의 개시일 후 결제 회원:</strong> 결제(승인)일 기준으로 수강 가능 일수가 설정됩니다.</p>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 shrink-0">
                               <Label className="shrink-0 font-bold">수강 가능 일수:</Label>
                               <div className="flex items-center gap-2">
                                 <Input 
@@ -1707,35 +1850,6 @@ export default function AdminCourseEditor() {
                                 })}
                               />
                             </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <p className="text-[10px] text-gray-400 px-1">수강 시작일</p>
-                            <Input
-                              type="datetime-local"
-                              value={toLocalDatetimeString(courseInfo.start_date)}
-                              onChange={(e) =>
-                                setCourseInfo({
-                                  ...courseInfo,
-                                  start_date: fromLocalDatetimeString(e.target.value),
-                                })
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <p className="text-[10px] text-gray-400 px-1">수강 종료일</p>
-                            <Input
-                              type="datetime-local"
-                              value={toLocalDatetimeString(courseInfo.end_date)}
-                              onChange={(e) =>
-                                setCourseInfo({
-                                  ...courseInfo,
-                                  end_date: fromLocalDatetimeString(e.target.value),
-                                })
-                              }
-                            />
                           </div>
                         </div>
                       )}

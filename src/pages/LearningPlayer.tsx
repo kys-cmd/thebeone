@@ -583,8 +583,8 @@ export default function LearningPlayer() {
             <div className="space-y-2 md:space-y-4">
                <div className="flex items-center gap-2">
                   <Badge className="bg-purple-600 text-white border-none font-bold text-[10px]">COURSE</Badge>
-                  <span className="text-gray-500 font-bold text-xs line-clamp-1">
-                    Chapter. {activeItem ? course.curriculum.findIndex(s => s.items.some(i => i.id === activeItem.id)) + 1 : 1}
+                  <span className="text-gray-400 font-bold text-xs line-clamp-1">
+                    {activeItem ? course.curriculum.find(s => s.items.some(i => i.id === activeItem.id))?.title || course.title : course.title}
                   </span>
                </div>
                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

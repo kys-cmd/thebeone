@@ -144,7 +144,20 @@ const renderStudyPeriod = (course: Course) => {
   let endDate: Date | null = null;
 
   if (course.enrollment_expires_at) {
-    startDate = course.enrollment_created_at ? new Date(course.enrollment_created_at) : null;
+    const enrollCreatedAt = course.enrollment_created_at ? new Date(course.enrollment_created_at) : null;
+    const courseStartDate = course.start_date ? new Date(course.start_date) : null;
+    if (
+      course.is_duration_based &&
+      courseStartDate &&
+      !isNaN(courseStartDate.getTime()) &&
+      enrollCreatedAt &&
+      !isNaN(enrollCreatedAt.getTime()) &&
+      enrollCreatedAt.getTime() < courseStartDate.getTime()
+    ) {
+      startDate = courseStartDate;
+    } else {
+      startDate = enrollCreatedAt || courseStartDate;
+    }
     endDate = new Date(course.enrollment_expires_at);
   } else {
     startDate = course.start_date ? new Date(course.start_date) : null;

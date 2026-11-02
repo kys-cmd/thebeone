@@ -61,12 +61,43 @@ export const handler: Handler = async (event) => {
 
           // 3. Grant Course Enrollment (자동 수강생 리스트 반영)
           try {
+            let expiresAt: string | null = null;
+            try {
+              const { data: courseInfo } = await supabase
+                .from("courses")
+                .select("is_duration_based, duration_days, start_date, end_date, layout")
+                .eq("id", order.course_id)
+                .maybeSingle();
+              if (courseInfo && courseInfo.is_duration_based && courseInfo.duration_days && Number(courseInfo.duration_days) > 0) {
+                const nowDate = new Date();
+                const startDate = courseInfo.start_date ? new Date(courseInfo.start_date) : null;
+                const baseDate = (startDate && !isNaN(startDate.getTime()) && nowDate.getTime() < startDate.getTime())
+                  ? new Date(startDate)
+                  : nowDate;
+                const expDate = new Date(baseDate);
+                expDate.setDate(expDate.getDate() + Number(courseInfo.duration_days));
+                const endTimeStr = (courseInfo.layout as any)?.duration_end_time || "23:59";
+                const [hours, minutes] = endTimeStr.split(":").map(Number);
+                expDate.setHours(
+                  !isNaN(hours) ? hours : 23,
+                  !isNaN(minutes) ? minutes : 59,
+                  59,
+                  999
+                );
+                expiresAt = expDate.toISOString();
+              }
+            } catch (cErr) {
+              console.warn("[Webhook Notify] course duration lookup warning:", cErr);
+            }
+
             const { error: enrollmentsError } = await supabase
               .from("enrollments")
               .upsert({
                 user_id: order.user_id,
                 course_id: order.course_id,
                 status: "active",
+                is_deleted: false,
+                expires_at: expiresAt,
                 created_at: new Date().toISOString()
               }, { onConflict: "user_id, course_id" });
 

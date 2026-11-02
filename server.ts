@@ -82,6 +82,27 @@ function generateInicisSignature(
   return crypto.createHash("sha256").update(hashTarget).digest("hex");
 }
 
+function calculateCourseEnrollmentExpiry(course: any, nowDate: Date = new Date()): string | null {
+  if (!course || !course.is_duration_based || !course.duration_days || Number(course.duration_days) <= 0) {
+    return null;
+  }
+  const startDate = course.start_date ? new Date(course.start_date) : null;
+  const baseDate = (startDate && !isNaN(startDate.getTime()) && nowDate.getTime() < startDate.getTime())
+    ? new Date(startDate)
+    : new Date(nowDate);
+  const expiresAt = new Date(baseDate);
+  expiresAt.setDate(expiresAt.getDate() + Number(course.duration_days));
+  const endTimeStr = (course.layout as any)?.duration_end_time || "23:59";
+  const [hours, minutes] = endTimeStr.split(":").map(Number);
+  expiresAt.setHours(
+    !isNaN(hours) ? hours : 23,
+    !isNaN(minutes) ? minutes : 59,
+    59,
+    999
+  );
+  return expiresAt.toISOString();
+}
+
 // Retrieve from Database primary, fallback to configuration settings (Task 2)
 async function getInicisConfig() {
   if (supabaseAdmin) {
@@ -1538,15 +1559,11 @@ async function startServer() {
         try {
           const { data: courseInfo } = await supabaseAdmin
             .from("courses")
-            .select("is_duration_based, duration_days")
+            .select("is_duration_based, duration_days, start_date, end_date, layout")
             .eq("id", courseId)
             .single();
           
-          if (courseInfo && courseInfo.is_duration_based && courseInfo.duration_days) {
-            const expDate = new Date();
-            expDate.setDate(expDate.getDate() + Number(courseInfo.duration_days));
-            expiresAt = expDate.toISOString();
-          }
+          expiresAt = calculateCourseEnrollmentExpiry(courseInfo, new Date());
         } catch (courseErr) {
           console.warn("[INICIS-RETURN] Failed to calculate course duration, default to infinite:", courseErr);
         }
@@ -1949,15 +1966,23 @@ async function startServer() {
           ]);
         }
 
-        const defaultDurationMonths = 12;
-        const expiresAt = new Date();
-        expiresAt.setMonth(expiresAt.getMonth() + defaultDurationMonths);
+        let expiresAt: string | null = null;
+        try {
+          const { data: courseInfo } = await supabaseAdmin
+            .from("courses")
+            .select("is_duration_based, duration_days, start_date, end_date, layout")
+            .eq("id", courseId)
+            .maybeSingle();
+          expiresAt = calculateCourseEnrollmentExpiry(courseInfo, new Date());
+        } catch (e) {
+          console.warn("[process-payment] Course duration lookup fallback:", e);
+        }
 
         await supabaseAdmin.from("enrollments").upsert({
           user_id: targetUserId,
           course_id: courseId,
           status: "active",
-          expires_at: expiresAt.toISOString(),
+          expires_at: expiresAt,
           is_deleted: false
         }, { onConflict: "user_id, course_id" });
 
@@ -2195,9 +2220,19 @@ async function startServer() {
           return res.status(400).json({ status: "error", message: "Missing userId or courseId parameters" });
         }
 
-        const defaultExpires = new Date();
-        defaultExpires.setMonth(defaultExpires.getMonth() + 12);
-        const resolveExpiry = expiresAt || defaultExpires.toISOString();
+        let resolveExpiry: string | null = expiresAt !== undefined ? expiresAt : null;
+        if (expiresAt === undefined) {
+          try {
+            const { data: courseInfo } = await supabaseAdmin
+              .from("courses")
+              .select("is_duration_based, duration_days, start_date, end_date, layout")
+              .eq("id", courseId)
+              .maybeSingle();
+            resolveExpiry = calculateCourseEnrollmentExpiry(courseInfo, new Date());
+          } catch (e) {
+            console.warn("[grant-enrollment] Course duration lookup fallback:", e);
+          }
+        }
 
         await supabaseAdmin.from("enrollments").upsert({
           user_id: userId,
@@ -2737,15 +2772,23 @@ async function startServer() {
           ]);
         }
 
-        const defaultDurationMonths = 12;
-        const expiresAt = new Date();
-        expiresAt.setMonth(expiresAt.getMonth() + defaultDurationMonths);
+        let expiresAt: string | null = null;
+        try {
+          const { data: courseInfo } = await supabaseAdmin
+            .from("courses")
+            .select("is_duration_based, duration_days, start_date, end_date, layout")
+            .eq("id", order.course_id)
+            .maybeSingle();
+          expiresAt = calculateCourseEnrollmentExpiry(courseInfo, new Date());
+        } catch (e) {
+          console.warn("[reprocess-order] Course duration lookup fallback:", e);
+        }
 
         await supabaseAdmin.from("enrollments").upsert({
           user_id: order.user_id,
           course_id: order.course_id,
           status: "active",
-          expires_at: expiresAt.toISOString(),
+          expires_at: expiresAt,
           is_deleted: false
         }, { onConflict: "user_id, course_id" });
 
@@ -4343,19 +4386,33 @@ async function startServer() {
       
       // 1. Grant Course Enrollment
       try {
+        let expiresAt: string | null = null;
+        try {
+          const { data: courseInfo } = await supabaseAdmin
+            .from("courses")
+            .select("is_duration_based, duration_days, start_date, end_date, layout")
+            .eq("id", order.course_id)
+            .maybeSingle();
+          expiresAt = calculateCourseEnrollmentExpiry(courseInfo, new Date());
+        } catch (courseErr) {
+          console.warn(`[OrderTransition] Failed to calculate course duration:`, courseErr);
+        }
+
         const { error: enrollErr } = await supabaseAdmin
           .from("enrollments")
           .upsert({
             user_id: order.user_id,
             course_id: order.course_id,
             status: "active",
+            is_deleted: false,
+            expires_at: expiresAt,
             created_at: new Date().toISOString()
           }, { onConflict: "user_id, course_id" });
 
         if (enrollErr) {
           console.error(`[OrderTransition] Enrollment upsert error:`, enrollErr);
         } else {
-          console.log(`[OrderTransition] Enrollment added successfully.`);
+          console.log(`[OrderTransition] Enrollment added successfully (expires_at=${expiresAt}).`);
         }
       } catch (e) {
         console.error(`[OrderTransition] Failed to enroll course in payment transition:`, e);

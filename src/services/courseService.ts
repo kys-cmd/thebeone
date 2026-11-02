@@ -1,6 +1,41 @@
 import { supabase } from '@/lib/supabase';
 import { Course } from '@/types';
 
+export function calculateDurationExpiresAt(
+  course: {
+    is_duration_based?: boolean | null;
+    duration_days?: number | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    layout?: any;
+  } | null | undefined,
+  paymentOrEnrollDate: Date = new Date()
+): string | null {
+  if (!course) return null;
+  if (course.is_duration_based && course.duration_days && Number(course.duration_days) > 0) {
+    const startDate = course.start_date ? new Date(course.start_date) : null;
+    // 1. 강의 개시일 전에 결제한 회원은 강의 개시일부터 카운팅
+    // 2. 강의 개시 후 결제한 회원은 결제일 기준 카운팅
+    const baseDate =
+      startDate && !isNaN(startDate.getTime()) && paymentOrEnrollDate < startDate
+        ? new Date(startDate)
+        : new Date(paymentOrEnrollDate);
+
+    const expiresAt = new Date(baseDate);
+    expiresAt.setDate(expiresAt.getDate() + Number(course.duration_days));
+    const endTime = (course.layout as any)?.duration_end_time || "23:59";
+    const [h, m] = endTime.split(":").map(Number);
+    expiresAt.setHours(
+      h !== undefined && !isNaN(h) ? h : 23,
+      m !== undefined && !isNaN(m) ? m : 59,
+      0,
+      0
+    );
+    return expiresAt.toISOString();
+  }
+  return null;
+}
+
 export const courseService = {
   async getCourses() {
     const { data, error } = await supabase
@@ -85,6 +120,7 @@ export const courseService = {
         expires_at,
         course:courses (
           is_duration_based,
+          start_date,
           end_date
         )
       `)
@@ -181,35 +217,28 @@ export const courseService = {
       .maybeSingle();
 
     if (checkError) throw checkError;
+
+    const nowDate = new Date();
     
     if (existing) {
       // 만약 기존에 등록 정보가 있다면 (삭제되었든, 활성 상태이든) 복구 및 정보 업데이트를 수행합니다.
       const updateData: any = {
         is_deleted: false,
-        created_at: new Date().toISOString() // 등록일 재설정
+        created_at: nowDate.toISOString() // 등록일 재설정
       };
 
       if (customExpiresAt !== undefined) {
         updateData.expires_at = customExpiresAt;
       } else {
-        // 코스 기본 기간 기반으로 만료일 계산
+        // 코스 기본 기간 기반으로 만료일 계산 (개시일 전 결제 시 개시일 기준, 개시 후 결제 시 결제일 기준)
         const { data: course, error: courseError } = await supabase
           .from('courses')
-          .select('is_duration_based, duration_days, layout')
+          .select('is_duration_based, duration_days, start_date, end_date, layout')
           .eq('id', courseId)
           .single();
         
         if (!courseError && course) {
-          if (course.is_duration_based && course.duration_days) {
-            const expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + course.duration_days);
-            const endTime = (course.layout as any)?.duration_end_time || "23:59";
-            const [h, m] = endTime.split(":").map(Number);
-            expiresAt.setHours(h !== undefined && !isNaN(h) ? h : 23, m !== undefined && !isNaN(m) ? m : 59, 0, 0);
-            updateData.expires_at = expiresAt.toISOString();
-          } else {
-            updateData.expires_at = null;
-          }
+          updateData.expires_at = calculateDurationExpiresAt(course, nowDate);
         }
       }
 
@@ -227,7 +256,7 @@ export const courseService = {
     // 4. Check Capacity for offline courses & Fetch duration info
     const { data: course, error: courseError } = await supabase
       .from('courses')
-      .select('category, max_capacity, is_duration_based, duration_days, layout')
+      .select('category, max_capacity, is_duration_based, duration_days, start_date, end_date, layout')
       .eq('id', courseId)
       .single();
 
@@ -250,19 +279,14 @@ export const courseService = {
     const enrollmentData: any = { 
       user_id: userId, 
       course_id: courseId,
-      created_at: new Date().toISOString(),
+      created_at: nowDate.toISOString(),
       is_deleted: false
     };
 
     if (customExpiresAt !== undefined) {
       enrollmentData.expires_at = customExpiresAt;
     } else if (course.is_duration_based && course.duration_days) {
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + course.duration_days);
-      const endTime = (course.layout as any)?.duration_end_time || "23:59";
-      const [h, m] = endTime.split(":").map(Number);
-      expiresAt.setHours(h !== undefined && !isNaN(h) ? h : 23, m !== undefined && !isNaN(m) ? m : 59, 0, 0);
-      enrollmentData.expires_at = expiresAt.toISOString();
+      enrollmentData.expires_at = calculateDurationExpiresAt(course, nowDate);
     }
 
     const { data, error } = await supabase

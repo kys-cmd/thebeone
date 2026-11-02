@@ -14,7 +14,6 @@ import {
   MessageSquare,
   Trophy,
   Video,
-  Lock,
   Trash2,
   Edit2
 } from 'lucide-react';
@@ -30,8 +29,6 @@ import { reviewService, Review } from '@/services/reviewService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
-import { getVimeoEmbedUrl } from '@/lib/vimeo';
-import { CurriculumItem } from '@/types';
 
 function CourseReviews({ courseId }: { courseId: string }) {
   const { user } = useAuthStore();
@@ -221,7 +218,6 @@ export default function CourseDetail() {
   const [loading, setLoading] = useState(true);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [enrolledCount, setEnrolledCount] = useState(0);
-  const [activeLesson, setActiveLesson] = useState<CurriculumItem | null>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
   const [isTabsSticky, setIsTabsSticky] = useState(false);
 
@@ -294,7 +290,11 @@ export default function CourseDetail() {
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div></div>;
   if (!course) return <div className="min-h-screen flex items-center justify-center font-bold">강의를 찾을 수 없습니다.</div>;
 
-  const isOffline = course.category === 'special_offline' || course.category === 'beone_exclusive_offline';
+  const isOffline = 
+    course.category === 'special_offline' || 
+    course.category === 'beone_exclusive_offline' || 
+    course.category === 'offline' || 
+    Boolean(course.category && course.category.includes('offline'));
   const hasRegEnded = course.reg_end_date ? new Date() > new Date(course.reg_end_date) : false;
   const isSoldOut = course.is_force_closed || hasRegEnded || (
                      isOffline && 
@@ -373,7 +373,9 @@ export default function CourseDetail() {
                   <p className="opacity-50 text-xs font-bold uppercase tracking-widest">Duration</p>
                   <p className="text-xl font-black">
                     {course.is_duration_based ? (
-                      `수강시작일로부터 ${course.duration_days}일`
+                      course.start_date && new Date() < new Date(course.start_date)
+                        ? `개시일(${new Date(course.start_date).toLocaleDateString()})로부터 ${course.duration_days}일`
+                        : `결제일로부터 ${course.duration_days}일`
                     ) : course.start_date && course.end_date ? (
                       `${new Date(course.start_date).toLocaleDateString()} ~ ${new Date(course.end_date).toLocaleDateString()}`
                     ) : (
@@ -391,12 +393,18 @@ export default function CourseDetail() {
                   <img src={course.thumbnail} className="w-full h-full object-cover" alt={course.title} />
                 ) : (
                   <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                    <Video className="w-12 h-12 text-gray-300" />
+                    {isOffline ? (
+                      <Calendar className="w-12 h-12 text-gray-300" />
+                    ) : (
+                      <Video className="w-12 h-12 text-gray-300" />
+                    )}
                   </div>
                 )}
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                  <PlayCircle className="w-16 h-16 text-white drop-shadow-2xl" />
-                </div>
+                {!isOffline && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                    <PlayCircle className="w-16 h-16 text-white drop-shadow-2xl" />
+                  </div>
+                )}
               </div>
 
               <div className="space-y-6">
@@ -404,7 +412,11 @@ export default function CourseDetail() {
                   <div className="flex items-center gap-2 text-gray-500">
                     <Clock className="w-4 h-4" />
                     <span className="text-sm font-bold">
-                      {course.is_duration_based ? `수강 기간: ${course.duration_days}일` : '강의 기간: 상시/일정'}
+                      {course.is_duration_based
+                        ? (course.start_date && new Date() < new Date(course.start_date)
+                            ? `수강 기간: 개시일(${new Date(course.start_date).toLocaleDateString()})부터 ${course.duration_days}일`
+                            : `수강 기간: 결제일로부터 ${course.duration_days}일`)
+                        : '강의 기간: 상시/일정'}
                     </span>
                   </div>
                   {!(course.category === 'beone_exclusive_online' || course.category === 'beone_exclusive_offline') ? (
@@ -714,163 +726,67 @@ export default function CourseDetail() {
               <Badge className="bg-purple-50 text-purple-600 border-none font-black px-4 py-1">CURRICULUM</Badge>
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <h2 className="text-4xl font-black tracking-tighter text-gray-900">당신을 전문가로 만들어 줄{'\n'}압도적인 커리큘럼</h2>
-                {activeLesson && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => setActiveLesson(null)}
-                    className="text-gray-400 hover:text-purple-600 font-bold"
-                  >
-                    플레이어 닫기
-                  </Button>
-                )}
               </div>
             </div>
-
-            {/* Integrated Player (Playlist Style) */}
-            <AnimatePresence>
-              {!isOffline && activeLesson && (
-                <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="space-y-6 mb-12">
-                    <div className="aspect-video bg-black rounded-[32px] overflow-hidden shadow-2xl shadow-purple-500/10 relative border border-gray-100">
-                      <iframe
-                        key={activeLesson.id}
-                        src={getVimeoEmbedUrl(activeLesson.vimeo_id || '', { autoplay: 1 })}
-                        className="absolute inset-0 w-full h-full"
-                        allow="autoplay; fullscreen; picture-in-picture; encrypted-media; gyroscope; accelerometer; clipboard-write; web-share"
-                        referrerPolicy="strict-origin-when-cross-origin"
-                        allowFullScreen
-                        title={activeLesson.title}
-                        onError={() => {
-                          toast.error('동영상을 불러오는 중 오류가 발생했습니다. Vimeo 권한 설정을 확인해주세요.');
-                        }}
-                      />
-                    </div>
-                    <div className="px-4 py-6 bg-purple-50/50 rounded-[32px] border border-purple-100/50 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="flex gap-1 items-end h-3">
-                            <motion.div animate={{ height: [4, 12, 4] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-1 bg-purple-600 rounded-full" />
-                            <motion.div animate={{ height: [12, 4, 12] }} transition={{ repeat: Infinity, duration: 0.8 }} className="w-1 bg-purple-600 rounded-full" />
-                            <motion.div animate={{ height: [8, 12, 8] }} transition={{ repeat: Infinity, duration: 0.7 }} className="w-1 bg-purple-600 rounded-full" />
-                          </div>
-                          <span className="text-purple-600 font-black text-sm uppercase tracking-tighter">실시간 수강 중</span>
-                        </div>
-                        <Badge variant="outline" className="border-purple-200 text-purple-600 font-bold">
-                          {activeLesson.duration}
-                        </Badge>
-                      </div>
-                      <h3 className="text-2xl font-black text-gray-900">{activeLesson.title}</h3>
-                      <p className="text-sm text-gray-500 font-medium break-keep">
-                        비메오 영상 플레이어에 문제가 있을 경우, 관리자 페이지에서 영상 ID(h 파라미터 포함)를 확인하시거나 브라우저 캐시를 삭제 후 다시 시도해주세요.
-                      </p>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
 
             <div className="grid grid-cols-1 gap-6">
               {course.curriculum?.map((section, idx) => (
                 <div key={section.id} className="space-y-4">
                   <div className="flex items-center justify-between px-2">
-                    <p className="text-sm font-black text-purple-600 uppercase tracking-widest">CHAPTER 0{idx + 1}. {section.title}</p>
-                    <Badge variant="outline" className="text-[10px] text-gray-400 font-bold border-gray-100">
-                      {section.items.length} Lectures
+                    <p className="text-base font-black text-purple-600 tracking-tight">
+                      {section.title}
+                    </p>
+                    <Badge variant="outline" className="text-xs text-gray-400 font-bold border-gray-100">
+                      {isOffline ? `${section.items.length}개 세션` : `${section.items.length} Lectures`}
                     </Badge>
                   </div>
                   <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
                     {section.items.map((item, itemIdx) => {
-                      const isActive = !isOffline && activeLesson?.id === item.id;
-                      const isLocked = !isEnrolled && !item.is_free;
-                      
+                      if (isOffline) {
+                        return (
+                          <div 
+                            key={item.id} 
+                            className="w-full px-7 py-5 flex items-start gap-4 text-left hover:bg-slate-50/50 transition-colors"
+                          >
+                            <span className="text-sm font-black text-purple-600 shrink-0 pt-0.5 select-none font-mono">
+                              {String(itemIdx + 1).padStart(2, '0')}.
+                            </span>
+                            <div className="flex-1">
+                              <p className="font-extrabold tracking-tight break-keep text-base text-gray-800 leading-relaxed">
+                                {item.title}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+
                       return (
-                        <button 
+                        <div 
                           key={item.id} 
-                          onClick={() => {
-                            if (isOffline) {
-                              toast.info('본 강좌는 오프라인 현장 아카데미 특강이므로 동영상 및 플레이어가 제공되지 않습니다.');
-                              return;
-                            }
-                            if (isLocked) {
-                              toast.error('수강 신청 후 시청 가능합니다.');
-                              return;
-                            }
-                            setActiveLesson(item);
-                            scrollToSection('curriculum');
-                          }}
-                          className={cn(
-                            "w-full p-5 flex items-center justify-between group transition-all text-left relative",
-                            isActive ? "bg-purple-600 text-white" : (isLocked && !isOffline) ? "opacity-60 bg-gray-50/50" : "hover:bg-purple-50/50"
-                          )}
+                          className="w-full p-5 flex items-center justify-between text-left relative hover:bg-slate-50/50 transition-colors"
                         >
-                          {isActive && (
-                            <motion.div 
-                              layoutId="active-lesson-indicator"
-                              className="absolute left-0 top-0 bottom-0 w-1.5 bg-white rounded-r-full"
-                            />
-                          )}
                           <div className="flex items-center gap-5">
-                            <span className={cn(
-                              "text-[10px] font-black w-5 shrink-0",
-                              isActive ? "text-white/60" : "text-gray-300 group-hover:text-purple-300"
-                            )}>
+                            <span className="text-xs font-black w-5 shrink-0 text-gray-400 font-mono">
                               {String(itemIdx + 1).padStart(2, '0')}
                             </span>
-                            <div className={cn(
-                              "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 transition-colors",
-                              isActive ? "bg-white/20 text-white" : (isLocked && !isOffline) ? "bg-gray-100 text-gray-400" : "bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white"
-                            )}>
-                              {isOffline ? (
-                                <CheckCircle2 className="w-5 h-5 text-purple-600 group-hover:text-white transition-colors" />
-                              ) : isLocked ? (
-                                <Lock className="w-4 h-4" />
-                              ) : (
-                                <Video className="w-5 h-5" />
-                              )}
+                            <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-purple-50 text-purple-600">
+                              <Video className="w-5 h-5" />
                             </div>
                             <div className="space-y-0.5">
-                              <p className={cn(
-                                "font-black tracking-tight break-keep text-sm",
-                                isActive ? "text-white" : "text-gray-800"
-                              )}>
+                              <p className="font-extrabold tracking-tight break-keep text-base text-gray-800">
                                 {item.title}
                               </p>
                               <div className="flex items-center gap-2">
-                                <span className={cn("text-[10px] font-bold", isActive ? "text-white/60" : "text-gray-400")}>
-                                  {isOffline ? "현장 세션 아젠다" : (item.duration || "00:00")}
+                                <span className="text-xs font-bold text-gray-400">
+                                  {item.duration || "00:00"}
                                 </span>
-                                {item.is_free && !isActive && !isOffline && (
+                                {item.is_free && (
                                   <Badge className="h-4 px-1.5 text-[8px] bg-purple-100 text-purple-600 border-none font-black uppercase">Free</Badge>
                                 )}
                               </div>
                             </div>
                           </div>
-                          
-                          <div className="flex items-center gap-4">
-                            {isActive ? (
-                              <div className="flex gap-0.5 items-end h-3">
-                                <motion.div animate={{ height: [4, 12, 4] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-1 bg-white rounded-full" />
-                                <motion.div animate={{ height: [12, 4, 12] }} transition={{ repeat: Infinity, duration: 0.8 }} className="w-1 bg-white rounded-full" />
-                                <motion.div animate={{ height: [6, 12, 6] }} transition={{ repeat: Infinity, duration: 0.7 }} className="w-1 bg-white rounded-full" />
-                              </div>
-                            ) : isOffline ? (
-                              <Badge className="bg-slate-100 text-[9px] font-black tracking-tight text-slate-500 border-none px-2 py-0.5 rounded cursor-default">
-                                오프라인 현장 진행
-                              </Badge>
-                            ) : (
-                              <ChevronRight className={cn(
-                                "w-4 h-4 transition-all opacity-0 group-hover:opacity-100 group-hover:translate-x-1",
-                                isActive ? "text-white" : isLocked ? "text-gray-200" : "text-purple-300"
-                              )} />
-                            )}
-                          </div>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>

@@ -314,15 +314,40 @@ export const handler: Handler = async (event, context) => {
       }
 
       // Active 수강 신청 권한 부여 (Enrollment)
-      const defaultDurationMonths = 12; // 1 year default access
-      const expiresAt = new Date();
-      expiresAt.setMonth(expiresAt.getMonth() + defaultDurationMonths);
+      let expiresAt: string | null = null;
+      try {
+        const { data: courseInfo } = await supabaseAdmin
+          .from("courses")
+          .select("is_duration_based, duration_days, start_date, end_date, layout")
+          .eq("id", courseId)
+          .maybeSingle();
+        if (courseInfo && courseInfo.is_duration_based && courseInfo.duration_days && Number(courseInfo.duration_days) > 0) {
+          const nowDate = new Date();
+          const startDate = courseInfo.start_date ? new Date(courseInfo.start_date) : null;
+          const baseDate = (startDate && !isNaN(startDate.getTime()) && nowDate.getTime() < startDate.getTime())
+            ? new Date(startDate)
+            : nowDate;
+          const expDate = new Date(baseDate);
+          expDate.setDate(expDate.getDate() + Number(courseInfo.duration_days));
+          const endTimeStr = (courseInfo.layout as any)?.duration_end_time || "23:59";
+          const [hours, minutes] = endTimeStr.split(":").map(Number);
+          expDate.setHours(
+            !isNaN(hours) ? hours : 23,
+            !isNaN(minutes) ? minutes : 59,
+            59,
+            999
+          );
+          expiresAt = expDate.toISOString();
+        }
+      } catch (e) {
+        console.warn("[process-payment] Course duration lookup fallback:", e);
+      }
 
       await supabaseAdmin.from("enrollments").upsert({
         user_id: targetUserId,
         course_id: courseId,
         status: "active",
-        expires_at: expiresAt.toISOString(),
+        expires_at: expiresAt,
         is_deleted: false,
         updated_at: new Date().toISOString()
       }, { onConflict: "user_id, course_id" });
@@ -455,9 +480,36 @@ export const handler: Handler = async (event, context) => {
         };
       }
 
-      const defaultExpires = new Date();
-      defaultExpires.setMonth(defaultExpires.getMonth() + 12);
-      const resolveExpiry = expiresAt || defaultExpires.toISOString();
+      let resolveExpiry: string | null = expiresAt !== undefined ? expiresAt : null;
+      if (expiresAt === undefined) {
+        try {
+          const { data: courseInfo } = await supabaseAdmin
+            .from("courses")
+            .select("is_duration_based, duration_days, start_date, end_date, layout")
+            .eq("id", courseId)
+            .maybeSingle();
+          if (courseInfo && courseInfo.is_duration_based && courseInfo.duration_days && Number(courseInfo.duration_days) > 0) {
+            const nowDate = new Date();
+            const startDate = courseInfo.start_date ? new Date(courseInfo.start_date) : null;
+            const baseDate = (startDate && !isNaN(startDate.getTime()) && nowDate.getTime() < startDate.getTime())
+              ? new Date(startDate)
+              : nowDate;
+            const expDate = new Date(baseDate);
+            expDate.setDate(expDate.getDate() + Number(courseInfo.duration_days));
+            const endTimeStr = (courseInfo.layout as any)?.duration_end_time || "23:59";
+            const [hours, minutes] = endTimeStr.split(":").map(Number);
+            expDate.setHours(
+              !isNaN(hours) ? hours : 23,
+              !isNaN(minutes) ? minutes : 59,
+              59,
+              999
+            );
+            resolveExpiry = expDate.toISOString();
+          }
+        } catch (e) {
+          console.warn("[grant-enrollment] Course duration lookup fallback:", e);
+        }
+      }
 
       await supabaseAdmin.from("enrollments").upsert({
         user_id: userId,
@@ -1125,15 +1177,40 @@ export const handler: Handler = async (event, context) => {
         ]);
       }
 
-      const defaultDurationMonths = 12;
-      const expiresAt = new Date();
-      expiresAt.setMonth(expiresAt.getMonth() + defaultDurationMonths);
+      let expiresAt: string | null = null;
+      try {
+        const { data: courseInfo } = await supabaseAdmin
+          .from("courses")
+          .select("is_duration_based, duration_days, start_date, end_date, layout")
+          .eq("id", order.course_id)
+          .maybeSingle();
+        if (courseInfo && courseInfo.is_duration_based && courseInfo.duration_days && Number(courseInfo.duration_days) > 0) {
+          const nowDate = new Date();
+          const startDate = courseInfo.start_date ? new Date(courseInfo.start_date) : null;
+          const baseDate = (startDate && !isNaN(startDate.getTime()) && nowDate.getTime() < startDate.getTime())
+            ? new Date(startDate)
+            : nowDate;
+          const expDate = new Date(baseDate);
+          expDate.setDate(expDate.getDate() + Number(courseInfo.duration_days));
+          const endTimeStr = (courseInfo.layout as any)?.duration_end_time || "23:59";
+          const [hours, minutes] = endTimeStr.split(":").map(Number);
+          expDate.setHours(
+            !isNaN(hours) ? hours : 23,
+            !isNaN(minutes) ? minutes : 59,
+            59,
+            999
+          );
+          expiresAt = expDate.toISOString();
+        }
+      } catch (e) {
+        console.warn("[reprocess-order] Course duration lookup fallback:", e);
+      }
 
       await supabaseAdmin.from("enrollments").upsert({
         user_id: order.user_id,
         course_id: order.course_id,
         status: "active",
-        expires_at: expiresAt.toISOString(),
+        expires_at: expiresAt,
         is_deleted: false,
         updated_at: new Date().toISOString()
       }, { onConflict: "user_id, course_id" });
