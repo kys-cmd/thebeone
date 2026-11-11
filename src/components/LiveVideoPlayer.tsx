@@ -1,36 +1,43 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
+import DOMPurify from 'dompurify';
 
 interface LiveVideoPlayerProps {
   embedCode: string;
 }
 
-/**
- * LiveVideoPlayer
- *
- * Prevents video playback interruption and iframe re-mounting:
- * 1. Safely renders the embed HTML without causing React unmount/remount churn.
- * 2. Only updates innerHTML when embedCode actually changes, preserving iframe playback.
- * 3. Initial render directly injects HTML so there is no flicker or blank state.
- */
+const LIVE_EMBED_SANITIZE_OPTIONS = {
+  ADD_TAGS: ['iframe', 'video', 'source'],
+  ADD_ATTR: [
+    'src', 'allow', 'allowfullscreen', 'frameborder', 'scrolling',
+    'width', 'height', 'style', 'class', 'title', 'referrerpolicy',
+    'controls', 'autoplay', 'muted', 'playsinline'
+  ]
+};
+
 export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = React.memo(({ embedCode }) => {
+  const sanitizedEmbed = useMemo(
+    () => DOMPurify.sanitize(embedCode || '', LIVE_EMBED_SANITIZE_OPTIONS),
+    [embedCode]
+  );
   const containerRef = useRef<HTMLDivElement>(null);
-  const prevEmbedRef = useRef<string>(embedCode);
+  const prevEmbedRef = useRef<string>(sanitizedEmbed);
 
   useEffect(() => {
     if (!containerRef.current) return;
-    if (prevEmbedRef.current !== embedCode) {
-      prevEmbedRef.current = embedCode;
-      containerRef.current.innerHTML = embedCode;
+    if (prevEmbedRef.current !== sanitizedEmbed) {
+      prevEmbedRef.current = sanitizedEmbed;
+      containerRef.current.innerHTML = sanitizedEmbed;
     }
-  }, [embedCode]);
+  }, [sanitizedEmbed]);
 
   return (
     <div
       ref={containerRef}
       className="w-full h-full [&>div]:w-full [&>div]:h-full [&>div]:!p-0 [&_iframe]:w-full [&_iframe]:h-full [&_iframe]:absolute [&_iframe]:inset-0"
-      dangerouslySetInnerHTML={{ __html: embedCode }}
+      dangerouslySetInnerHTML={{ __html: sanitizedEmbed }}
     />
   );
 });
 
 LiveVideoPlayer.displayName = 'LiveVideoPlayer';
+

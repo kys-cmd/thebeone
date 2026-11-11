@@ -242,9 +242,13 @@ export const liveService = {
   }): Promise<{ success: boolean; conflict?: boolean; activeSessions?: LiveSession[]; session?: LiveSession; config?: any; message?: string }> {
     // 1. Try API endpoint first
     try {
+      const session = (await supabase.auth.getSession()).data.session;
       const res = await fetch('/api/live/start', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+        },
         body: JSON.stringify(params)
       });
       if (res.ok) {
@@ -445,9 +449,13 @@ export const liveService = {
     
     // 1. Try API endpoint
     try {
+      const session = (await supabase.auth.getSession()).data.session;
       const res = await fetch('/api/live/stop', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+        },
         body: JSON.stringify(params)
       });
       if (res.ok) {
@@ -564,9 +572,13 @@ export const liveService = {
     
     // 1. Try API endpoint
     try {
+      const session = (await supabase.auth.getSession()).data.session;
       const res = await fetch('/api/live/stop-all', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+        },
         body: JSON.stringify(params || {})
       });
       if (res.ok) {

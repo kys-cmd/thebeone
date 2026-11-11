@@ -175,13 +175,13 @@ export default function Cart() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-[50px] pb-20">
-        <Card className="p-12 max-w-md w-full text-center space-y-6 rounded-[32px] shadow-sm border border-gray-100">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
+        <Card className="p-8 sm:p-12 max-w-md w-full text-center space-y-6 rounded-3xl sm:rounded-[32px] shadow-sm border border-gray-100">
           <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mx-auto">
             <ShoppingCart className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-black text-gray-900 leading-tight">로그인이 필요합니다</h2>
-          <p className="text-gray-500 font-bold text-sm">장바구니는 로그인 후 편리하게 수강 등록과 연계하여 관리할 수 있습니다.</p>
+          <h2 className="text-xl sm:text-2xl font-black text-gray-900 leading-tight">로그인이 필요합니다</h2>
+          <p className="text-gray-500 font-bold text-sm break-keep">장바구니는 로그인 후 편리하게 수강 등록과 연계하여 관리할 수 있습니다.</p>
           <div className="flex gap-4 justify-center">
             <Link to="/auth/login" className="w-full">
               <Button className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl font-black">
@@ -195,46 +195,46 @@ export default function Cart() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-[50px] pb-20 font-sans">
+    <div className={`min-h-screen bg-gray-50 pt-6 sm:pt-12 ${items.length > 0 ? 'pb-28 lg:pb-20' : 'pb-20'} font-sans`}>
       <div className="container mx-auto px-4 max-w-6xl">
         {/* Title */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-black tracking-tight text-gray-900 flex items-center gap-2">
-              수강 바구니 <ShoppingCart className="w-6 h-6 text-purple-600 inline" />
+        <div className="flex items-start sm:items-center justify-between gap-3 mb-6 sm:mb-8">
+          <div className="space-y-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-gray-900 flex items-center gap-2">
+              수강 바구니 <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 inline shrink-0" />
             </h1>
-            <p className="text-xs text-slate-400 font-medium">원하는 최상의 프리미엄 교육 강좌들을 담아 일괄 또는 선택 결제할 수 있습니다.</p>
+            <p className="text-xs text-slate-400 font-medium break-keep">원하는 프리미엄 교육 강좌들을 담아 일괄 또는 선택 결제할 수 있습니다.</p>
           </div>
-          <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 font-black px-4 py-1.5 border-none text-xs rounded-full">
+          <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 font-black px-3.5 py-1.5 border-none text-xs rounded-full shrink-0">
             {items.length}개 담김
           </Badge>
         </div>
 
         {isLoading ? (
-          <div className="py-40 flex flex-col items-center justify-center space-y-4">
-            <Loader2 className="w-12 h-12 text-purple-600 animate-spin" />
+          <div className="py-32 sm:py-40 flex flex-col items-center justify-center space-y-4">
+            <Loader2 className="w-10 h-10 sm:w-12 sm:h-12 text-purple-600 animate-spin" />
             <p className="text-gray-400 font-extrabold text-sm animate-pulse">수강 신청 바구니 내역을 동기화 중입니다...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 items-start">
             
             {/* Left Column: Board - list style with select option */}
             <div className="lg:col-span-2 space-y-4">
               
               {items.length > 0 ? (
-                <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-2xl sm:rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
                   
                   {/* Board Controls */}
-                  <div className="p-4 px-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-500">
+                  <div className="py-3.5 px-4 sm:px-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-500">
                     <div className="flex items-center gap-3">
                       <button 
                         onClick={handleToggleSelectAll}
-                        className="flex items-center gap-2 text-slate-700 hover:text-purple-600 transition-colors"
+                        className="flex items-center gap-2 text-slate-700 hover:text-purple-600 transition-colors min-h-[36px]"
                       >
                         {selectedIds.length === items.length ? (
-                          <CheckSquare className="w-4.5 h-4.5 text-purple-600 fill-purple-50" />
+                          <CheckSquare className="w-5 h-5 text-purple-600 fill-purple-50" />
                         ) : (
-                          <Square className="w-4.5 h-4.5 text-slate-300" />
+                          <Square className="w-5 h-5 text-slate-300" />
                         )}
                         전체 선택 ({selectedIds.length}/{items.length})
                       </button>
@@ -243,7 +243,7 @@ export default function Cart() {
                     {selectedIds.length > 0 && (
                       <button
                         onClick={handleDeleteSelected}
-                        className="flex items-center gap-1.5 text-rose-500 hover:text-rose-700 transition-colors py-1 px-3 bg-white border border-rose-100 rounded-full shadow-2sm"
+                        className="flex items-center gap-1.5 text-rose-500 hover:text-rose-700 transition-colors py-1.5 px-3 bg-white border border-rose-100 rounded-full shadow-xs"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         선택 삭제
@@ -251,7 +251,7 @@ export default function Cart() {
                     )}
                   </div>
 
-                  {/* Board List (Table / Row Board Layout) */}
+                  {/* Board List (Responsive Mobile Card / Desktop Row) */}
                   <div className="divide-y divide-slate-100">
                     <AnimatePresence mode="popLayout">
                       {items.map((item) => {
@@ -263,14 +263,15 @@ export default function Cart() {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, x: -10 }}
-                            className={`p-6 flex items-center gap-4 transition-colors ${
+                            className={`p-4 sm:p-6 flex items-start sm:items-center gap-3 sm:gap-4 transition-colors ${
                               isItemSelected ? 'bg-purple-50/20' : 'hover:bg-slate-50/50'
                             }`}
                           >
                             {/* Checkbox */}
                             <button
                               onClick={() => handleToggleSelect(item.id)}
-                              className="shrink-0 transition-all p-1"
+                              className="shrink-0 transition-all p-1.5 -ml-1.5 mt-0.5 sm:mt-0"
+                              aria-label="강의 선택"
                             >
                               {isItemSelected ? (
                                 <CheckSquare className="w-5 h-5 text-purple-600 fill-purple-100/30" />
@@ -280,7 +281,7 @@ export default function Cart() {
                             </button>
 
                             {/* Minimal Board Visual Thumbnail */}
-                            <div className="w-20 aspect-video rounded-lg overflow-hidden border border-slate-100 shrink-0 hidden sm:block bg-slate-100">
+                            <div className="w-20 sm:w-24 aspect-video rounded-xl overflow-hidden border border-slate-100 shrink-0 bg-slate-100 mt-0.5 sm:mt-0">
                               <img
                                 src={item.courses?.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=300'}
                                 referrerPolicy="no-referrer"
@@ -289,9 +290,9 @@ export default function Cart() {
                               />
                             </div>
 
-                            {/* Info */}
+                            {/* Info + Mobile Price */}
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
                                 <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md shrink-0">
                                   {item.courses?.instructor || '아카데미 전문'}
                                 </span>
@@ -299,26 +300,30 @@ export default function Cart() {
                                   {item.courses?.category === 'beone_exclusive_online' ? '비원 프리미엄' : '정식 코스'}
                                 </span>
                               </div>
-                              <h3 className="font-extrabold text-slate-800 text-sm sm:text-base leading-snug truncate">
+                              <h3 className="font-extrabold text-slate-800 text-sm sm:text-base leading-snug line-clamp-2 sm:truncate break-keep">
                                 {item.courses?.title || '수강 예정 교육 과정'}
                               </h3>
+                              <div className="mt-2 flex items-center justify-between sm:hidden">
+                                <span className="font-black text-purple-600 text-sm">
+                                  {(item.amount || item.price || 0).toLocaleString()}원
+                                </span>
+                              </div>
                             </div>
 
-                            {/* Right: Price & Row Delete */}
-                            <div className="text-right shrink-0 flex items-center gap-4">
-                              <span className="font-black text-slate-900 text-sm sm:text-base">
+                            {/* Right: Desktop Price & Row Delete */}
+                            <div className="text-right shrink-0 flex items-center gap-3 sm:gap-4">
+                              <span className="hidden sm:inline font-black text-slate-900 text-base">
                                 {(item.amount || item.price || 0).toLocaleString()}원
                               </span>
 
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  onClick={() => handleDeleteItem(item.id)}
-                                  className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
-                                  title="강좌 삭제"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
+                              <button
+                                onClick={() => handleDeleteItem(item.id)}
+                                className="p-2.5 -mr-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                                title="강좌 삭제"
+                                aria-label="강좌 삭제"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </motion.div>
                         );
@@ -327,7 +332,7 @@ export default function Cart() {
                   </div>
                 </div>
               ) : (
-                <div className="py-24 bg-white rounded-[32px] border border-dashed border-slate-200 text-center space-y-5">
+                <div className="py-20 sm:py-24 px-4 bg-white rounded-3xl sm:rounded-[32px] border border-dashed border-slate-200 text-center space-y-5">
                   <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-300">
                     <ShoppingCart className="w-7 h-7" />
                   </div>
@@ -336,7 +341,7 @@ export default function Cart() {
                     <p className="text-xs text-slate-400">다양하고 심도 깊은 정규 학습 코스를 둘러보세요!</p>
                   </div>
                   <Link to="/courses" className="inline-block">
-                    <Button className="h-10 px-6 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs">
+                    <Button className="h-11 px-6 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs">
                       교육 과정 구경하기
                     </Button>
                   </Link>
@@ -345,12 +350,12 @@ export default function Cart() {
             </div>
 
             {/* Right Column: Checkout Summary Panel */}
-            <aside className="space-y-4 sticky top-32">
-              <Card className="rounded-[32px] border border-slate-100 shadow-md overflow-hidden bg-white">
-                <div className="p-8 space-y-6">
-                  <h3 className="text-lg font-black text-slate-800 tracking-tight border-b pb-4">수강료 결제 청약</h3>
+            <aside className="space-y-4 lg:sticky lg:top-28">
+              <Card className="rounded-2xl sm:rounded-[32px] border border-slate-100 shadow-md overflow-hidden bg-white">
+                <div className="p-5 sm:p-8 space-y-5 sm:space-y-6">
+                  <h3 className="text-base sm:text-lg font-black text-slate-800 tracking-tight border-b pb-3.5 sm:pb-4">수강료 결제 청약</h3>
 
-                  <div className="space-y-4 text-xs font-bold text-slate-600">
+                  <div className="space-y-3.5 sm:space-y-4 text-xs font-bold text-slate-600">
                     <div className="flex justify-between items-center">
                       <span>선택한 항목 개수</span>
                       <span className="text-slate-800 text-sm font-black">{selectedItems.length}개 / 전체 {items.length}개</span>
@@ -385,7 +390,7 @@ export default function Cart() {
                               const val = Math.max(0, parseInt(valStr, 10) || 0);
                               setUseMileageInput(Math.min(val, userMileage, selectedSubtotal));
                             }}
-                            className="h-11 pr-12 font-bold text-xs rounded-xl text-purple-700 border-purple-200 focus:ring-purple-500 focus:border-purple-500"
+                            className="h-11 pr-10 font-bold text-xs rounded-xl text-purple-700 border-purple-200 focus:ring-purple-500 focus:border-purple-500"
                           />
                           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">P</span>
                         </div>
@@ -402,39 +407,34 @@ export default function Cart() {
                       </div>
                     </div>
 
-                    <div className="flex justify-between items-center text-rose-500 pt-2">
+                    <div className="flex justify-between items-center text-rose-500 pt-1">
                       <span>마일리지 할인 적용</span>
                       <span>-{appliedMileage.toLocaleString()}원</span>
                     </div>
 
                     <div className="pt-4 border-t border-slate-100 flex justify-between items-end">
                       <span className="font-extrabold text-slate-800 text-sm">최종 결제 금액</span>
-                      <span className="text-2xl font-black text-purple-600 tracking-tight">{finalTotal.toLocaleString()}원</span>
+                      <span className="text-xl sm:text-2xl font-black text-purple-600 tracking-tight">{finalTotal.toLocaleString()}원</span>
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="space-y-3 pt-2">
+                  <div className="space-y-3 pt-1 sm:pt-2">
                     {selectedItems.length > 0 ? (
-                      <div className="space-y-2.5">
-                        
-                        {/* Standard PG payment with high contrast primary button */}
-                        <Button
-                          onClick={() => handlePayment(selectedItems[0])}
-                          disabled={isPaying}
-                          className="w-full h-13 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-sm rounded-2xl shadow-md shadow-purple-100 flex items-center justify-center gap-1.5 transition-all"
-                        >
-                          {isPaying ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                          ) : (
-                            <>
-                              <CreditCard className="w-4.5 h-4.5" />
-                              신용카드 결제하기 ({selectedItems.length}건)
-                            </>
-                          )}
-                        </Button>
-
-                      </div>
+                      <Button
+                        onClick={() => handlePayment(selectedItems[0])}
+                        disabled={isPaying}
+                        className="w-full h-12 sm:h-13 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-sm rounded-2xl shadow-md shadow-purple-100 flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        {isPaying ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <>
+                            <CreditCard className="w-4 h-4" />
+                            신용카드 결제하기 ({selectedItems.length}건)
+                          </>
+                        )}
+                      </Button>
                     ) : (
                       <Button
                         disabled
@@ -451,6 +451,36 @@ export default function Cart() {
           </div>
         )}
       </div>
+
+      {/* Mobile Sticky Checkout Bar */}
+      {items.length > 0 && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-t border-slate-200/80 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
+          <div className="flex items-center justify-between gap-4 max-w-lg mx-auto">
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-slate-400">
+                총 {selectedItems.length}건 최종 결제 금액
+              </p>
+              <p className="text-lg font-black text-purple-600 tracking-tight truncate">
+                {finalTotal.toLocaleString()}원
+              </p>
+            </div>
+            <Button
+              onClick={() => selectedItems.length > 0 && handlePayment(selectedItems[0])}
+              disabled={isPaying || selectedItems.length === 0}
+              className="h-12 px-6 bg-purple-600 hover:bg-purple-700 text-white font-black text-sm rounded-xl shadow-md shadow-purple-100 shrink-0 flex items-center gap-1.5"
+            >
+              {isPaying ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <CreditCard className="w-4 h-4" />
+                  결제하기 ({selectedItems.length})
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

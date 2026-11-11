@@ -90,56 +90,56 @@ export default function Courses() {
   return (
     <div className="min-h-screen bg-white">
       {/* Course Area */}
-      <section className="pt-[50px] pb-12 md:pb-20 bg-gray-50/50">
+      <section className="pt-6 sm:pt-10 md:pt-12 pb-14 md:pb-20 bg-slate-50/50">
         <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between mb-10">
-            <h2 className="text-3xl font-black text-gray-900 tracking-tighter">전체 강의 목록</h2>
-            <p className="font-bold text-gray-500">총 {courses.length}개의 정규 클래스</p>
+          <div className="flex items-end justify-between gap-4 mb-6 sm:mb-10">
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">전체 강의 목록</h2>
+            <p className="text-xs sm:text-sm font-bold text-slate-500 shrink-0 tabular-nums">총 {courses.length}개 클래스</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-8 sm:gap-y-12">
             {courses.map((course, idx) => (
               <motion.div
                 key={course.id}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.05 }}
+                transition={{ delay: idx * 0.04 }}
               >
-                <Link to={`/course/${course.id}`} className="group flex flex-col gap-4">
-                  <div className="relative aspect-[16/10] bg-gray-100 rounded-3xl overflow-hidden shadow-sm group-hover:shadow-2xl transition-all duration-500">
+                <Link to={`/course/${course.id}`} className="group flex flex-col gap-3 sm:gap-4">
+                  <div className="relative aspect-[16/10] bg-slate-100 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xs group-hover:shadow-xl transition-all duration-300">
                     <img 
-                      src={course.thumbnail || 'https://picsum.photos/seed/course/800/500'} 
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                      src={course.thumbnail || 'https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800'} 
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                       alt={course.title} 
                     />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-500" />
-                    <div className="absolute bottom-4 right-4 bg-white p-2.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all">
-                      <Play className="w-5 h-5 text-purple-600 fill-current" />
+                    <div className="hidden sm:flex absolute bottom-4 right-4 bg-white p-2.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all">
+                      <Play className="w-4 h-4 text-purple-600 fill-current" />
                     </div>
                   </div>
                   
-                  <div className="space-y-3 px-1">
-                    <div className="flex items-center justify-between text-xs font-black text-purple-600 gap-2 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <span>{course.instructor} 강사</span>
-                        {course.instructor_tags && course.instructor_tags.slice(0, 2).map((tag, i) => (
-                          <span key={i} className="text-[10px] bg-purple-50 text-purple-500 px-1.5 py-0.5 rounded font-medium uppercase">
-                            #{tag.replace('#', '')}
-                          </span>
-                        ))}
-                      </div>
+                  <div className="space-y-1.5 sm:space-y-2 px-0.5">
+                    <div className="flex items-center text-xs font-bold text-purple-600 gap-1.5 flex-wrap">
+                      <span>{course.instructor} 강사</span>
+                      {course.instructor_tags && course.instructor_tags.slice(0, 2).map((tag, i) => (
+                        <span key={i} className="text-[11px] text-slate-400 font-medium">
+                          · #{tag.replace('#', '')}
+                        </span>
+                      ))}
                     </div>
-                    <h3 className="font-extrabold text-lg text-gray-900 leading-tight group-hover:text-purple-600 transition-colors line-clamp-2 min-h-[3rem]">
+                    <h3 className="font-extrabold text-base sm:text-lg text-slate-900 leading-snug group-hover:text-purple-600 transition-colors line-clamp-2 sm:min-h-[3rem] break-keep">
                       {course.title}
                     </h3>
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-baseline gap-2 pt-0.5 tabular-nums">
                       {course.is_free ? (
-                        <span className="text-xl font-black text-purple-600">무료</span>
+                        <span className="text-lg sm:text-xl font-black text-purple-600">무료</span>
                       ) : (
                         <>
-                          <span className="text-xl font-black text-gray-900">{course.discount_price ? course.discount_price.toLocaleString() : (course.price || 0).toLocaleString()}원</span>
+                          <span className="text-lg sm:text-xl font-black text-slate-900">
+                            {course.discount_price ? course.discount_price.toLocaleString() : (course.price || 0).toLocaleString()}원
+                          </span>
                           {course.discount_price && course.discount_price < (course.price || 0) && (
-                            <span className="text-sm font-black text-red-500">
+                            <span className="text-xs sm:text-sm font-black text-red-500">
                               {Math.round((1 - (course.discount_price / (course.price || 1))) * 100)}%
                             </span>
                           )}

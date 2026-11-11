@@ -252,12 +252,58 @@ export default function AdminSalesManagement() {
     }
   };
 
+  const extractOrderPaymentDetails = (order: any) => {
+    let tid = order.tid && order.tid !== '-' ? order.tid : '-';
+    let applNum = order.applNum && order.applNum !== '-' ? order.applNum : '-';
+    let payDevice = order.payDevice || '';
+    let cardName = order.cardName || '';
+
+    if ((tid === '-' || applNum === '-') && order.logs && order.logs.length > 0) {
+      const successLog = order.logs.find((l: any) => l.status === 'SUCCESS') || order.logs[0];
+      if (successLog && successLog.raw_response) {
+        try {
+          const rawRes = successLog.raw_response;
+          const parsed = typeof rawRes === 'string' ? JSON.parse(rawRes) : rawRes;
+          const rawObj = parsed.details || parsed;
+
+          if (tid === '-') {
+            tid = rawObj.tid || rawObj.TID || rawObj.P_TID || rawObj.AuthTID || rawObj.payment_tid || '-';
+          }
+          if (applNum === '-') {
+            applNum = rawObj.applNum || rawObj.CARD_ApplNum || rawObj.applNo || rawObj.P_AUTH_NO || rawObj.P_AUTH_NUM || rawObj.AuthCode || rawObj.applCode || rawObj.appl_num || '-';
+          }
+          if (!payDevice) {
+            payDevice = rawObj.payDevice || (String(tid).startsWith('INIMX_') ? 'MOBILE' : String(tid).startsWith('Stdpay') ? 'PC' : '');
+          }
+          if (!cardName) {
+            cardName = rawObj.P_FN_NM || rawObj.CARD_PurchaseName || '';
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+
+    const isInicisLinked = Boolean(
+      order.isInicisLinked ||
+      (tid !== '-' && (String(tid).startsWith('Stdpay') || String(tid).startsWith('INIMX_') || String(tid).startsWith('INI'))) ||
+      (applNum !== '-' && tid !== '-' && !String(tid).startsWith('direct_'))
+    );
+
+    return { tid, applNum, payDevice, cardName, isInicisLinked };
+  };
+
   const filteredOrders = orders.filter(order => {
+    const q = searchTerm.toLowerCase();
+    const { tid, applNum } = extractOrderPaymentDetails(order);
     const matchesSearch = 
-      order.profile?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.profile?.nickname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.profile?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.course?.title?.toLowerCase().includes(searchTerm.toLowerCase());
+      order.profile?.name?.toLowerCase().includes(q) ||
+      order.profile?.nickname?.toLowerCase().includes(q) ||
+      order.profile?.email?.toLowerCase().includes(q) ||
+      order.course?.title?.toLowerCase().includes(q) ||
+      order.merchant_uid?.toLowerCase().includes(q) ||
+      tid.toLowerCase().includes(q) ||
+      applNum.toLowerCase().includes(q);
     
     return !!matchesSearch;
   });
@@ -270,24 +316,7 @@ export default function AdminSalesManagement() {
 
     try {
       const excelData = filteredOrders.map((order, index) => {
-        // Parse tid and approval code from logs
-        let tid = '-';
-        let applNum = '-';
-        if (order.logs && order.logs.length > 0) {
-          const successLog = order.logs.find((l: any) => l.status === 'SUCCESS') || order.logs[0];
-          if (successLog && successLog.raw_response) {
-            try {
-              const rawRes = successLog.raw_response;
-              const parsed = typeof rawRes === 'string' ? JSON.parse(rawRes) : rawRes;
-              const rawObj = parsed.details || parsed;
-              
-              tid = rawObj.tid || rawObj.TID || rawObj.AuthTID || rawObj.payment_tid || rawObj.P_TID || '-';
-              applNum = rawObj.applNum || rawObj.applNo || rawObj.AuthCode || rawObj.applCode || rawObj.P_AUTH_NO || rawObj.appl_num || '-';
-            } catch (e) {
-              // ignore
-            }
-          }
-        }
+        const { tid, applNum, payDevice, cardName, isInicisLinked } = extractOrderPaymentDetails(order);
 
         const formattedDate = order.created_at 
           ? format(new Date(order.created_at), 'yyyy-MM-dd HH:mm:ss', { locale: ko })
@@ -297,8 +326,10 @@ export default function AdminSalesManagement() {
           'No': index + 1,
           '결제일시': formattedDate,
           '주문번호 (Merchant UID)': order.merchant_uid || order.id?.split('-')[0] || '-',
+          'PG 연동 여부': isInicisLinked ? `KG이니시스 연동 (${payDevice === 'MOBILE' ? '모바일' : 'PC'})` : '수동/기타',
           '승인 거래번호 (TID)': tid,
           '승인번호': applNum,
+          '카드사/결제수단 상세': cardName || order.payment_method || 'CARD',
           '구매자 실명': order.profile?.name || '-',
           '구매자 닉네임': order.profile?.nickname || '-',
           '구매자 이메일': order.profile?.email || '-',
@@ -465,7 +496,7 @@ export default function AdminSalesManagement() {
             <div className="flex-1 relative">
               <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <Input 
-                placeholder="회원 이름, 이메일, 또는 강의 제목으로 조회..." 
+                placeholder="회원 이름, 이메일, 강의 제목, 주문번호, 승인번호(TID)로 조회..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="h-14 pl-12 rounded-2xl border-gray-100 bg-gray-50 focus:bg-white font-bold transition-all"
@@ -514,27 +545,7 @@ export default function AdminSalesManagement() {
                 </tr>
               ) : filteredOrders.length > 0 ? (
                 filteredOrders.map((order, idx) => {
-                  // Parse tid and approval code from logs
-                  let tid = '-';
-                  let applNum = '-';
-                  if (order.logs && order.logs.length > 0) {
-                    const successLog = order.logs.find((l: any) => l.status === 'SUCCESS') || order.logs[0];
-                    if (successLog && successLog.raw_response) {
-                      try {
-                        const rawRes = successLog.raw_response;
-                        const parsed = typeof rawRes === 'string' ? JSON.parse(rawRes) : rawRes;
-                        const rawObj = parsed.details || parsed;
-                        
-                        // Extract Transaction ID (TID)
-                        tid = rawObj.tid || rawObj.TID || rawObj.AuthTID || rawObj.payment_tid || rawObj.P_TID || '-';
-                        
-                        // Extract Approval Number (승인번호)
-                        applNum = rawObj.applNum || rawObj.applNo || rawObj.AuthCode || rawObj.applCode || rawObj.P_AUTH_NO || rawObj.appl_num || '-';
-                      } catch (e) {
-                        // ignore parsing error
-                      }
-                    }
-                  }
+                  const { tid, applNum, payDevice, cardName, isInicisLinked } = extractOrderPaymentDetails(order);
 
                   // purchaser formatting: name + nickname
                   const realName = order.profile?.name || '';
@@ -555,14 +566,32 @@ export default function AdminSalesManagement() {
                         <div className="font-bold text-gray-900">{format(new Date(order.created_at), 'yyyy-MM-dd', { locale: ko })}</div>
                         <div className="text-[10px] text-gray-400 italic mt-0.5">{format(new Date(order.created_at), 'HH:mm:ss', { locale: ko })}</div>
                       </td>
-                      <td className="p-4 font-mono font-medium text-gray-600 break-all max-w-[150px]">
-                        {order.merchant_uid || order.id.split('-')[0]}
+                      <td className="p-4 font-mono font-medium text-gray-600 break-all max-w-[160px]">
+                        <div>{order.merchant_uid || order.id.split('-')[0]}</div>
+                        {isInicisLinked ? (
+                          <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            이니시스 연동 {payDevice === 'MOBILE' ? '(모바일)' : payDevice === 'PC' ? '(PC)' : ''}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-gray-100 text-gray-500">
+                            수동/기타 처리
+                          </span>
+                        )}
                       </td>
-                      <td className="p-4 font-mono text-gray-500 font-medium break-all max-w-[180px]">
-                        {tid}
+                      <td className="p-4 font-mono text-gray-500 font-medium break-all max-w-[190px]">
+                        <div className="text-[11px] text-gray-700">{tid}</div>
+                        {cardName && (
+                          <div className="text-[10px] text-gray-400 font-sans mt-0.5">{cardName}</div>
+                        )}
                       </td>
-                      <td className="p-4 font-mono text-gray-500 font-bold">
-                        {applNum}
+                      <td className="p-4 font-mono">
+                        {applNum !== '-' ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 font-black text-xs border border-purple-200 tracking-tight">
+                            {applNum}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 font-bold">-</span>
+                        )}
                       </td>
                       <td className="p-4">
                         <div className="font-extrabold text-gray-900">{purchaserText}</div>

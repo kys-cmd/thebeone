@@ -190,16 +190,16 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 py-32">
+    <div className="min-h-[calc(100dvh-3.5rem)] bg-gray-50 flex items-center justify-center px-4 py-8 sm:py-20">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-[600px] bg-white rounded-[40px] shadow-2xl border border-gray-100 p-10 md:p-14 space-y-12"
+        className="w-full max-w-[600px] bg-white rounded-3xl sm:rounded-[40px] shadow-xl sm:shadow-2xl border border-gray-100 p-6 sm:p-10 md:p-14 space-y-7 sm:space-y-12"
       >
         {/* Header */}
-        <div className="text-center space-y-4">
-          <h1 className="text-4xl font-black tracking-tighter text-gray-900">새로운 여정의 시작</h1>
-          <p className="text-gray-400 font-medium">단 1분이면 비원아카데미의 모든 혜택을 누릴 수 있습니다.</p>
+        <div className="text-center space-y-2.5 sm:space-y-4">
+          <h1 className="text-2xl sm:text-4xl font-black tracking-tighter text-gray-900">새로운 여정의 시작</h1>
+          <p className="text-xs sm:text-base text-gray-400 font-medium break-keep">단 1분이면 비원아카데미의 모든 혜택을 누릴 수 있습니다.</p>
         </div>
 
         {/* Social SSO Action */}
@@ -275,8 +275,8 @@ export default function Register() {
         </div>
 
         {/* Detailed Form */}
-        <form onSubmit={handleRegister} className="space-y-8">
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
+        <form onSubmit={handleRegister} className="space-y-6 sm:space-y-8">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5 sm:gap-y-8">
               <div className="space-y-2">
                  <Label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Email (ID)</Label>
                  <Input 
@@ -389,16 +389,16 @@ export default function Register() {
               </div>
            </div>
 
-           <div className="bg-purple-50 p-6 rounded-3xl space-y-3">
-              <div className="flex items-center gap-2 text-purple-600 font-black text-sm">
-                <Info className="w-4 h-4" /> 이용약관 고지
+           <div className="bg-purple-50 p-4 sm:p-6 rounded-2xl sm:rounded-3xl space-y-2 sm:space-y-3">
+              <div className="flex items-center gap-2 text-purple-600 font-black text-xs sm:text-sm">
+                <Info className="w-4 h-4 shrink-0" /> 이용약관 고지
               </div>
-              <p className="text-xs text-gray-500 font-medium leading-relaxed">
+              <p className="text-xs text-gray-500 font-medium leading-relaxed break-keep">
                 가입 시 비원아카데미의 서비스 이용약관 및 개인정보 처리방침에 동의하는 것으로 간주합니다. 입력하신 정보는 본인 확인 및 서비스 제공을 위해 안전하게 보호됩니다.
               </p>
            </div>
 
-           <Button type="submit" disabled={loading} className="w-full h-18 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200 py-6">
+           <Button type="submit" disabled={loading} className="w-full h-14 sm:h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-base sm:text-xl rounded-2xl shadow-xl shadow-purple-200">
              {loading ? '처리 중...' : '회원가입 완료하기'}
            </Button>
 

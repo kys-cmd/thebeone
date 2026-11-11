@@ -38,7 +38,7 @@ function decodePercentBytes(str: string): string {
 
 function decodeBuffer(buf: Buffer): Record<string, string> {
   const result: Record<string, string> = {};
-  const bodyStr = buf.toString("ascii");
+  const bodyStr = buf.toString("latin1");
   const pairs = bodyStr.split("&");
   for (const pair of pairs) {
     const eqIdx = pair.indexOf("=");
@@ -81,23 +81,31 @@ export const handler: Handler = async (event) => {
   let timestamp = "";
   let authSignature = "";
 
-  // 기본 리디렉션 주소 설정 (환경에 따라 구성 및 localhost 우회)
+  // 기본 리디렉션 주소 설정 (요청 헤더 및 환경 변수 기반 동적 결정)
   const getSecurePublicUrl = (md: string | null | undefined) => {
-    const DEV_URL = "https://ais-dev-qbvit3fpjqe4xthteyekz2-553123300253.asia-northeast1.run.app";
-    const PRE_URL = "https://ais-pre-qbvit3fpjqe4xthteyekz2-553123300253.asia-northeast1.run.app";
-
     const candidates: string[] = [];
     if (md) candidates.push(md);
-    
-    const fUrl = process.env.APP_URL || process.env.VITE_APP_URL;
+
+    const fUrl = process.env.APP_URL || process.env.VITE_APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL;
     if (fUrl) candidates.push(fUrl);
+
+    if (event.headers) {
+      const forwardedHost = event.headers["x-forwarded-host"] || event.headers["host"];
+      const forwardedProto = event.headers["x-forwarded-proto"] || "https";
+      if (forwardedHost) {
+        candidates.push(`${forwardedProto}://${forwardedHost}`);
+      }
+      if (event.headers["origin"]) {
+        candidates.push(event.headers["origin"]);
+      }
+      if (event.headers["referer"]) {
+        candidates.push(event.headers["referer"]);
+      }
+    }
 
     for (const candidate of candidates) {
       if (!candidate || typeof candidate !== "string") continue;
-      let clean = candidate.trim();
-      if (clean.endsWith("/")) {
-        clean = clean.slice(0, -1);
-      }
+      const clean = candidate.trim().replace(/\/+$/, "");
       if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
         continue;
       }
@@ -110,16 +118,13 @@ export const handler: Handler = async (event) => {
         if (hostname.includes("MY_APP_URL") || hostname.includes("your-project") || hostname.includes("inicis.com") || hostname.includes("toss")) {
           continue;
         }
-        return clean;
-      } catch (e) {
+        return `${parsed.protocol}//${parsed.host}`;
+      } catch {
         // ignore
       }
     }
 
-    if (md && md.includes("ais-pre")) {
-      return PRE_URL;
-    }
-    return DEV_URL;
+    return "";
   };
 
   if (supabaseAdmin) {
@@ -161,6 +166,29 @@ export const handler: Handler = async (event) => {
         statusCode: 302,
         headers: {
           "Location": `${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent(P_RMESG1 || "모바일 인증 과정 오류")}&oid=${oid || ""}&resultCode=${P_STATUS || "UNKNOWN"}`
+        },
+        body: ""
+      };
+    }
+
+    let isVerifiedMobileDomain = false;
+    try {
+      const parsedReqUrl = new URL(P_REQ_URL);
+      if (parsedReqUrl.protocol === "https:" || parsedReqUrl.protocol === "http:") {
+        isVerifiedMobileDomain =
+          parsedReqUrl.hostname === "inicis.com" ||
+          parsedReqUrl.hostname.endsWith(".inicis.com");
+      }
+    } catch {
+      isVerifiedMobileDomain = false;
+    }
+
+    if (!isVerifiedMobileDomain) {
+      console.error("[INICIS-RETURN] Unverified P_REQ_URL domain:", P_REQ_URL);
+      return {
+        statusCode: 302,
+        headers: {
+          "Location": `${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent("위변조가 의심되는 결제 게이트웨이 도메인입니다.")}&oid=${oid || ""}&resultCode=UNVERIFIED_GATEWAY`
         },
         body: ""
       };
@@ -212,17 +240,31 @@ export const handler: Handler = async (event) => {
         };
       }
 
+      const mobileAuthNo = (
+        appRes.P_AUTH_NO ||
+        appRes.P_AUTH_NUM ||
+        appRes.applNum ||
+        appRes.applNo ||
+        inicisData.P_AUTH_NO ||
+        inicisData.P_AUTH_NUM ||
+        ""
+      ).trim();
       authResponseData = {
         resultCode: "0000",
         resultMsg: finalMsg,
         TotPrice: finalAmt,
         payMethod: appRes.P_TYPE || "CARD",
         TID: appRes.P_TID || P_TID,
+        tid: appRes.P_TID || P_TID,
         mid: mid,
         MOID: finalApprovedOid,
-        applNum: appRes.P_AUTH_NO || appRes.P_AUTH_NUM || "",
-        applNo: appRes.P_AUTH_NO || appRes.P_AUTH_NUM || "",
-        P_AUTH_NO: appRes.P_AUTH_NO || appRes.P_AUTH_NUM || ""
+        applNum: mobileAuthNo,
+        applNo: mobileAuthNo,
+        P_AUTH_NO: mobileAuthNo,
+        P_FN_NM: appRes.P_FN_NM || "",
+        P_CARD_NUM: appRes.P_CARD_NUM || "",
+        P_AUTH_DT: appRes.P_AUTH_DT || "",
+        payDevice: "MOBILE"
       };
       oid = finalApprovedOid;
 
@@ -351,6 +393,19 @@ export const handler: Handler = async (event) => {
       const resJsonText = await response.text();
       console.log("[INICIS-RETURN] 승인 응답 원본 텍스트:", resJsonText);
       authResponseData = JSON.parse(resJsonText);
+      if (authResponseData && typeof authResponseData === "object") {
+        const pcApplNum = (
+          authResponseData.applNum ||
+          authResponseData.CARD_ApplNum ||
+          authResponseData.applNo ||
+          authResponseData.P_AUTH_NO ||
+          authResponseData.AuthCode ||
+          ""
+        ).toString().trim();
+        authResponseData.applNum = pcApplNum;
+        authResponseData.TID = authResponseData.tid || authResponseData.TID || "";
+        authResponseData.payDevice = "PC";
+      }
 
     } catch (apiErr: any) {
       console.error("[INICIS-RETURN] 승인 API 호출 오류 발생 -> 즉시 망취소 수행:", apiErr);
@@ -487,6 +542,17 @@ export const handler: Handler = async (event) => {
       .eq("merchant_uid", oid);
 
     if (updateError) throw updateError;
+
+    // Clean up any leftover PENDING cart orders for the same user & course
+    if (orderData.user_id && orderData.course_id) {
+      await supabaseAdmin
+        .from("orders")
+        .delete()
+        .eq("user_id", orderData.user_id)
+        .eq("course_id", orderData.course_id)
+        .eq("status", "PENDING")
+        .neq("merchant_uid", oid);
+    }
 
     // D. 유실 방지를 위한 결제 성공 로그(payment_logs) 추가 기록
     try {

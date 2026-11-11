@@ -41,7 +41,9 @@ export default function LearningPlayer() {
   const [course, setCourse] = useState<Course | null>(null);
   const [activeItem, setActiveItem] = useState<CurriculumItem | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
 
   // Lesson progress tracking states
   const [completedLessons, setCompletedLessons] = useState<Set<string>>(new Set());
@@ -532,23 +534,27 @@ export default function LearningPlayer() {
   return (
     <div className="min-h-[100dvh] bg-black flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="h-14 md:h-16 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-4 md:px-6 shrink-0 z-50">
-        <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
-          <Link to="/mypage" className="text-gray-400 hover:text-white transition-colors shrink-0">
+      <header className="h-14 md:h-16 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-3 md:px-6 shrink-0 z-50">
+        <div className="flex items-center gap-1.5 md:gap-4 overflow-hidden min-w-0">
+          <Link
+            to="/mypage"
+            className="text-gray-300 hover:text-white transition-colors shrink-0 h-10 w-10 flex items-center justify-center rounded-xl hover:bg-gray-800"
+            aria-label="마이페이지로 돌아가기"
+          >
             <ChevronLeft className="w-5 h-5 md:w-6 md:h-6" />
           </Link>
-          <div className="h-4 w-[1px] bg-gray-700 mx-1 md:mx-2 shrink-0" />
-          <h1 className="text-white font-black text-xs md:text-base line-clamp-1">{course.title}</h1>
+          <div className="h-4 w-[1px] bg-gray-700 mr-1 md:mx-2 shrink-0" />
+          <h1 className="text-white font-black text-xs sm:text-sm md:text-base line-clamp-1">{course.title}</h1>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button 
             variant="ghost" 
-            size="icon" 
-            className="text-gray-400 hover:text-white h-8 w-8"
+            className="text-gray-200 hover:text-white hover:bg-gray-800 h-10 px-3 rounded-xl font-bold text-xs gap-1.5"
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           >
-            <Menu className="w-5 h-5 md:w-6 md:h-6" />
+            <Menu className="w-4 h-4 md:w-5 md:h-5" />
+            <span>목차</span>
           </Button>
         </div>
       </header>

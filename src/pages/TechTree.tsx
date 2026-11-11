@@ -50,7 +50,7 @@ export default function TechTreePage() {
               <span className="text-purple-600">서비스 준비 중</span>
             </h1>
             <p className="text-gray-500 font-bold text-lg leading-relaxed max-w-md mx-auto">
-              당신만의 압도적인 재테크 로드맵을 그려줄 AI 기반 <br className="hidden md:block" /> 
+              당신만의 압도적인 재테크 로드맵을 그려줄 체계적인 맞춤형 <br className="hidden md:block" /> 
               자본주의 테크트리 서비스가 곧 공개됩니다.
             </p>
           </div>

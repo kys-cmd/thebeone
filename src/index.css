@@ -4,14 +4,19 @@
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
-/* Utilities for tabs scroll */
+/* Utilities for horizontal scroll & mobile safe-area */
 @layer utilities {
-  .scrollbar-hide::-webkit-scrollbar {
+  .scrollbar-hide::-webkit-scrollbar,
+  .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
-  .scrollbar-hide {
+  .scrollbar-hide,
+  .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
 

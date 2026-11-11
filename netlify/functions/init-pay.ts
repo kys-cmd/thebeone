@@ -34,9 +34,9 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    const { price, oid, timestamp, userId, courseId, orderName } = JSON.parse(event.body || "{}");
+    const { price, oid, timestamp, userId, courseId, orderName, mileageUsed } = JSON.parse(event.body || "{}");
 
-    if (!price || !oid || !timestamp) {
+    if (price === undefined || price === null || !oid || !timestamp) {
       return {
         statusCode: 400,
         headers: { "Access-Control-Allow-Origin": allowedOrigin },
@@ -44,26 +44,88 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    // 1. 혹시 orders 데이터베이스에 매칭되는 결제 대기가 없을 시 선제 생성 (상태: PENDING)
+    let verifiedPrice = Number(price);
+    let safeMileageUsed = Math.max(0, Number(mileageUsed) || 0);
+
+    // 1. 강의 실제 가격 및 사용자 보유 마일리지 검증 + PENDING 주문 연동
     if (supabaseAdmin && userId && courseId) {
       try {
-        // 기존 동일 oid(merchant_uid)가 있는지 확인하고 없으면 신규 생성
-        const { data: existing } = await supabaseAdmin
+        const [{ data: courseData }, { data: profileData }] = await Promise.all([
+          supabaseAdmin.from("courses").select("id, price, title").eq("id", courseId).maybeSingle(),
+          supabaseAdmin.from("profiles").select("mileage").eq("id", userId).maybeSingle()
+        ]);
+
+        if (courseData && Number(courseData.price) > 0) {
+          const coursePrice = Number(courseData.price);
+          const availableMileage = Math.max(0, Number(profileData?.mileage) || 0);
+          if (safeMileageUsed > availableMileage) {
+            return {
+              statusCode: 400,
+              headers: { "Access-Control-Allow-Origin": allowedOrigin },
+              body: JSON.stringify({ status: "error", message: "보유한 마일리지를 초과하여 사용할 수 없습니다." }),
+            };
+          }
+          safeMileageUsed = Math.min(safeMileageUsed, coursePrice);
+          const expectedPrice = Math.max(0, coursePrice - safeMileageUsed);
+          if (verifiedPrice !== expectedPrice) {
+            return {
+              statusCode: 400,
+              headers: { "Access-Control-Allow-Origin": allowedOrigin },
+              body: JSON.stringify({ status: "error", message: "결제 요청 금액이 실제 강의 금액과 일치하지 않습니다." }),
+            };
+          }
+          verifiedPrice = expectedPrice;
+        }
+
+        const { data: existingByOid } = await supabaseAdmin
           .from("orders")
           .select("id")
           .eq("merchant_uid", oid)
           .maybeSingle();
 
-        if (!existing) {
-          await supabaseAdmin.from("orders").insert([{
-            user_id: userId,
-            course_id: courseId,
-            amount: Number(price),
-            status: "PENDING",
-            order_name: orderName || "온라인 강좌 수강권 구매",
-            merchant_uid: oid,
-            created_at: new Date().toISOString()
-          }]);
+        if (existingByOid) {
+          await supabaseAdmin
+            .from("orders")
+            .update({
+              amount: verifiedPrice,
+              mileage_used: safeMileageUsed,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", existingByOid.id);
+        } else {
+          const { data: existingPending } = await supabaseAdmin
+            .from("orders")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("course_id", courseId)
+            .eq("status", "PENDING")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (existingPending) {
+            await supabaseAdmin
+              .from("orders")
+              .update({
+                merchant_uid: oid,
+                amount: verifiedPrice,
+                mileage_used: safeMileageUsed,
+                order_name: orderName || courseData?.title || "온라인 강좌 수강권 구매",
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", existingPending.id);
+          } else {
+            await supabaseAdmin.from("orders").insert([{
+              user_id: userId,
+              course_id: courseId,
+              amount: verifiedPrice,
+              status: "PENDING",
+              order_name: orderName || courseData?.title || "온라인 강좌 수강권 구매",
+              merchant_uid: oid,
+              mileage_used: safeMileageUsed,
+              created_at: new Date().toISOString()
+            }]);
+          }
         }
       } catch (dbErr: any) {
         console.error("초기 주문 테이블 생성(PENDING) 에러:", dbErr.message);

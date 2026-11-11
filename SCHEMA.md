@@ -1,6 +1,6 @@
 # Supabase DB Schema Design (PostgreSQL)
 
-이 프로젝트는 패스트캠퍼스 스타일의 교육 플랫폼과 커뮤니티 연동을 위해 다음과 같은 데이터베이스 스키마를 사용합니다.
+이 프로젝트는 비원아카데미(BE ONE) 교육 플랫폼과 커뮤니티 연동을 위해 다음과 같은 데이터베이스 스키마를 사용합니다.
 
 ## 1. Profiles (사용자 프로필)
 - `id`: UUID (auth.users 참조, PK)

@@ -19,14 +19,9 @@ import {
   ShieldCheck, 
   Mail, 
   Key,
-  Eye,
-  EyeOff,
   Upload,
   Image as ImageIcon,
   Loader2,
-  Building2,
-  Zap,
-  FileUp,
   CheckCircle2,
   AlertCircle,
   CreditCard
@@ -75,7 +70,6 @@ const PAYMENT_METHODS_DIRECT = [
 ];
 
 export default function AdminSystemSettings() {
-  const [showApiKey, setShowApiKey] = useState(false);
   const [config, setConfig] = useState<SiteConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -355,29 +349,40 @@ export default function AdminSystemSettings() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Key className="w-5 h-5 text-amber-600" />
-                <CardTitle>API 및 외부 SDK 연동</CardTitle>
+                <CardTitle>외부 인프라 및 서비스 연동</CardTitle>
               </div>
-              <CardDescription>Gemini, Supabase 등 핵심 서비스 인증 키를 관리합니다.</CardDescription>
+              <CardDescription>데이터베이스, 미디어 스트리밍, 메일 발송 등 핵심 외부 연동 현황을 확인합니다. 민감한 인증 키는 서버 환경 변수에서 안전하게 관리됩니다.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-2">
-                <Label>Gemini API Key</Label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Input 
-                      type={showApiKey ? "text" : "password"} 
-                      defaultValue="AIzaSyA_example_key_123456789" 
-                      readOnly
-                    />
-                    <button 
-                      onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gray-900"
-                    >
-                      {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <Button variant="outline">재발급 요청</Button>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-gray-900">Supabase (DB / Auth / Storage)</p>
+                  <p className="text-xs text-muted-foreground">회원 인증, 강의 데이터 및 스토리지 연동</p>
                 </div>
+                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">연동됨</span>
+              </div>
+              <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-gray-900">Vimeo / YouTube 플레이어</p>
+                  <p className="text-xs text-muted-foreground">온라인 강의 및 라이브 스트리밍 임베드</p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">연동됨</span>
+              </div>
+              <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-gray-900">KG 이니시스 전자결제 (PG)</p>
+                  <p className="text-xs text-muted-foreground">PC 표준결제 및 모바일 스마트결제 연동</p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                  {paymentSettings.pg_mode === 'live' ? '실운영 모드' : '테스트 모드'}
+                </span>
+              </div>
+              <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-gray-900">SMTP 이메일 인증 발송</p>
+                  <p className="text-xs text-muted-foreground">비밀번호 재설정 OTP 및 시스템 알림 발송</p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">서버 환경 설정</span>
               </div>
             </CardContent>
           </Card>

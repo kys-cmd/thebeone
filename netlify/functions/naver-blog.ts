@@ -5,7 +5,8 @@ const parser = new Parser();
 
 export const handler: Handler = async (event) => {
   try {
-    const blogId = event.queryStringParameters?.blogId || "thebeone";
+    const rawBlogId = event.queryStringParameters?.blogId || "thebeone";
+    const blogId = /^[a-zA-Z0-9_-]{1,50}$/.test(rawBlogId) ? rawBlogId : "thebeone";
     console.log(`Fetching Naver Blog RSS for: ${blogId}`);
 
     const feed = await parser.parseURL(`https://rss.blog.naver.com/${blogId}.xml`);

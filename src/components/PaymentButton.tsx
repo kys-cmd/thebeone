@@ -18,9 +18,10 @@ interface PaymentButtonProps {
     name: string;
     phone?: string;
   } | null;
+  compact?: boolean;
 }
 
-export const PaymentButton: React.FC<PaymentButtonProps> = ({ lecture, user }) => {
+export const PaymentButton: React.FC<PaymentButtonProps> = ({ lecture, user, compact = false }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState<boolean>(false);
   const [isPaymentEnabled, setIsPaymentEnabled] = useState<boolean>(() => {
@@ -99,7 +100,7 @@ export const PaymentButton: React.FC<PaymentButtonProps> = ({ lecture, user }) =
         
         window.dispatchEvent(new Event('cart-updated'));
         
-        toast.success('수강 바구니에 성공적으로 담겼습니다! 결제선택 단계로 안내합니다. 🎉', {
+        toast.success('수강 바구니에 담겼습니다. 결제 페이지로 이동합니다.', {
           position: 'top-center'
         });
       }
@@ -107,7 +108,7 @@ export const PaymentButton: React.FC<PaymentButtonProps> = ({ lecture, user }) =
       // 4. Navigate smoothly to Cart
       setTimeout(() => {
         navigate('/cart');
-      }, 500);
+      }, 400);
 
     } catch (err: any) {
       console.error('Cart Insertion Error:', err);
@@ -116,6 +117,28 @@ export const PaymentButton: React.FC<PaymentButtonProps> = ({ lecture, user }) =
       setLoading(false);
     }
   };
+
+  if (compact) {
+    return (
+      <Button
+        onClick={handleAddToCart}
+        disabled={loading}
+        className="w-full h-12 text-sm sm:text-base font-extrabold bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-md shadow-purple-200/70 transition-all active:scale-[0.98] flex items-center justify-center gap-2 whitespace-nowrap"
+      >
+        {loading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            담는 중...
+          </>
+        ) : (
+          <>
+            <ShoppingCart className="h-4 w-4" />
+            수강 신청하기
+          </>
+        )}
+      </Button>
+    );
+  }
 
   return (
     <div className="space-y-2 w-full">

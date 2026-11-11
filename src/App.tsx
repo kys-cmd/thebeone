@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useEffect, lazy, Suspense } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Toaster } from '@/components/ui/sonner';
@@ -15,11 +15,11 @@ import CommunityPage from './pages/Community';
 import Courses from './pages/Courses';
 import SpecialLectures from './pages/SpecialLectures';
 import BeOneExclusive from './pages/BeOneExclusive';
+import MembershipPage from './pages/Membership';
 import LifeCoaching from './pages/LifeCoaching';
 import LivePage from './pages/Live';
 import TechTreePage from './pages/TechTree';
 import ChatPage from './pages/Chat';
-import AdminCourseEditor from './pages/admin/CourseEditor';
 import AboutPage from './pages/About';
 import MyPage from './pages/MyPage';
 import LearningPlayer from './pages/LearningPlayer';
@@ -40,24 +40,24 @@ import TermsPage from './pages/legal/Terms';
 import PrivacyPage from './pages/legal/Privacy';
 
 import AdminLayout from './components/layout/AdminLayout';
-import MobileBottomNav from './components/layout/MobileBottomNav';
-import AdminDashboard from './pages/admin/Dashboard';
-import AdminCourseManagement from './pages/admin/CourseManagement';
-import AdminCMS from './pages/admin/CMS';
-import AdminUserManagement from './pages/admin/UserManagement';
-import AdminStudentManagement from './pages/admin/StudentManagement';
-import AdminCommunityManagement from './pages/admin/CommunityManagement';
-import AdminCommunityEditor from './pages/admin/CommunityEditor';
-import AdminStatistics from './pages/admin/Statistics';
-import AdminSystemSettings from './pages/admin/SystemSettings';
-import AdminSalesManagement from './pages/admin/SalesManagement';
-import AdminInstructorManagement from './pages/admin/InstructorManagement';
-import AdminReviewManagement from './pages/admin/ReviewManagement';
-import AdminSupportInquiries from './pages/admin/SupportInquiries';
-import AdminErrorLogs from './pages/admin/ErrorLogs';
-import AdminFontDemo from './pages/admin/FontDemo';
-import AdminLiveManagement from './pages/admin/LiveManagement';
-import { Outlet } from 'react-router-dom';
+
+const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
+const AdminCourseManagement = lazy(() => import('./pages/admin/CourseManagement'));
+const AdminCourseEditor = lazy(() => import('./pages/admin/CourseEditor'));
+const AdminCMS = lazy(() => import('./pages/admin/CMS'));
+const AdminUserManagement = lazy(() => import('./pages/admin/UserManagement'));
+const AdminStudentManagement = lazy(() => import('./pages/admin/StudentManagement'));
+const AdminCommunityManagement = lazy(() => import('./pages/admin/CommunityManagement'));
+const AdminCommunityEditor = lazy(() => import('./pages/admin/CommunityEditor'));
+const AdminStatistics = lazy(() => import('./pages/admin/Statistics'));
+const AdminSystemSettings = lazy(() => import('./pages/admin/SystemSettings'));
+const AdminSalesManagement = lazy(() => import('./pages/admin/SalesManagement'));
+const AdminInstructorManagement = lazy(() => import('./pages/admin/InstructorManagement'));
+const AdminReviewManagement = lazy(() => import('./pages/admin/ReviewManagement'));
+const AdminSupportInquiries = lazy(() => import('./pages/admin/SupportInquiries'));
+const AdminSystemDiagnostics = lazy(() => import('./pages/admin/SystemDiagnostics'));
+const AdminFontDemo = lazy(() => import('./pages/admin/FontDemo'));
+const AdminLiveManagement = lazy(() => import('./pages/admin/LiveManagement'));
 
 /**
  * 기본정보 입력을 마치지 않은 회원도 접근할 수 있어야 하는 경로.
@@ -159,14 +159,11 @@ function PublicLayout() {
       <div className={isDedicatedMobileView ? "hidden md:block" : "block"}>
         <Header />
       </div>
-      <main className={`flex-1 ${isDedicatedMobileView ? "pb-0 flex flex-col" : "pb-16 md:pb-0"}`}>
+      <main className="flex-1 flex flex-col">
         <Outlet />
       </main>
       <div className={isDedicatedMobileView ? "hidden md:block" : "block"}>
         <Footer />
-      </div>
-      <div className={isDedicatedMobileView ? "hidden md:block" : "block"}>
-        <MobileBottomNav />
       </div>
     </>
   );
@@ -225,16 +222,10 @@ export default function App() {
 
     return () => {
       mounted = false;
+      clearTimeout(loadingTimeout);
       subscription.unsubscribe();
     };
   }, [setUser, setLoading]);
-
-  const isPopup = typeof window !== 'undefined' && (
-    window.location.pathname === '/chat' ||
-    new URLSearchParams(window.location.search).get('popup') === 'true' ||
-    sessionStorage.getItem('is_popup_chat') === 'true' ||
-    window.name === 'BOneChatWindow'
-  );
 
   return (
     <Router>
@@ -254,6 +245,11 @@ function AppContent() {
 
   return (
     <div className={isPopup ? "w-screen h-screen overflow-hidden flex flex-col font-sans antialiased bg-white" : "flex min-h-screen flex-col font-sans antialiased"}>
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 font-bold text-purple-600">
+          페이지를 불러오는 중...
+        </div>
+      }>
       <Routes>
         {/* Admin Routes */}
         <Route path="/admin" element={
@@ -281,7 +277,8 @@ function AppContent() {
           <Route path="stats" element={<AdminStatistics />} />
           <Route path="settings" element={<AdminSystemSettings />} />
           <Route path="support" element={<AdminSupportInquiries />} />
-          <Route path="errors" element={<AdminErrorLogs />} />
+          <Route path="diagnostics" element={<AdminSystemDiagnostics />} />
+          <Route path="errors" element={<AdminSystemDiagnostics />} />
           <Route path="font-demo" element={<AdminFontDemo />} />
         </Route>
 
@@ -299,6 +296,7 @@ function AppContent() {
           <Route path="/beone" element={<BeOneExclusive />} />
           <Route path="/live" element={<LivePage />} />
           <Route path="/live/:id" element={<LivePage />} />
+          <Route path="/membership" element={<MembershipPage />} />
           <Route path="/techtree" element={<TechTreePage />} />
           <Route path="/lifecoaching" element={<LifeCoaching />} />
           <Route path="/course/:id" element={<CourseDetail />} />
@@ -328,6 +326,7 @@ function AppContent() {
           <Route path="*" element={<Home />} />
         </Route>
       </Routes>
+      </Suspense>
       <Toaster position="top-center" richColors />
       {!isPopup && <FloatingChat />}
     </div>

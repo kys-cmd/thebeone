@@ -29,6 +29,8 @@ export function useInicisPay() {
     script.id = "inicis-stdpay-script";
     script.src = "https://stdpay.inicis.com/stdjs/INIStdPay.js";
     script.type = "text/javascript";
+    script.charset = "UTF-8";
+    script.setAttribute("charset", "UTF-8");
     script.async = true;
     script.onload = () => {
       console.log("[INICIS-SDK] Standard Pay Web Library successfully loaded.");
@@ -105,20 +107,15 @@ export function useInicisPay() {
 
       const { signature, mKey, mid } = initResult;
 
-      // 3) 도메인 Host 정보 획득 및 리턴 URL 조합 (localhost 우회 및 클라우드 외부 도메인 확보)
+      // 3) 도메인 Host 정보 획득 및 리턴 URL 조합
       const getFrontendRootUrl = () => {
-        const devUrl = "https://ais-dev-qbvit3fpjqe4xthteyekz2-553123300253.asia-northeast1.run.app";
-        const preUrl = "https://ais-pre-qbvit3fpjqe4xthteyekz2-553123300253.asia-northeast1.run.app";
         const originUrl = window.location.origin;
         const envAppUrl = (typeof process !== "undefined" && process?.env?.APP_URL) || import.meta.env?.VITE_APP_URL;
 
-        const candidates = [envAppUrl, originUrl, document.referrer];
+        const candidates = [originUrl, envAppUrl, document.referrer];
         for (const candidate of candidates) {
           if (!candidate || typeof candidate !== "string") continue;
-          let cleanUrl = candidate.trim();
-          if (cleanUrl.endsWith("/")) {
-            cleanUrl = cleanUrl.slice(0, -1);
-          }
+          const cleanUrl = candidate.trim().replace(/\/+$/, "");
           if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
             continue;
           }
@@ -128,16 +125,13 @@ export function useInicisPay() {
             if (hostname === "localhost" || hostname === "127.0.0.1" || hostname.includes("localhost") || hostname.includes("MY_APP_URL")) {
               continue;
             }
-            return cleanUrl;
-          } catch (e) {
+            return `${parsed.protocol}//${parsed.host}`;
+          } catch {
             // ignore
           }
         }
 
-        if (window.location.href.includes("ais-pre") || document.referrer.includes("ais-pre") || window.location.host.includes("ais-pre")) {
-          return preUrl;
-        }
-        return devUrl;
+        return originUrl;
       };
 
       const hostOrigin = getFrontendRootUrl();
@@ -155,12 +149,17 @@ export function useInicisPay() {
       const formId = "inicis_payment_form";
       const form = document.createElement("form");
       form.id = formId;
+      form.name = formId;
       form.method = "POST";
-      form.acceptCharset = "UTF-8";
 
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
       if (isMobile) {
+        // KG이니시스 모바일 결제(https://mobile.inicis.com/smart/payment/)는 요청 파라미터(P_GOODS, P_UNAME 등)를
+        // 반드시 EUC-KR 인코딩(accept-charset="euc-kr")으로 수신합니다. (UTF-8로 전송 시 한글 깨짐 발생)
+        // 단, P_CHARSET="utf8"은 이니시스가 P_NEXT_URL로 결과를 응답할 때 UTF-8로 보내도록 지정하는 옵션입니다.
+        form.acceptCharset = "euc-kr";
+        form.setAttribute("accept-charset", "euc-kr");
         form.action = "https://mobile.inicis.com/smart/payment/";
         form.target = "_top"; // Break out of developer preview iframes to prevent browser deep-link blocks
         
@@ -176,7 +175,7 @@ export function useInicisPay() {
           P_EMAIL: params.userEmail || "user@example.com",
           P_NEXT_URL: returnUrl,
           P_NOTI: hostOrigin,
-          P_CHARSET: "utf8", // Instruct KG Inicis standard smart PG that inputs are UTF-8 encoded
+          P_CHARSET: "utf8", // Instruct KG Inicis standard smart PG to send P_NEXT_URL response in UTF-8
           P_RESERVED: "twotrs_isp=Y&block_isp=Y&twotrs_isp_noti=N"
         };
 
@@ -191,10 +190,20 @@ export function useInicisPay() {
         formContainer.appendChild(form);
         document.body.appendChild(formContainer);
 
-        console.log("[useInicisPay] Submitting Mobile payment form, redirecting to: https://mobile.inicis.com/smart/payment/");
+        try {
+          (document as any).charset = "euc-kr";
+        } catch (e) {
+          // ignore on browsers where document.charset is read-only
+        }
+
+        console.log("[useInicisPay] Submitting Mobile payment form (accept-charset=euc-kr), redirecting to: https://mobile.inicis.com/smart/payment/");
         form.submit();
         return;
       }
+
+      // PC 웹표준 결제(INIStdPay)는 UTF-8 인코딩을 사용
+      form.acceptCharset = "UTF-8";
+      form.setAttribute("accept-charset", "UTF-8");
 
       // 결제창 노출 방식 파라미터 구성
       const formFields: Record<string, string> = {
@@ -210,7 +219,7 @@ export function useInicisPay() {
         currency: "WON",
         merchantData: hostOrigin, // Robustly preserve the actual browser origin domain for S2S callback redirect matching
         
-        // UTF-8 Charset explicitly enforced to prevent broken Korean characters (e.g., ??誘명??) in emails and PG screens
+        // UTF-8 Charset explicitly enforced to prevent broken Korean characters in emails and PG screens
         charset: "UTF-8",
         g_charset: "utf-8",
 

@@ -6,23 +6,21 @@ import {
   Play, 
   Check, 
   ShieldAlert, 
-  Monitor, 
   Globe, 
   Clock, 
-  RefreshCw,
-  Terminal,
-  Bug,
-  ChevronDown,
-  ChevronUp,
-  CreditCard,
-  Layers,
-  ArrowRightLeft,
-  XCircle,
-  Database,
-  Search
+  RefreshCw, 
+  Terminal, 
+  Bug, 
+  ChevronDown, 
+  ChevronUp, 
+  CreditCard, 
+  ArrowRightLeft, 
+  XCircle, 
+  Database, 
+  Search 
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { logger, ErrorLog } from '@/lib/logger';
+import { logger, ErrorLog } from '@/lib/diagnostics';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
@@ -48,7 +46,7 @@ const PrettyJson = ({ data }: { data: any }) => {
   );
 };
 
-export default function ErrorLogs() {
+export default function SystemDiagnostics() {
   const [activeTab, setActiveTab] = useState<'system' | 'payment'>('system');
   
   // 1. Client System Logs States
@@ -126,33 +124,28 @@ export default function ErrorLogs() {
     }
   }, [activeTab]);
 
-  // Copy local log to AI Studio template
-  const handleCopyToAIStudio = (log: ErrorLog) => {
+  // Copy local diagnostic log to clipboard
+  const handleCopyReport = (log: ErrorLog) => {
     const ticks = "```";
     const tick = "`";
     const markdownTemplate = `---
-[AI STUDIO DEBUGGING REPORT]
+[SYSTEM DIAGNOSTIC REPORT]
 ---
-# 🐛 오류 디버깅 요청 (Error Debugging Request)
+# 오류 진단 리포트 (System Diagnostic Report)
 
 ## 1. 에러 핵심 정보 (Core Summary)
-- 🔴 **에러 메시지**: ${log.message}
-- 📅 **발생 시간**: ${new Date(log.timestamp).toLocaleString('ko-KR')} (UTC/Local)
-- 🔗 **발생 URL**: ${log.url}
-- ⚙️ **로그 유형**: ${log.type.toUpperCase()} / Error Source
+- **에러 메시지**: ${log.message}
+- **발생 시간**: ${new Date(log.timestamp).toLocaleString('ko-KR')} (UTC/Local)
+- **발생 URL**: ${log.url}
+- **로그 유형**: ${log.type.toUpperCase()} / Error Source
 
 ## 2. 브라우저 및 기기 환경 (Diagnostic Environment)
-- 💻 **상세 정보 (User Agent)**: ${tick}${log.userAgent}${tick}
+- **상세 정보 (User Agent)**: ${tick}${log.userAgent}${tick}
 
 ## 3. 에러 추적 스택트레이스 (Error Stack Trace)
 ${ticks}javascript
 ${log.stack || 'No Stack Trace Available'}
 ${ticks}
-
----
-## 🤖 AI 수석 개발자에게 보내는 메모
-- **문제 설명**: 위 오류 보고서 내용을 토대로 코드를 진단해 주세요.
-- **해결 지침**: 발생한 오류의 원인을 설명하고, 해당 소스 파일을 찾아 안전하게 수정해 주세요.
 `;
 
     const fallbackCopy = (text: string, logId: string) => {
@@ -170,8 +163,8 @@ ${ticks}
         document.body.removeChild(textArea);
         if (successful) {
           setCopiedId(logId);
-          toast.success('구글 AI 스튜디오 맞춤형 오류 보고서가 복사되었습니다!', {
-            description: '구글 AI 스튜디오에 바로 붙여넣기(Ctrl+V)하여 수정을 요청하세요.'
+          toast.success('오류 진단 리포트가 클립보드에 복사되었습니다.', {
+            description: '이슈 트래커나 기술 지원 채널에 붙여넣기(Ctrl+V)하여 공유할 수 있습니다.'
           });
           setTimeout(() => setCopiedId(null), 3000);
         } else {
@@ -186,8 +179,8 @@ ${ticks}
     if (navigator && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
       navigator.clipboard.writeText(markdownTemplate).then(() => {
         setCopiedId(log.id);
-        toast.success('구글 AI 스튜디오 맞춤형 오류 보고서가 복사되었습니다!', {
-          description: '구글 AI 스튜디오에 바로 붙여넣기(Ctrl+V)하여 수정을 요청하세요.'
+        toast.success('오류 진단 리포트가 클립보드에 복사되었습니다.', {
+          description: '이슈 트래커나 기술 지원 채널에 붙여넣기(Ctrl+V)하여 공유할 수 있습니다.'
         });
         setTimeout(() => setCopiedId(null), 3000);
       }).catch(() => {
@@ -257,7 +250,7 @@ ${ticks}
   };
 
   const triggerTestPromiseError = () => {
-    const p = Promise.reject(new Error('K-Learn DB Connection Timeout (Simulated DB failure)'));
+    const p = Promise.reject(new Error('Database Connection Timeout (Simulated DB failure)'));
     p.catch(err => {
       logger.log(`[시뮬레이터] 테스트용 프로미스 거부 에러: ${err.message}`, err, 'promise', '관리자가 수동으로 비동기 프로미스 거부 로그 생성을 수행했습니다.');
       toast.info('테스트용 프로미스 에러가 기록되었습니다!!');
@@ -349,7 +342,7 @@ ${ticks}
         </div>
         
         {/* Tab Selection */}
-        <div className="flex bg-gray-150 p-1 rounded-2xl border border-gray-100 self-start xl:self-center">
+        <div className="flex bg-gray-100 p-1 rounded-2xl border border-gray-200 self-start xl:self-center">
           <button
             onClick={() => setActiveTab('system')}
             className={`px-5 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-1.5 ${
@@ -538,7 +531,7 @@ ${ticks}
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleCopyToAIStudio(log);
+                              handleCopyReport(log);
                             }}
                             className="rounded-xl font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white shrink-0 shadow-lg shadow-purple-100"
                           >
@@ -550,7 +543,7 @@ ${ticks}
                             ) : (
                               <>
                                 <Copy className="w-3.5 h-3.5 mr-1" />
-                                AI 스튜디오 복사하기
+                                진단 리포트 복사
                               </>
                             )}
                           </Button>

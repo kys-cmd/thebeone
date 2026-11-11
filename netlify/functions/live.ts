@@ -2,9 +2,9 @@ import { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
-// Initialize Supabase Admin using service role key if available, else anon key
+// Initialize Supabase Admin using service role key
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const supabaseAdmin = (supabaseUrl && supabaseKey)
   ? createClient(supabaseUrl, supabaseKey, {
       auth: {
@@ -13,6 +13,27 @@ const supabaseAdmin = (supabaseUrl && supabaseKey)
       }
     })
   : null;
+
+async function verifyLiveAdmin(authHeader?: string, fallbackAdminId?: string): Promise<boolean> {
+  if (!supabaseAdmin) return false;
+  try {
+    let uid = fallbackAdminId || "";
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.split(" ")[1];
+      const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+      if (user?.id) uid = user.id;
+    }
+    if (!uid) return false;
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("role")
+      .eq("id", uid)
+      .maybeSingle();
+    return !!(profile && (profile.role === "admin" || profile.role === "super_admin"));
+  } catch {
+    return false;
+  }
+}
 
 export const handler: Handler = async (event) => {
   const allowedOrigin = process.env.APP_URL || process.env.VITE_APP_URL || "*";
@@ -201,6 +222,16 @@ export const handler: Handler = async (event) => {
     let body: any = {};
     if (event.body) {
       try { body = JSON.parse(event.body); } catch {}
+    }
+
+    const authHeader = event.headers.authorization || event.headers.Authorization;
+    const isCallerAdmin = await verifyLiveAdmin(authHeader, body?.adminId);
+    if (!isCallerAdmin) {
+      return {
+        statusCode: 403,
+        headers: responseHeaders,
+        body: JSON.stringify({ success: false, message: "관리자 권한이 필요합니다." })
+      };
     }
 
     // 3. START LIVE

@@ -305,7 +305,7 @@ export function FloatingChat() {
   );
 
   return (
-    <div className="fixed md:bottom-6 bottom-20 md:right-6 right-4 sm:w-96 w-[calc(100vw-32px)] h-[540px] md:h-[580px] bg-white rounded-[32px] shadow-2xl border border-slate-150 flex flex-col overflow-hidden z-[9999] transition-all animate-fade-in-up">
+    <div className="fixed bottom-4 md:bottom-6 right-3 left-3 sm:left-auto md:right-6 sm:w-96 max-h-[calc(100dvh-5rem)] h-[520px] md:h-[580px] bg-white rounded-3xl md:rounded-[32px] shadow-2xl border border-slate-200/80 flex flex-col overflow-hidden z-[9999] transition-all animate-fade-in-up">
       {/* HEADER SECTION */}
       <div className="bg-purple-650 py-4.5 px-6 text-white flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">

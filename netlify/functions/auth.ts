@@ -23,7 +23,7 @@ async function sendOTPEmail(email: string, code: string): Promise<boolean> {
   const pass = process.env.SMTP_PASS;
 
   if (!host || !user || !pass) {
-    console.warn(`[SMS/Email Sandbox] No SMTP configured. Generated OTP: ${code} for ${email}`);
+    console.warn(`[SMS/Email Sandbox] No SMTP configured for OTP dispatch to ${email}`);
     return false;
   }
 
@@ -297,8 +297,8 @@ export const handler: Handler = async (event) => {
         };
       }
 
-      // Generate a 6-digit secure code
-      const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
+      // Generate a 6-digit cryptographically secure code
+      const generatedCode = crypto.randomInt(100000, 1000000).toString();
       const expiry = Date.now() + 5 * 60 * 1000; // valid for 5 min
 
       // Inactivate any existing OTP records for this email
@@ -314,7 +314,7 @@ export const handler: Handler = async (event) => {
         .insert([{
           type: "password_reset_otp",
           title: email,
-          content: JSON.stringify({ code: generatedCode, expiresAt: expiry, verified: false }),
+          content: JSON.stringify({ code: generatedCode, expiresAt: expiry, verified: false, attempts: 0 }),
           active: true,
           is_deleted: false
         }]);
@@ -328,7 +328,6 @@ export const handler: Handler = async (event) => {
         };
       }
 
-      console.log(`[OTP Engine] Generated recovery OTP for (${email}): ${generatedCode}`);
       const isSent = await sendOTPEmail(email, generatedCode);
 
       return {
@@ -384,7 +383,27 @@ export const handler: Handler = async (event) => {
         };
       }
 
-      if (meta.code !== code) {
+      const attempts = Number(meta.attempts || 0);
+      if (attempts >= 5) {
+        await supabaseAdmin
+          .from("support_contents")
+          .update({ active: false, is_deleted: true, updated_at: new Date().toISOString() })
+          .eq("id", record.id);
+        return {
+          statusCode: 429,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: "인증코드 입력 허용 횟수(5회)를 초과했습니다. 인증번호를 다시 요청해 주세요." })
+        };
+      }
+
+      if (meta.code !== String(code).trim()) {
+        await supabaseAdmin
+          .from("support_contents")
+          .update({
+            content: JSON.stringify({ ...meta, attempts: attempts + 1 }),
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", record.id);
         return {
           statusCode: 400,
           headers: responseHeaders,

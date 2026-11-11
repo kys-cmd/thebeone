@@ -6,20 +6,20 @@ steps:
       'build',
       '--build-arg', 'VITE_SUPABASE_URL=${_SUPABASE_URL}',
       '--build-arg', 'VITE_SUPABASE_ANON_KEY=${_SUPABASE_ANON_KEY}',
-      '-t', 'asia-northeast3-docker.pkg.dev/$PROJECT_ID/app-repo/my-vite-app:$COMMIT_SHA',
+      '-t', 'asia-northeast3-docker.pkg.dev/$PROJECT_ID/app-repo/beone-academy:$COMMIT_SHA',
       '.'
     ]
 
   # 2. Push the image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'asia-northeast3-docker.pkg.dev/$PROJECT_ID/app-repo/my-vite-app:$COMMIT_SHA']
+    args: ['push', 'asia-northeast3-docker.pkg.dev/$PROJECT_ID/app-repo/beone-academy:$COMMIT_SHA']
 
   # 3. Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args: [
-      'run', 'deploy', 'my-vite-app',
-      '--image', 'asia-northeast3-docker.pkg.dev/$PROJECT_ID/app-repo/my-vite-app:$COMMIT_SHA',
+      'run', 'deploy', 'beone-academy',
+      '--image', 'asia-northeast3-docker.pkg.dev/$PROJECT_ID/app-repo/beone-academy:$COMMIT_SHA',
       '--region', 'asia-northeast3',
       '--platform', 'managed',
       '--allow-unauthenticated',
@@ -27,7 +27,7 @@ steps:
     ]
 
 images:
-  - 'asia-northeast3-docker.pkg.dev/$PROJECT_ID/app-repo/my-vite-app:$COMMIT_SHA'
+  - 'asia-northeast3-docker.pkg.dev/$PROJECT_ID/app-repo/beone-academy:$COMMIT_SHA'
 
 # Default values for substitution (Change these in Cloud Build Trigger settings)
 substitutions:

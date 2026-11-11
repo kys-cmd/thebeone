@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import { ThemeProvider } from 'next-themes';
 import App from './App.tsx';
 import './index.css';
-import { logger } from './lib/logger';
+import { logger } from './lib/diagnostics';
 
 // Global error tracking initialization
 logger.init();

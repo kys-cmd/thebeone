@@ -11,15 +11,6 @@ import cors from "cors";
 import nodemailer from "nodemailer";
 import iconv from "iconv-lite";
 
-// In-memory OTP Cache for password resets
-interface OTPRecord {
-  email: string;
-  code: string;
-  expiresAt: number;
-  verified: boolean;
-}
-const otpStorage = new Map<string, OTPRecord>();
-
 // Load .env variables
 config();
 
@@ -39,7 +30,7 @@ const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
   : null;
 
 // ==========================================
-// KG INICIS CONFIGURATION & ENDPOINTS (Task 2 & 3)
+// KG INICIS CONFIGURATION & ENDPOINTS
 // ==========================================
 const INICIS_ENDPOINTS = {
   sandbox: {
@@ -54,7 +45,7 @@ const INICIS_ENDPOINTS = {
   },
 };
 
-// Timezone-resilient Korean Standard Time (KST, UTC+9) 14-digit generator (Task 5)
+// Timezone-resilient Korean Standard Time (KST, UTC+9) 14-digit generator
 function getInicisKstTimestamp(): string {
   const d = new Date();
   const kstMs = d.getTime() + (d.getTimezoneOffset() * 60000) + (9 * 60 * 60 * 1000);
@@ -70,7 +61,7 @@ function getInicisKstTimestamp(): string {
   return `${yyyy}${MM}${dd}${hh}${mm}${ss}`;
 }
 
-// Unified Sign Generator (Task 4)
+// Unified Sign Generator
 function generateInicisSignature(
   mid: string,
   signKey: string,
@@ -103,7 +94,7 @@ function calculateCourseEnrollmentExpiry(course: any, nowDate: Date = new Date()
   return expiresAt.toISOString();
 }
 
-// Retrieve from Database primary, fallback to configuration settings (Task 2)
+// Retrieve PG configuration from database with environment fallback
 async function getInicisConfig() {
   if (supabaseAdmin) {
     try {
@@ -185,7 +176,8 @@ async function startServer() {
 
   function decodeBuffer(buf: Buffer): Record<string, string> {
     const result: Record<string, string> = {};
-    const bodyStr = buf.toString("ascii");
+    // Use latin1 (binary) instead of ascii so raw bytes >= 0x80 are not stripped of their 8th bit
+    const bodyStr = buf.toString("latin1");
     const pairs = bodyStr.split("&");
     for (const pair of pairs) {
       const eqIdx = pair.indexOf("=");
@@ -496,11 +488,30 @@ async function startServer() {
     }
   });
 
+  async function verifyLiveAdmin(authHeader?: string, fallbackAdminId?: string): Promise<boolean> {
+    if (await adminCheck(authHeader)) return true;
+    if (fallbackAdminId && supabaseAdmin) {
+      const { data: profile } = await supabaseAdmin
+        .from("profiles")
+        .select("role")
+        .eq("id", fallbackAdminId)
+        .maybeSingle();
+      if (profile && (profile.role === "admin" || profile.role === "super_admin")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // 3. Start Live Stream (With conflict detection & optional termination of previous)
   app.post("/api/live/start", async (req, res) => {
     try {
       if (!supabaseAdmin) {
         return res.status(500).json({ success: false, message: "DB 연결을 확인해주세요." });
+      }
+
+      if (!(await verifyLiveAdmin(req.headers.authorization, req.body?.adminId))) {
+        return res.status(403).json({ success: false, message: "관리자 권한이 필요합니다." });
       }
 
       const {
@@ -683,6 +694,10 @@ async function startServer() {
         return res.status(500).json({ success: false, message: "DB 연결을 확인해주세요." });
       }
 
+      if (!(await verifyLiveAdmin(req.headers.authorization, req.body?.adminId))) {
+        return res.status(403).json({ success: false, message: "관리자 권한이 필요합니다." });
+      }
+
       const { sessionId, adminId, adminName, adminEmail } = req.body;
       const nowIso = new Date().toISOString();
 
@@ -807,6 +822,10 @@ async function startServer() {
         return res.status(500).json({ success: false, message: "DB 연결을 확인해주세요." });
       }
 
+      if (!(await verifyLiveAdmin(req.headers.authorization, req.body?.adminId))) {
+        return res.status(403).json({ success: false, message: "관리자 권한이 필요합니다." });
+      }
+
       const { adminId, adminName, adminEmail } = req.body;
       const nowIso = new Date().toISOString();
 
@@ -880,7 +899,7 @@ async function startServer() {
     }
   });
 
-  // Basic API verification with full diagnosis capability (Task 1 Debugger)
+  // Health check and admin diagnostic endpoint
   app.get("/api/test", async (req, res) => {
     const isAuthorized = await adminCheck(req.headers.authorization);
 
@@ -945,7 +964,7 @@ async function startServer() {
   // KG INICIS PAYMENT INTEGRATION (PC STDPAY)
   // ==========================================
   
-  // 1. Generate Signature & Pre-insert order (Express PORT)
+  // 1. Generate Signature & Pre-insert order
   app.post("/api/init-pay", async (req, res) => {
     try {
       const { price, oid, timestamp, userId, courseId, orderName, mileageUsed } = req.body;
@@ -963,33 +982,80 @@ async function startServer() {
         status: "SUCCESS"
       });
 
-      // Pre-insert order into Supabase
+      let verifiedPrice = Number(price);
+      let verifiedMileage = Math.max(0, Number(mileageUsed) || 0);
+
+      // Verify course price & user mileage against DB and pre-insert order into Supabase
       if (supabaseAdmin && userId && courseId) {
         try {
-          const { data: existing } = await supabaseAdmin
+          const { data: courseRow } = await supabaseAdmin
+            .from("courses")
+            .select("price")
+            .eq("id", courseId)
+            .maybeSingle();
+
+          const { data: profileRow } = await supabaseAdmin
+            .from("profiles")
+            .select("mileage")
+            .eq("id", userId)
+            .maybeSingle();
+
+          if (courseRow && typeof courseRow.price === "number") {
+            const availableMileage = Math.max(0, Number(profileRow?.mileage) || 0);
+            if (verifiedMileage > availableMileage) {
+              return res.status(400).json({ status: "error", message: "보유 마일리지를 초과하여 사용할 수 없습니다." });
+            }
+            const expectedFinalPrice = Math.max(0, Number(courseRow.price) - verifiedMileage);
+            if (expectedFinalPrice !== verifiedPrice) {
+              console.warn(`[INIT-PAY] Client price (${verifiedPrice}) differed from server calculation (${expectedFinalPrice}). Enforcing server price.`);
+              verifiedPrice = expectedFinalPrice;
+            }
+          }
+
+          const { data: existingByOid } = await supabaseAdmin
             .from("orders")
             .select("id")
             .eq("merchant_uid", oid)
             .maybeSingle();
 
-          if (!existing) {
-            await supabaseAdmin.from("orders").insert([{
-              user_id: userId,
-              course_id: courseId,
-              amount: Number(price),
-              status: "PENDING",
-              order_name: orderName || "온라인 강좌 수강권 구매",
-              merchant_uid: oid,
-              mileage_used: Number(mileageUsed) || 0,
-              created_at: new Date().toISOString()
-            }]);
-            console.log(`[INIT-PAY] Pending order created. OID: ${oid}, Price: ${price}, Mileage: ${mileageUsed}`);
-          } else {
+          if (existingByOid) {
             await supabaseAdmin.from("orders").update({
-              amount: Number(price),
-              mileage_used: Number(mileageUsed) || 0
+              amount: verifiedPrice,
+              mileage_used: verifiedMileage
             }).eq("merchant_uid", oid);
-            console.log(`[INIT-PAY] Existing order updated. OID: ${oid}, Price: ${price}, Mileage: ${mileageUsed}`);
+            console.log(`[INIT-PAY] Existing order updated by OID. OID: ${oid}, Price: ${verifiedPrice}, Mileage: ${verifiedMileage}`);
+          } else {
+            const { data: existingPending } = await supabaseAdmin
+              .from("orders")
+              .select("id")
+              .eq("user_id", userId)
+              .eq("course_id", courseId)
+              .eq("status", "PENDING")
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (existingPending) {
+              await supabaseAdmin.from("orders").update({
+                merchant_uid: oid,
+                amount: verifiedPrice,
+                mileage_used: verifiedMileage,
+                order_name: orderName || "온라인 강좌 수강권 구매"
+              }).eq("id", existingPending.id);
+              console.log(`[INIT-PAY] Updated existing PENDING cart order (${existingPending.id}) with OID: ${oid}`);
+            } else {
+              await supabaseAdmin.from("orders").insert([{
+                user_id: userId,
+                course_id: courseId,
+                amount: verifiedPrice,
+                status: "PENDING",
+                order_name: orderName || "온라인 강좌 수강권 구매",
+                merchant_uid: oid,
+                mileage_used: verifiedMileage,
+                created_at: new Date().toISOString()
+              }]);
+              console.log(`[INIT-PAY] Pending order created. OID: ${oid}, Price: ${verifiedPrice}, Mileage: ${verifiedMileage}`);
+            }
           }
         } catch (dbErr: any) {
           console.error("[INIT-PAY] Database order placement failed (ignored):", dbErr.message);
@@ -1007,7 +1073,7 @@ async function startServer() {
       }
 
       const config = await getInicisConfig();
-      const signature = generateInicisSignature(config.mid, config.signKey, oid, Number(price), timestamp);
+      const signature = generateInicisSignature(config.mid, config.signKey, oid, verifiedPrice, timestamp);
       const mKey = crypto.createHash("sha256").update(config.signKey).digest("hex");
 
       const responsePayload = {
@@ -1016,7 +1082,7 @@ async function startServer() {
         mKey,
         mid: config.mid,
         oid,
-        price,
+        price: verifiedPrice,
         timestamp,
         isSandbox: config.isSandbox,
       };
@@ -1048,7 +1114,7 @@ async function startServer() {
     }
   });
 
-  // 2. Auth URL Postback & S2S Payment Approval + NetCancel Rollback (Express PORT)
+  // 2. Auth URL Postback & S2S Payment Approval + NetCancel Rollback
   app.post("/api/inicis-return", async (req, res) => {
     const decodedBody = getDecodedBody(req);
     console.log("[INICIS-RETURN] Received approval payload (Raw):", req.body, "(Decoded):", decodedBody);
@@ -1069,14 +1135,11 @@ async function startServer() {
     const config = await getInicisConfig();
     finalMid = config.mid;
 
-    // Application origin URL determination (Robustly prioritized dynamic request context to avoid hardcoded localhost diversion)
+    // Resolve application origin URL dynamically from request context or environment
     const getSecurePublicUrl = (reqObj: any, md: string | null | undefined) => {
-      const DEV_URL = "https://ais-dev-qbvit3fpjqe4xthteyekz2-553123300253.asia-northeast1.run.app";
-      const PRE_URL = "https://ais-pre-qbvit3fpjqe4xthteyekz2-553123300253.asia-northeast1.run.app";
-
       const candidates: string[] = [];
       if (md) candidates.push(md);
-      
+
       const fUrl = process.env.APP_URL || process.env.VITE_APP_URL;
       if (fUrl) candidates.push(fUrl);
 
@@ -1086,11 +1149,11 @@ async function startServer() {
             const proto = reqObj.headers['x-forwarded-proto'] || 'https';
             candidates.push(`${proto}://${reqObj.headers['x-forwarded-host']}`);
           }
-          if (reqObj.headers.referer) {
-            candidates.push(reqObj.headers.referer);
-          }
           if (reqObj.headers.origin) {
             candidates.push(reqObj.headers.origin);
+          }
+          if (reqObj.headers.referer) {
+            candidates.push(reqObj.headers.referer);
           }
         }
         const hostHeader = reqObj.get ? reqObj.get('host') : (reqObj.headers?.host);
@@ -1102,10 +1165,7 @@ async function startServer() {
 
       for (const candidate of candidates) {
         if (!candidate || typeof candidate !== "string") continue;
-        let clean = candidate.trim();
-        if (clean.endsWith("/")) {
-          clean = clean.slice(0, -1);
-        }
+        const clean = candidate.trim().replace(/\/+$/, "");
         if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
           continue;
         }
@@ -1118,16 +1178,13 @@ async function startServer() {
           if (hostname.includes("MY_APP_URL") || hostname.includes("your-project") || hostname.includes("inicis.com") || hostname.includes("toss")) {
             continue;
           }
-          return clean;
-        } catch (e) {
+          return `${parsed.protocol}//${parsed.host}`;
+        } catch {
           // ignore
         }
       }
 
-      if (reqObj && reqObj.headers && reqObj.headers.referer && reqObj.headers.referer.includes("ais-pre")) {
-        return PRE_URL;
-      }
-      return DEV_URL;
+      return "";
     };
 
     if (isMobileFlow) {
@@ -1160,6 +1217,22 @@ async function startServer() {
           });
         }
         return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent(P_RMESG1 || "모바일 결제 인증 실패")}&oid=${finalOid || ""}&resultCode=${P_STATUS || "UNKNOWN"}`);
+      }
+
+      // Validate P_REQ_URL domain to prevent SSRF / forged approval server
+      let isVerifiedMobileDomain = false;
+      try {
+        const parsedReqUrl = new URL(P_REQ_URL);
+        if (parsedReqUrl.protocol === "http:" || parsedReqUrl.protocol === "https:") {
+          isVerifiedMobileDomain = parsedReqUrl.hostname === "inicis.com" || parsedReqUrl.hostname.endsWith(".inicis.com");
+        }
+      } catch {
+        isVerifiedMobileDomain = false;
+      }
+
+      if (!isVerifiedMobileDomain) {
+        console.error("[INICIS-RETURN] Unverified mobile P_REQ_URL domain:", P_REQ_URL);
+        return res.redirect(`${clientOrigin}/payment/callback?status=fail&message=${encodeURIComponent("위변조가 의심되는 모바일 결제 게이트웨이 도메인입니다.")}&oid=${finalOid || ""}&resultCode=UNVERIFIED_GATEWAY`);
       }
 
       // 1) S2S approval to P_REQ_URL
@@ -1223,17 +1296,21 @@ async function startServer() {
         }
 
         // Standardize response to match down-stream expected format
+        const mobileApplNum = appRes.P_AUTH_NO || appRes.P_AUTH_NUM || appRes.applNum || "";
         authResponseData = {
           resultCode: "0000",
           resultMsg: finalMsg,
           TotPrice: finalAmt,
           payMethod: appRes.P_TYPE || "CARD",
           TID: appRes.P_TID || P_TID,
+          tid: appRes.P_TID || P_TID,
           mid: finalMid,
           MOID: finalApprovedOid,
-          applNum: appRes.P_AUTH_NO || appRes.P_AUTH_NUM || "",
-          applNo: appRes.P_AUTH_NO || appRes.P_AUTH_NUM || "",
-          P_AUTH_NO: appRes.P_AUTH_NO || appRes.P_AUTH_NUM || ""
+          applNum: mobileApplNum,
+          applNo: mobileApplNum,
+          P_AUTH_NO: mobileApplNum,
+          P_FN_NM: appRes.P_FN_NM || "",
+          payDevice: "MOBILE"
         };
         finalOid = finalApprovedOid;
 
@@ -1377,6 +1454,13 @@ async function startServer() {
         const resJsonText = await apiResponse.text();
         console.log("[INICIS-RETURN] Response Raw String:", resJsonText);
         authResponseData = JSON.parse(resJsonText);
+        if (authResponseData && typeof authResponseData === "object") {
+          const pcApplNum = authResponseData.applNum || authResponseData.CARD_ApplNum || authResponseData.applNo || authResponseData.P_AUTH_NO || "";
+          authResponseData.applNum = pcApplNum;
+          authResponseData.TID = authResponseData.TID || authResponseData.tid || "";
+          authResponseData.tid = authResponseData.tid || authResponseData.TID || "";
+          authResponseData.payDevice = authResponseData.payDevice || "PC";
+        }
 
         // Log S2S Approval API Response
         await writePaymentApiLog({
@@ -1489,6 +1573,21 @@ async function startServer() {
 
       // 1) Update order to COMPLETED standard state transition using state machine
       await handleOrderStateTransition(finalOid, "COMPLETED", authResponseData, Number(authResponseData.TotPrice || orderData.amount));
+
+      // Clean up any leftover duplicate PENDING cart orders for the same user and course
+      if (orderData.user_id && orderData.course_id) {
+        try {
+          await supabaseAdmin
+            .from("orders")
+            .delete()
+            .eq("user_id", orderData.user_id)
+            .eq("course_id", orderData.course_id)
+            .eq("status", "PENDING")
+            .neq("id", orderData.id);
+        } catch (cleanupErr) {
+          console.warn("[INICIS-RETURN] Pending cart cleanup warning:", cleanupErr);
+        }
+      }
 
       // 1.5) Deduct user mileage automatically after successful state transition
       try {
@@ -1907,8 +2006,11 @@ async function startServer() {
         return res.json({ allowed: false, reason: "No active enrollment or course expired" });
       }
 
-      // 2. Process payment securely (복식부기 트랜잭션 기록 포함)
+      // 2. Process payment securely (복식부기 트랜잭션 기록 포함 - 관리자 수동 승인 전용)
       if (action === "process-payment") {
+        if (!requestingUser || !(await isAdminCheck(requestingUser.id))) {
+          return res.status(403).json({ status: "error", message: "Forbidden: Direct payment processing requires administrator privileges." });
+        }
         const { merchant_uid, amount, courseId, userId, payment_tid, payment_method, mileage_used } = req.body;
         const targetUserId = userId || requestingUser?.id;
 
@@ -2719,6 +2821,141 @@ async function startServer() {
         });
       }
 
+      // 7.9 ADMIN: 전체 주문 및 이니시스 결제/승인번호 통합 조회 (RLS 우회)
+      if (action === "admin-get-orders") {
+        const limit = Number(req.body?.limit) || 200;
+        const { data: orders, error: ordersError } = await supabaseAdmin
+          .from("orders")
+          .select("id, amount, status, created_at, user_id, course_id, merchant_uid, payment_method, order_name")
+          .order("created_at", { ascending: false })
+          .limit(limit);
+
+        if (ordersError) {
+          return res.status(500).json({ status: "error", message: ordersError.message });
+        }
+        if (!orders || orders.length === 0) {
+          return res.json({ status: "success", orders: [] });
+        }
+
+        const userIds = [...new Set(orders.map((o: any) => o.user_id).filter(Boolean))];
+        const courseIds = [...new Set(orders.map((o: any) => o.course_id).filter(Boolean))];
+        const orderIds = orders.map((o: any) => o.id);
+
+        const [profilesRes, coursesRes, logsByOrderRes, recentLogsRes] = await Promise.all([
+          userIds.length > 0
+            ? supabaseAdmin.from("profiles").select("id, name, nickname, email, mobile_phone, phone").in("id", userIds)
+            : Promise.resolve({ data: [] as any[] }),
+          courseIds.length > 0
+            ? supabaseAdmin.from("courses").select("id, title, thumbnail").in("id", courseIds)
+            : Promise.resolve({ data: [] as any[] }),
+          orderIds.length > 0
+            ? supabaseAdmin.from("payment_logs").select("id, order_id, status, raw_response, payment_method, amount, created_at").in("order_id", orderIds)
+            : Promise.resolve({ data: [] as any[] }),
+          supabaseAdmin.from("payment_logs").select("id, order_id, status, raw_response, payment_method, amount, created_at").order("created_at", { ascending: false }).limit(300)
+        ]);
+
+        const profilesMap = new Map((profilesRes.data || []).map((p: any) => [p.id, p]));
+        const coursesMap = new Map((coursesRes.data || []).map((c: any) => [c.id, c]));
+
+        // Deduplicate all fetched payment_logs
+        const allLogsMap = new Map<string, any>();
+        for (const l of (logsByOrderRes.data || [])) {
+          if (l?.id) allLogsMap.set(l.id, l);
+        }
+        for (const l of (recentLogsRes.data || [])) {
+          if (l?.id && !allLogsMap.has(l.id)) allLogsMap.set(l.id, l);
+        }
+        const allLogs = Array.from(allLogsMap.values());
+
+        const logsByOrderId = new Map<string, any[]>();
+        const logsByMerchantUid = new Map<string, any[]>();
+
+        for (const log of allLogs) {
+          if (log.order_id) {
+            if (!logsByOrderId.has(log.order_id)) logsByOrderId.set(log.order_id, []);
+            logsByOrderId.get(log.order_id)!.push(log);
+          }
+          if (log.raw_response) {
+            try {
+              const parsed = typeof log.raw_response === "string" ? JSON.parse(log.raw_response) : log.raw_response;
+              const rawObj = parsed?.details || parsed || {};
+              const mUid = rawObj.MOID || rawObj.P_OID || rawObj.merchant_uid || parsed?.merchant_uid;
+              if (mUid) {
+                if (!logsByMerchantUid.has(mUid)) logsByMerchantUid.set(mUid, []);
+                logsByMerchantUid.get(mUid)!.push(log);
+              }
+            } catch {
+              // ignore JSON parse error
+            }
+          }
+        }
+
+        const enrichedOrders = orders.map((order: any) => {
+          const directLogs = logsByOrderId.get(order.id) || [];
+          const uidLogs = order.merchant_uid ? (logsByMerchantUid.get(order.merchant_uid) || []) : [];
+          const mergedLogsMap = new Map<string, any>();
+          for (const l of [...directLogs, ...uidLogs]) {
+            mergedLogsMap.set(l.id || JSON.stringify(l), l);
+          }
+          const matchedLogs = Array.from(mergedLogsMap.values());
+
+          let tid = "-";
+          let applNum = "-";
+          let payDevice = "-";
+          let cardName = "";
+          let applDate = "";
+          let applTime = "";
+
+          if (matchedLogs.length > 0) {
+            const successLog = matchedLogs.find((l: any) => l.status === "SUCCESS") || matchedLogs[0];
+            if (successLog && successLog.raw_response) {
+              try {
+                const parsed = typeof successLog.raw_response === "string"
+                  ? JSON.parse(successLog.raw_response)
+                  : successLog.raw_response;
+                const rawObj = parsed?.details || parsed || {};
+
+                tid = rawObj.tid || rawObj.TID || rawObj.AuthTID || rawObj.payment_tid || rawObj.P_TID || "-";
+                applNum = rawObj.applNum || rawObj.CARD_ApplNum || rawObj.applNo || rawObj.AuthCode || rawObj.applCode || rawObj.P_AUTH_NO || rawObj.P_AUTH_NUM || rawObj.appl_num || "-";
+                cardName = rawObj.P_FN_NM || rawObj.CARD_PurchaseName || "";
+                applDate = rawObj.applDate || "";
+                applTime = rawObj.applTime || "";
+                if (rawObj.payDevice) {
+                  payDevice = rawObj.payDevice;
+                } else if (typeof tid === "string" && tid.startsWith("INIMX_")) {
+                  payDevice = "MOBILE";
+                } else if (typeof tid === "string" && tid.startsWith("Stdpay")) {
+                  payDevice = "PC";
+                }
+              } catch {
+                // ignore
+              }
+            }
+          }
+
+          const isInicisLinked = Boolean(
+            (tid && tid !== "-" && !tid.startsWith("TID-MOCK") && (tid.startsWith("Stdpay") || tid.startsWith("INIMX_") || tid.length >= 20)) ||
+            (applNum && applNum !== "-")
+          );
+
+          return {
+            ...order,
+            profile: profilesMap.get(order.user_id) || null,
+            course: coursesMap.get(order.course_id) || null,
+            logs: matchedLogs,
+            tid,
+            applNum,
+            payDevice,
+            cardName,
+            applDate,
+            applTime,
+            isInicisLinked
+          };
+        });
+
+        return res.json({ status: "success", orders: enrichedOrders });
+      }
+
       // 8. ADMIN: 주문정보 PAID 강제 갱신 및 재처리 (Order Reprocess Machine)
       if (action === "reprocess-order") {
         const { orderId } = req.body;
@@ -2815,7 +3052,7 @@ async function startServer() {
         });
       }
 
-      // 8.46 ADMIN: 이니시스 실시간 연계 환불 처리 기능 (Task - Refund Order)
+      // 8.46 ADMIN: 이니시스 실시간 연계 환불 처리 기능
       if (action === "refund-order") {
         const { orderId, reason } = req.body;
         if (!orderId) {
@@ -3343,66 +3580,14 @@ async function startServer() {
     }
   });
 
-  // 이니시스 Signature 생성 API
-  app.post("/api/payment/inicis/sign", async (req, res) => {
-    console.log("POST /api/payment/inicis/sign called");
-    try {
-      const { price, oid, timestamp, userId, courseId, orderName } = req.body;
-      console.log("Sign request body:", { price, oid, timestamp, userId, courseId, orderName });
-      
-      if (!price || !oid || !timestamp) {
-        return res.status(400).json({ status: "error", message: "Missing required fields" });
-      }
-
-      const config = await getInicisConfig();
-
-      if (supabaseAdmin) {
-        console.log(`Creating order record on server: oid=${oid}, userId=${userId}, amount=${price}`);
-
-        // Create ORDER record here (Bypassing RLS)
-        const { error: orderError } = await supabaseAdmin.from("orders").insert([{
-          user_id: userId,
-          course_id: courseId,
-          amount: price,
-          status: "PENDING",
-          order_name: orderName,
-          merchant_uid: oid
-        }]);
-
-        if (orderError) {
-          console.error("Order creation failed on server:", orderError);
-          return res.status(500).json({ status: "error", message: `Order creation failed: ${orderError.message}` });
-        }
-      } else {
-        console.warn("Supabase Admin NOT initialized. Order record NOT created.");
-      }
-      
-      const signature = generateInicisSignature(config.mid, config.signKey, oid, Number(price), timestamp);
-      const mKey = crypto.createHash('sha256').update(config.signKey).digest('hex');
-      
-      res.json({
-        mid: config.mid,
-        signature,
-        mKey,
-        isSandbox: config.isSandbox,
-        status: "success"
-      });
-    } catch (error) {
-      console.error("Signature generation error:", error);
-      res.status(500).json({ status: "error", message: "Signature generation failed" });
-    }
-  });
-
   // Admin API for Direct Password Reset (For CMS Admin Use)
   app.post("/api/admin/reset-password", async (req, res) => {
     console.log("POST /api/admin/reset-password called with body:", { ...req.body, password: req.body?.password ? '***' : undefined });
     try {
-      if (req.headers.authorization) {
-        const isAuthorized = await adminCheck(req.headers.authorization);
-        if (!isAuthorized) {
-          console.warn("[ADMIN_AUTH] reset-password authorization failed for token, rejecting 403");
-          return res.status(403).json({ status: "error", message: "Forbidden - Administrator access only" });
-        }
+      const isAuthorized = await adminCheck(req.headers.authorization);
+      if (!isAuthorized) {
+        console.warn("[ADMIN_AUTH] reset-password authorization failed, rejecting 403");
+        return res.status(403).json({ status: "error", message: "Forbidden - Administrator access only" });
       }
 
       const { email, userId, requestId, password } = req.body;
@@ -3486,11 +3671,9 @@ async function startServer() {
   app.post("/api/admin/update-user-status", async (req, res) => {
     console.log("POST /api/admin/update-user-status called with body:", req.body);
     try {
-      if (req.headers.authorization) {
-        const isAuthorized = await adminCheck(req.headers.authorization);
-        if (!isAuthorized) {
-          return res.status(403).json({ status: "error", message: "Forbidden - Administrator access only" });
-        }
+      const isAuthorized = await adminCheck(req.headers.authorization);
+      if (!isAuthorized) {
+        return res.status(403).json({ status: "error", message: "Forbidden - Administrator access only" });
       }
 
       const { userId, status, suspensionDays } = req.body;
@@ -3871,7 +4054,7 @@ async function startServer() {
     const pass = process.env.SMTP_PASS;
 
     if (!host || !user || !pass) {
-      console.warn(`[SMS/Email Sandbox] No SMTP configured. Generated OTP: ${code} for ${email}`);
+      console.warn(`[SMS/Email Sandbox] No SMTP configured for OTP dispatch to ${email}`);
       return false;
     }
 
@@ -4085,8 +4268,8 @@ async function startServer() {
         return res.status(404).json({ status: "error", message: "가입되어 있지 않거나 비활성화된 이메일 주소입니다." });
       }
 
-      // Generate a 6-digit secure code
-      const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
+      // Generate a cryptographically secure 6-digit code
+      const generatedCode = crypto.randomInt(100000, 1000000).toString();
       const expiry = Date.now() + 5 * 60 * 1000; // valid for 5 min
 
       // Inactivate any existing OTP records for this email
@@ -4102,7 +4285,7 @@ async function startServer() {
         .insert([{
           type: "password_reset_otp",
           title: email,
-          content: JSON.stringify({ code: generatedCode, expiresAt: expiry, verified: false }),
+          content: JSON.stringify({ code: generatedCode, expiresAt: expiry, verified: false, attempts: 0 }),
           active: true,
           is_deleted: false
         }]);
@@ -4112,7 +4295,6 @@ async function startServer() {
         return res.status(500).json({ status: "error", message: "인증번호 등록 데이터베이스 처리에 실패했습니다." });
       }
 
-      console.log(`[OTP Engine] Generated recovery OTP for (${email}): ${generatedCode}`);
       const isSent = await sendOTPEmail(email, generatedCode);
 
       return res.json({
@@ -4162,7 +4344,23 @@ async function startServer() {
         return res.status(400).json({ status: "error", message: "유효 시간이 만료되었습니다. 인증번호를 다시 요청해 주세요." });
       }
 
-      if (meta.code !== code) {
+      const attempts = (Number(meta.attempts) || 0) + 1;
+      if (attempts > 5) {
+        await supabaseAdmin
+          .from("support_contents")
+          .update({ active: false, is_deleted: true, updated_at: new Date().toISOString() })
+          .eq("id", record.id);
+        return res.status(429).json({ status: "error", message: "인증 시도 횟수(5회)를 초과했습니다. 인증번호를 다시 발급받아 주세요." });
+      }
+
+      if (meta.code !== String(code).trim()) {
+        await supabaseAdmin
+          .from("support_contents")
+          .update({
+            content: JSON.stringify({ ...meta, attempts }),
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", record.id);
         return res.status(400).json({ status: "error", message: "인증코드 6자리가 일치하지 않습니다. 다시 입력해 주세요." });
       }
 
@@ -4170,7 +4368,7 @@ async function startServer() {
       const tempToken = crypto.randomBytes(32).toString("hex");
 
       // Mark the DB OTP as verified and save the securely generated random token
-      const updatedMeta = { ...meta, verified: true, resetToken: tempToken };
+      const updatedMeta = { ...meta, verified: true, resetToken: tempToken, attempts };
       const { error: updateErr } = await supabaseAdmin
         .from("support_contents")
         .update({
@@ -4288,8 +4486,11 @@ async function startServer() {
   app.get("/api/naver-blog", async (req, res) => {
     try {
       console.log("Fetching Naver Blog RSS...");
-      const blogId = req.query.blogId || "thebeone"; 
-      const feed = await parser.parseURL(`https://rss.blog.naver.com/${blogId}.xml`);
+      const rawBlogId = String(req.query.blogId || "thebeone").trim();
+      if (!/^[a-zA-Z0-9_-]{1,50}$/.test(rawBlogId)) {
+        return res.status(400).json({ status: "error", message: "Invalid blogId format" });
+      }
+      const feed = await parser.parseURL(`https://rss.blog.naver.com/${encodeURIComponent(rawBlogId)}.xml`);
       
       const posts = feed.items.map(item => ({
         title: item.title,
@@ -4792,137 +4993,6 @@ async function startServer() {
     }
   });
 
-  // 이니시스 결과 알림 (Webhook)
-  // 이니시스는 결제 완료 후 이 URL로 백채널 통보를 보냅니다.
-  app.post("/api/payment/inicis/notify", async (req, res) => {
-    try {
-      const decodedBody = getDecodedBody(req);
-      console.log("Inicis Notify Received (Raw):", req.body, "(Decoded):", decodedBody);
-      req.body = decodedBody;
-      const { P_STATUS, P_TID, P_MID, P_AMT, P_OID, P_RMESG1 } = req.body;
-
-      // 1. 로그 저장
-      if (supabaseAdmin) {
-        await supabaseAdmin.from("payment_logs").insert([{
-          merchant_uid: P_OID,
-          raw_data: req.body
-        }]);
-      }
-
-      if (P_STATUS === "00") { // 성공
-        const amount = P_AMT ? parseInt(P_AMT, 10) : undefined;
-        await handleOrderStateTransition(P_OID, "PAID", req.body, amount);
-        console.log(`Payment Success Notify (Transitioned): ${P_OID}`);
-      } else {
-        await handleOrderStateTransition(P_OID, "FAILED", req.body);
-        console.log(`Payment Failed Notify (Transitioned): ${P_OID}, Reason: ${P_RMESG1}`);
-      }
-
-      res.send("OK");
-    } catch (error) {
-      console.error("Notify error:", error);
-      res.send("OK"); // Respond OK to Inicis anyway so they don't retry, but we log the error
-    }
-  });
-
-  // 이니시스 PC (StdPay) Return URL Handler
-  // 브라우저가 사용자 결제 완료 후 POST로 이 주소로 들어옵니다.
-  app.post("/api/payment/inicis/callback", async (req, res) => {
-    try {
-      const decodedBody = getDecodedBody(req);
-      console.log("Inicis Callback Received (Raw):", req.body, "(Decoded):", decodedBody);
-      req.body = decodedBody;
-      const { authToken, authUrl, merchantData } = req.body;
-
-      if (!authToken || !authUrl) {
-        console.error("Missing authToken or authUrl");
-        return res.redirect("/payment/callback?status=fail&success=false&message=Invalid+Callback&resultCode=INVALID_CALLBACK");
-      }
-
-      const config = await getInicisConfig();
-      const mid = config.mid;
-      const signKey = config.signKey;
-
-      let isVerifiedDomain = false;
-      try {
-        const parsedAuthUrl = new URL(authUrl);
-        if (parsedAuthUrl.protocol === "http:" || parsedAuthUrl.protocol === "https:") {
-          isVerifiedDomain = parsedAuthUrl.hostname === "inicis.com" || parsedAuthUrl.hostname.endsWith(".inicis.com");
-        }
-      } catch (e) {
-        isVerifiedDomain = false;
-      }
-
-      if (!isVerifiedDomain) {
-        console.error("Unverified authUrl domain:", authUrl);
-        return res.redirect("/payment/callback?status=fail&success=false&message=Unverified+Payment+Gateway+Domain&resultCode=UNVERIFIED_GATEWAY");
-      }
-
-      const timestamp = new Date().getTime().toString();
-
-      // StdPay Auth Signature: SHA256(authToken + timestamp)
-      const signature = crypto.createHash('sha256').update(`authToken=${authToken}&timestamp=${timestamp}`).digest('hex');
-
-      // Request Auth to Inicis
-      const authResponse = await fetch(authUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mid,
-          authToken,
-          timestamp,
-          signature,
-          format: "JSON"
-        })
-      });
-
-      const authResult = await authResponse.json();
-      console.log("Inicis Auth Result:", authResult);
-
-      if (authResult.resultCode === "0000") {
-        // Validate Inicis signValue signature to prevent response tampering
-        const expectedSignValue = crypto.createHash("sha256")
-          .update(authResult.resultCode + (authResult.TotPrice || "") + (authResult.MOID || "") + mid + signKey)
-          .digest("hex");
-
-        if (authResult.signValue && authResult.signValue !== expectedSignValue) {
-          console.error(`[Inicis Callback] Signature verification failed! Expected: ${expectedSignValue}, Received: ${authResult.signValue}`);
-          return res.redirect(`/payment/callback?status=fail&success=false&message=${encodeURIComponent("결제 응답 서명 검증 실패 (보안 오류)")}&resultCode=SIGNATURE_VERIFICATION_FAILED`);
-        }
-
-        // Payment Success
-        const oid = authResult.MOID;
-        const totalPirce = authResult.TotPrice ? parseInt(authResult.TotPrice, 10) : undefined;
-        
-        // Log detail
-        if (supabaseAdmin) {
-          await supabaseAdmin.from("payment_logs").insert([{
-            merchant_uid: oid,
-            raw_data: authResult
-          }]);
-        }
-
-        // Apply Transition with expectedAmount validation
-        await handleOrderStateTransition(oid, "PAID", authResult, totalPirce);
-        
-        res.redirect(`/payment/callback?status=success&success=true&resultCode=0000&mid=${mid}&oid=${oid}&message=${encodeURIComponent("결제가 완료되었습니다!")}`);
-      } else {
-        // Payment Failed
-        const oid = authResult.MOID || "unknown";
-        const message = encodeURIComponent(authResult.resultMsg || "결제 인증에 실패했습니다.");
-        
-        if (oid !== "unknown") {
-          await handleOrderStateTransition(oid, "FAILED", authResult);
-        }
-
-        res.redirect(`/payment/callback?status=fail&success=false&resultCode=${authResult.resultCode}&resultMsg=${message}&message=${message}`);
-      }
-    } catch (error: any) {
-      console.error("Callback handling error:", error);
-      res.redirect(`/payment/callback?status=fail&success=false&message=${encodeURIComponent(error.message || "Internal Server Error")}&resultCode=INTERNAL_SERVER_ERROR`);
-    }
-  });
-
   app.get("/payment/close", (req, res) => {
     res.send(`<html><head><script>window.close();</script></head><body>Closing...</body></html>`);
   });
@@ -4936,9 +5006,37 @@ async function startServer() {
       }
 
       // Add protocol if missing
-      let targetUrl = url;
+      let targetUrl = url.trim();
       if (!/^https?:\/\//i.test(targetUrl)) {
         targetUrl = "https://" + targetUrl;
+      }
+
+      let parsedTarget: URL;
+      try {
+        parsedTarget = new URL(targetUrl);
+      } catch {
+        return res.status(400).json({ status: "error", message: "Invalid URL format" });
+      }
+
+      if (parsedTarget.protocol !== "http:" && parsedTarget.protocol !== "https:") {
+        return res.status(400).json({ status: "error", message: "Only HTTP/HTTPS protocols are allowed" });
+      }
+
+      const hostname = parsedTarget.hostname.toLowerCase();
+      const isPrivateOrInternal =
+        hostname === "localhost" ||
+        hostname === "0.0.0.0" ||
+        hostname === "[::1]" ||
+        hostname.endsWith(".local") ||
+        hostname.endsWith(".internal") ||
+        /^127\./.test(hostname) ||
+        /^10\./.test(hostname) ||
+        /^192\.168\./.test(hostname) ||
+        /^169\.254\./.test(hostname) ||
+        /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname);
+
+      if (isPrivateOrInternal) {
+        return res.status(403).json({ status: "error", message: "Forbidden internal or private network address" });
       }
 
       console.log(`[Link Preview] Fetching metadata for ${targetUrl}`);
@@ -5111,15 +5209,14 @@ async function startServer() {
   });
 
   // Serve static assets OR Vite middleware
-  let vite: any;
   if (process.env.NODE_ENV !== "production") {
-    vite = await createViteServer({
+    const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
-    // Ensure that API requests are not intercepted by Vite middleware
+    // Ensure that API requests and config are not intercepted by Vite middleware
     app.use((req, res, next) => {
-      if (req.url.startsWith('/api/') || req.url === '/api') {
+      if (req.url.startsWith('/api/') || req.url === '/api' || req.url.startsWith('/config.js')) {
         return next();
       }
       vite.middlewares(req, res, next);
@@ -5127,48 +5224,20 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-  }
-
-  // SPA Fallback
-  app.get("*", async (req, res, next) => {
-    // Skip API and config routes - let the specific handlers or the catch-all deal with these
-    if (req.path.startsWith("/api") || req.path === "/config.js") {
-      return next();
-    }
-
-    // In development mode, Vite handles SPA fallback through middleware, 
-    // but we can also manually serve index.html if needed.
-    if (process.env.NODE_ENV !== "production") {
-      try {
-        const indexPath = path.resolve(process.cwd(), "index.html");
-        if (!fs.existsSync(indexPath)) {
-          console.error(`Index file not found at: ${indexPath}`);
-          return next();
-        }
-        let template = fs.readFileSync(indexPath, "utf-8");
-        // @ts-ignore - Assuming vite defined in outer scope or using local vite instance
-        if (typeof vite !== 'undefined') {
-          // @ts-ignore
-          template = await vite.transformIndexHtml(req.originalUrl, template);
-        }
-        return res.status(200).set({ "Content-Type": "text/html" }).send(template);
-      } catch (e) {
-        console.error("SPA Fallback (Dev) Error:", e);
-        return next(e);
+    // SPA Fallback for production
+    app.get("*", (req, res, next) => {
+      if (req.path.startsWith("/api") || req.path === "/config.js") {
+        return next();
       }
-    } else {
-      // Production mode: serve from dist
-      const distPath = path.join(process.cwd(), "dist");
       const indexPath = path.join(distPath, "index.html");
-      
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {
         console.error(`Production index.html missing at: ${indexPath}`);
         res.status(404).send("Application not built or index.html missing.");
       }
-    }
-  });
+    });
+  }
 
   // Global Error Handler
   app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

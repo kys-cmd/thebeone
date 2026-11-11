@@ -248,9 +248,25 @@ export const handler: Handler = async (event, context) => {
     }
 
     // =========================================================================
-    // 2. PROCESS PAYMENT (Secure complete checkout handler)
+    // 2. PROCESS PAYMENT (Admin / Verified Free Checkout Handler)
     // =========================================================================
     if (action === "process-payment") {
+      if (!requestingUser) {
+        return {
+          statusCode: 401,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: "Authentication token is required." })
+        };
+      }
+      const callerIsAdmin = await isAdminUser(requestingUser.id);
+      if (!callerIsAdmin) {
+        return {
+          statusCode: 403,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: "Forbidden - Direct payment processing requires administrator privileges." })
+        };
+      }
+
       const { merchant_uid, amount, courseId, userId, payment_tid, payment_method } = body;
       const targetUserId = userId || requestingUser?.id;
 
@@ -465,6 +481,107 @@ export const handler: Handler = async (event, context) => {
         headers: responseHeaders,
         body: JSON.stringify({ status: "error", message: "Forbidden - Administrator access credentials required." })
       };
+    }
+
+    // 8.47 ADMIN: 결제/환불 API 통신 로그 조회
+    if (action === "admin-get-payment-api-logs") {
+      const { limit = 100, offset = 0 } = body;
+      try {
+        const { data, count, error } = await supabaseAdmin
+          .from("payment_api_logs")
+          .select(`
+            *,
+            orders (
+              id,
+              order_name,
+              amount,
+              status,
+              user_id
+            )
+          `, { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        if (error) {
+          return {
+            statusCode: 500,
+            headers: responseHeaders,
+            body: JSON.stringify({ status: "error", message: `로그 조회 실패: ${error.message}` })
+          };
+        }
+
+        const logsWithProfiles = [];
+        if (data && data.length > 0) {
+          const userIds = data
+            .map((l: any) => l.orders?.user_id)
+            .filter((id: any) => !!id);
+
+          let profilesMap: Record<string, any> = {};
+          if (userIds.length > 0) {
+            const { data: pData } = await supabaseAdmin
+              .from("profiles")
+              .select("id, email, name")
+              .in("id", userIds);
+
+            if (pData) {
+              profilesMap = pData.reduce((acc: any, curr: any) => {
+                acc[curr.id] = curr;
+                return acc;
+              }, {});
+            }
+          }
+
+          for (const log of data) {
+            const logCopy = { ...log };
+            if (logCopy.orders && logCopy.orders.user_id) {
+              logCopy.orders.profiles = profilesMap[logCopy.orders.user_id] || null;
+            }
+            logsWithProfiles.push(logCopy);
+          }
+        }
+
+        return {
+          statusCode: 200,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "success", logs: logsWithProfiles, count })
+        };
+      } catch (err: any) {
+        return {
+          statusCode: 500,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: `로그 조회 중 예외 발생: ${err.message}` })
+        };
+      }
+    }
+
+    // 8.48 ADMIN: 결제/환불 API 통신 로그 전체 삭제
+    if (action === "admin-clear-payment-api-logs") {
+      try {
+        const { error } = await supabaseAdmin
+          .from("payment_api_logs")
+          .delete()
+          .neq("id", "00000000-0000-0000-0000-000000000000");
+
+        if (error) {
+          return {
+            statusCode: 500,
+            headers: responseHeaders,
+            body: JSON.stringify({ status: "error", message: `로그 전체 삭제 실패: ${error.message}` })
+          };
+        }
+
+        return {
+          statusCode: 200,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "success", message: "결제/환불 통신 API 로그가 전체 정리되었습니다." })
+        };
+      } catch (err: any) {
+        return {
+          statusCode: 500,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: `로그 전체 삭제 중 예외 발생: ${err.message}` })
+        };
+      }
     }
 
     // =========================================================================
@@ -1115,6 +1232,185 @@ export const handler: Handler = async (event, context) => {
     }
 
     // =========================================================================
+    // 7-2. ADMIN: 전체 주문 및 이니시스 승인번호(payment_logs) 매칭 조회 (RLS 우회)
+    // =========================================================================
+    if (action === "admin-get-orders") {
+      const limit = Number(body.limit) || 200;
+
+      const { data: orders, error: ordersError } = await supabaseAdmin
+        .from("orders")
+        .select("id, amount, status, created_at, updated_at, user_id, course_id, merchant_uid, payment_method")
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+      if (ordersError) throw ordersError;
+      if (!orders || orders.length === 0) {
+        return {
+          statusCode: 200,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "success", orders: [] })
+        };
+      }
+
+      const userIds = [...new Set(orders.map((o: any) => o.user_id).filter(Boolean))];
+      const courseIds = [...new Set(orders.map((o: any) => o.course_id).filter(Boolean))];
+
+      const [profilesRes, coursesRes, logsRes] = await Promise.all([
+        userIds.length > 0
+          ? supabaseAdmin.from("profiles").select("id, name, nickname, email").in("id", userIds)
+          : Promise.resolve({ data: [] as any[] }),
+        courseIds.length > 0
+          ? supabaseAdmin.from("courses").select("id, title, thumbnail").in("id", courseIds)
+          : Promise.resolve({ data: [] as any[] }),
+        supabaseAdmin
+          .from("payment_logs")
+          .select("id, order_id, status, raw_response, payment_method, amount, created_at")
+          .order("created_at", { ascending: false })
+          .limit(1000)
+      ]);
+
+      const profilesMap = new Map((profilesRes.data || []).map((p: any) => [p.id, p]));
+      const coursesMap = new Map((coursesRes.data || []).map((c: any) => [c.id, c]));
+
+      const logsByOrderId = new Map<string, any[]>();
+      const logsByMerchantUid = new Map<string, any[]>();
+
+      if (logsRes.data) {
+        for (const log of logsRes.data) {
+          if (log.order_id) {
+            if (!logsByOrderId.has(log.order_id)) {
+              logsByOrderId.set(log.order_id, []);
+            }
+            logsByOrderId.get(log.order_id)!.push(log);
+          }
+          if (log.raw_response) {
+            try {
+              const parsed = typeof log.raw_response === "string" ? JSON.parse(log.raw_response) : log.raw_response;
+              const rawObj = parsed?.details || parsed;
+              const mUid = parsed?.merchant_uid || rawObj?.MOID || rawObj?.P_OID || rawObj?.oid || rawObj?.orderNumber;
+              if (mUid) {
+                if (!logsByMerchantUid.has(mUid)) {
+                  logsByMerchantUid.set(mUid, []);
+                }
+                logsByMerchantUid.get(mUid)!.push(log);
+              }
+            } catch (_e) {
+              // ignore json parse error
+            }
+          }
+        }
+      }
+
+      const enrichedOrders = orders.map((order: any) => {
+        const directLogs = logsByOrderId.get(order.id) || [];
+        const uidLogs = order.merchant_uid ? (logsByMerchantUid.get(order.merchant_uid) || []) : [];
+        const mergedLogsMap = new Map<string, any>();
+        for (const l of [...directLogs, ...uidLogs]) {
+          mergedLogsMap.set(l.id || `${l.order_id}_${l.created_at}`, l);
+        }
+        const orderLogs = Array.from(mergedLogsMap.values());
+
+        let tid = "";
+        let applNum = "";
+        let payDevice = "";
+        let cardName = "";
+        let applDate = "";
+        let applTime = "";
+        let isInicisLinked = false;
+
+        const sortedLogs = [...orderLogs].sort((a, b) => {
+          if (a.status === "SUCCESS" && b.status !== "SUCCESS") return -1;
+          if (a.status !== "SUCCESS" && b.status === "SUCCESS") return 1;
+          return 0;
+        });
+
+        for (const logItem of sortedLogs) {
+          if (!logItem?.raw_response) continue;
+          try {
+            const parsed = typeof logItem.raw_response === "string" ? JSON.parse(logItem.raw_response) : logItem.raw_response;
+            const rawObj = parsed?.details || parsed;
+            if (!rawObj || typeof rawObj !== "object") continue;
+
+            const extractedTid = (
+              rawObj.tid ||
+              rawObj.TID ||
+              rawObj.P_TID ||
+              rawObj.AuthTID ||
+              rawObj.payment_tid ||
+              ""
+            ).toString().trim();
+
+            const extractedApplNum = (
+              rawObj.applNum ||
+              rawObj.CARD_ApplNum ||
+              rawObj.applNo ||
+              rawObj.P_AUTH_NO ||
+              rawObj.P_AUTH_NUM ||
+              rawObj.AuthCode ||
+              rawObj.applCode ||
+              rawObj.appl_num ||
+              ""
+            ).toString().trim();
+
+            if (extractedTid && !tid) tid = extractedTid;
+            if (extractedApplNum && !applNum) applNum = extractedApplNum;
+
+            if (!payDevice) {
+              if (rawObj.payDevice) {
+                payDevice = rawObj.payDevice;
+              } else if (extractedTid.startsWith("INIMX_") || rawObj.P_TID) {
+                payDevice = "MOBILE";
+              } else if (extractedTid.startsWith("Stdpay")) {
+                payDevice = "PC";
+              }
+            }
+
+            if (!cardName) {
+              cardName = rawObj.P_FN_NM || rawObj.CARD_PurchaseName || rawObj.cardName || "";
+            }
+            if (!applDate) {
+              applDate = rawObj.applDate || (rawObj.P_AUTH_DT ? String(rawObj.P_AUTH_DT).substring(0, 8) : "");
+            }
+            if (!applTime) {
+              applTime = rawObj.applTime || (rawObj.P_AUTH_DT ? String(rawObj.P_AUTH_DT).substring(8, 14) : "");
+            }
+          } catch (_e) {
+            // ignore
+          }
+        }
+
+        if (tid && (tid.startsWith("Stdpay") || tid.startsWith("INIMX_") || tid.startsWith("INI"))) {
+          isInicisLinked = true;
+        } else if (applNum && tid && !tid.startsWith("direct_")) {
+          isInicisLinked = true;
+        }
+
+        return {
+          ...order,
+          profile: profilesMap.get(order.user_id) || null,
+          course: coursesMap.get(order.course_id) || null,
+          logs: orderLogs,
+          tid: tid || "-",
+          applNum: applNum || "-",
+          payDevice: payDevice || (tid.startsWith("INIMX_") ? "MOBILE" : tid.startsWith("Stdpay") ? "PC" : ""),
+          cardName: cardName || "",
+          applDate: applDate || "",
+          applTime: applTime || "",
+          isInicisLinked
+        };
+      });
+
+      return {
+        statusCode: 200,
+        headers: responseHeaders,
+        body: JSON.stringify({
+          status: "success",
+          orders: enrichedOrders
+        })
+      };
+    }
+
+    // =========================================================================
     // 8. ADMIN: 주문정보 PAID 강제 갱신 및 재처리 (Order Reprocess Machine)
     // =========================================================================
     if (action === "reprocess-order") {
@@ -1243,7 +1539,7 @@ export const handler: Handler = async (event, context) => {
     }
 
     // =========================================================================
-    // 8.46 ADMIN: 이니시스 실시간 연계 환불 처리 기능 (Task - Refund Order)
+    // 8.46 ADMIN: 이니시스 실시간 연계 환불 처리 기능
     // =========================================================================
     if (action === "refund-order") {
       const { orderId, reason } = body;

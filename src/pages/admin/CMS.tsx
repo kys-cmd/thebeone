@@ -263,7 +263,7 @@ export default function AdminCMS() {
               <h2 className="text-3xl font-black tracking-tight">HERO 영역 디자인 설정</h2>
               <p className="text-purple-100 max-w-2xl font-medium leading-relaxed">
                 메인 페이지와 카테고리별 상단 배너를 설정합니다. <br/>
-                배너 타입에 따라 <strong>롤링 배너</strong>, <strong>상세 페이지 레이아웃</strong> 등 패스트캠퍼스 스타일의 세련된 디자인이 자동 적용됩니다. <br/>
+                배너 타입에 따라 <strong>롤링 배너</strong>, <strong>상세 페이지 레이아웃</strong> 등 비원아카데미 표준 레이아웃 디자인이 자동 적용됩니다. <br/>
                 <span className="text-white text-xs mt-2 inline-block bg-white/20 px-3 py-1 rounded-full font-black animate-pulse">
                   최적화된 이미지 사이즈: 가로 1920px × 세로 450px (고해상도 와이드 규격)
                 </span>

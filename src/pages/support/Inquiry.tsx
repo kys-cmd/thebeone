@@ -83,29 +83,28 @@ export default function InquiryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] pt-[50px] pb-20">
+    <div className="min-h-screen bg-[#f8fafc] pt-6 sm:pt-12 pb-16 sm:pb-20">
       <div className="container mx-auto px-4 max-w-7xl">
-        <div className="space-y-12">
-          <div className="space-y-4 text-center">
+        <div className="space-y-8 sm:space-y-12">
+          <div className="space-y-3 sm:space-y-4 text-center">
             <Badge className="bg-blue-100 text-blue-600 border-none px-4 py-1.5 rounded-full font-black text-xs uppercase tracking-widest">
               Direct Contact
             </Badge>
-            <h1 className="text-4xl font-black text-gray-900 tracking-tighter">1:1 문의</h1>
-            <p className="text-gray-500 font-bold">
-              서비스 이용 중 불편한 점이나 궁금한 점이 있으시면<br />
-              언제든지 문의해 주세요. 담당자가 확인 후 답변 드립니다.
+            <h1 className="text-2xl sm:text-4xl font-black text-gray-900 tracking-tighter">1:1 문의</h1>
+            <p className="text-sm sm:text-base text-gray-500 font-bold break-keep">
+              서비스 이용 중 불편한 점이나 궁금한 점이 있으시면<br className="hidden sm:block" /> 언제든지 문의해 주세요. 담당자가 확인 후 답변 드립니다.
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="bg-white p-10 rounded-[48px] border border-gray-100 shadow-2xl space-y-8 max-w-3xl mx-auto w-full">
-            <div className="space-y-6">
+          <form onSubmit={handleSubmit} className="bg-white p-5 sm:p-8 md:p-10 rounded-3xl sm:rounded-[48px] border border-gray-100 shadow-xl sm:shadow-2xl space-y-6 sm:space-y-8 max-w-3xl mx-auto w-full">
+            <div className="space-y-5 sm:space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-black text-gray-900 ml-1">문의 유형 <span className="text-red-500">*</span></label>
+                  <label className="text-xs sm:text-sm font-black text-gray-900 ml-1">문의 유형 <span className="text-red-500">*</span></label>
                   <select 
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="w-full h-14 bg-gray-50 border-none rounded-2xl font-bold px-6 focus:ring-2 focus:ring-blue-500 outline-none text-gray-700"
+                    className="w-full h-12 sm:h-14 bg-gray-50 border-none rounded-xl sm:rounded-2xl font-bold px-4 sm:px-6 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-700"
                     required
                   >
                     <option value="사이트 오류">사이트 오류</option>
@@ -117,53 +116,53 @@ export default function InquiryPage() {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-black text-gray-900 ml-1">작성자 명 <span className="text-red-500">*</span></label>
+                  <label className="text-xs sm:text-sm font-black text-gray-900 ml-1">작성자 명 <span className="text-red-500">*</span></label>
                   <Input 
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="이름 또는 닉네임" 
-                    className="h-14 bg-gray-50 border-none rounded-2xl font-bold px-6 focus-visible:ring-2 focus-visible:ring-blue-500" 
+                    className="h-12 sm:h-14 bg-gray-50 border-none rounded-xl sm:rounded-2xl font-bold px-4 sm:px-6 text-sm focus-visible:ring-2 focus-visible:ring-blue-500" 
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-black text-gray-900 ml-1">이메일 <span className="text-red-500">*</span></label>
+                  <label className="text-xs sm:text-sm font-black text-gray-900 ml-1">이메일 <span className="text-red-500">*</span></label>
                   <Input 
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="답변 받을 이메일 주소" 
-                    className="h-14 bg-gray-50 border-none rounded-2xl font-bold px-6 focus-visible:ring-2 focus-visible:ring-blue-500" 
+                    className="h-12 sm:h-14 bg-gray-50 border-none rounded-xl sm:rounded-2xl font-bold px-4 sm:px-6 text-sm focus-visible:ring-2 focus-visible:ring-blue-500" 
                     required
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-black text-gray-900 ml-1">문의 제목 <span className="text-red-500">*</span></label>
+                <label className="text-xs sm:text-sm font-black text-gray-900 ml-1">문의 제목 <span className="text-red-500">*</span></label>
                 <Input 
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="제목을 입력해 주세요" 
-                  className="h-14 bg-gray-50 border-none rounded-2xl font-bold px-6 focus-visible:ring-2 focus-visible:ring-blue-500" 
+                  className="h-12 sm:h-14 bg-gray-50 border-none rounded-xl sm:rounded-2xl font-bold px-4 sm:px-6 text-sm focus-visible:ring-2 focus-visible:ring-blue-500" 
                   required
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-black text-gray-900 ml-1">상세 내용 <span className="text-red-500">*</span></label>
+                <label className="text-xs sm:text-sm font-black text-gray-900 ml-1">상세 내용 <span className="text-red-500">*</span></label>
                 <Textarea 
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="상세한 내용을 기재해 주시면 더 정확한 안내가 가능합니다." 
-                  className="min-h-[200px] bg-gray-50 border-none rounded-[24px] font-bold p-6 focus-visible:ring-2 focus-visible:ring-blue-500" 
+                  className="min-h-[160px] sm:min-h-[200px] bg-gray-50 border-none rounded-2xl sm:rounded-[24px] font-bold p-4 sm:p-6 text-sm focus-visible:ring-2 focus-visible:ring-blue-500" 
                   required
                 />
               </div>
               
-              <div className="p-4 bg-blue-50 rounded-2xl flex items-center gap-3">
-                <ShieldCheck className="w-5 h-5 text-blue-500 shrink-0" />
-                <p className="text-[11px] font-bold text-blue-800 leading-snug">
+              <div className="p-3.5 sm:p-4 bg-blue-50 rounded-2xl flex items-start sm:items-center gap-3">
+                <ShieldCheck className="w-5 h-5 text-blue-500 shrink-0 mt-0.5 sm:mt-0" />
+                <p className="text-[11px] font-bold text-blue-800 leading-snug break-keep">
                   개인정보 수집 및 이용에 동의하며 작성하신 내용이 본 서비스 관리를 위해 제출됩니다.
                 </p>
               </div>
@@ -172,7 +171,7 @@ export default function InquiryPage() {
             <Button 
               type="submit" 
               disabled={isSubmitting}
-              className="w-full h-16 bg-blue-600 hover:bg-blue-700 text-white font-black text-lg rounded-[24px] gap-3 shadow-xl shadow-blue-200 transition-all hover:scale-[1.02] active:scale-95 duration-250 flex items-center justify-center"
+              className="w-full h-14 sm:h-16 bg-blue-600 hover:bg-blue-700 text-white font-black text-base sm:text-lg rounded-2xl sm:rounded-[24px] gap-3 shadow-xl shadow-blue-200 transition-all active:scale-95 duration-200 flex items-center justify-center"
             >
               {isSubmitting ? (
                 <>

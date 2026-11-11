@@ -365,9 +365,9 @@ export default function LivePage() {
   const chatIsDisabledByAdmin = config?.live_chat_enabled === false;
 
   return (
-    <div className="h-[100dvh] md:h-[calc(100dvh-5rem)] lg:h-auto lg:min-h-screen bg-black flex flex-col lg:block lg:pt-20 lg:pb-32 overflow-hidden lg:overflow-visible">
-      {/* Mobile Dedicated Top Navigation Bar (lg:hidden) */}
-      <div className="lg:hidden shrink-0 h-11 bg-black/95 backdrop-blur border-b border-white/10 px-3 flex items-center justify-between z-30 text-white">
+    <div className="h-[100dvh] md:h-[calc(100dvh-4rem)] lg:h-auto lg:min-h-screen bg-black flex flex-col lg:block lg:pt-12 lg:pb-24 overflow-hidden lg:overflow-visible">
+      {/* Mobile Dedicated Top Navigation Bar (md:hidden) */}
+      <div className="md:hidden shrink-0 h-12 bg-black/95 backdrop-blur border-b border-white/10 px-3 flex items-center justify-between z-30 text-white">
         <div className="flex items-center gap-1.5">
           <Button 
             variant="ghost" 
@@ -662,7 +662,7 @@ export default function LivePage() {
             )}
 
             {/* Chat Input Bar */}
-            <div className="p-2.5 sm:p-3 lg:p-4 border-t bg-white shrink-0">
+            <div className="px-2.5 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] sm:p-3 lg:p-4 border-t bg-white shrink-0">
                {!user ? (
                  <div className="flex items-center justify-between gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
                    <div className="flex items-center gap-1.5 text-xs text-gray-500 font-bold min-w-0 truncate">
@@ -729,8 +729,8 @@ export default function LivePage() {
       </div>
 
       {showSettingsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-white rounded-[32px] p-8 max-w-lg w-full space-y-8 shadow-2xl relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl sm:rounded-[32px] p-6 sm:p-8 max-w-lg w-full space-y-6 sm:space-y-8 shadow-2xl relative my-auto">
             <div className="absolute top-6 left-6 flex items-center gap-2 text-red-600">
               <Zap className="w-5 h-5" />
               <span className="font-black">LIVE SETUP</span>
@@ -808,8 +808,8 @@ export default function LivePage() {
 
       {/* Conflict Resolution Modal */}
       {showConflictModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-white rounded-[32px] p-8 max-w-lg w-full space-y-6 shadow-2xl relative border-2 border-amber-500/30">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-white rounded-3xl sm:rounded-[32px] p-6 sm:p-8 max-w-lg w-full space-y-5 sm:space-y-6 shadow-2xl relative border-2 border-amber-500/30 my-auto">
             <div className="flex items-center gap-2 text-amber-600">
               <AlertTriangle className="w-6 h-6 animate-bounce" />
               <span className="font-black text-xs tracking-wider uppercase">라이브 방송 중복 감지</span>

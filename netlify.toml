@@ -12,20 +12,14 @@
 
 # 1. API Redirects to Netlify Functions
 [[redirects]]
-  from = "/api/payment/inicis/sign"
-  to = "/.netlify/functions/payment-sign"
+  from = "/api/init-pay"
+  to = "/.netlify/functions/init-pay"
   status = 200
   force = true
 
 [[redirects]]
-  from = "/api/payment/inicis/notify"
-  to = "/.netlify/functions/payment-notify"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/payment/inicis/callback"
-  to = "/.netlify/functions/payment-callback"
+  from = "/api/inicis-return"
+  to = "/.netlify/functions/inicis-return"
   status = 200
   force = true
 

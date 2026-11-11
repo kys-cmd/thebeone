@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
+import { Link, useLocation, Outlet } from 'react-router-dom';
 import { 
   Users, 
   BookOpen, 
@@ -8,9 +8,7 @@ import {
   MessageSquare, 
   Layout, 
   Settings, 
-  ShieldCheck,
   ChevronRight,
-  LogOut,
   Bell,
   Search,
   Command,
@@ -22,7 +20,6 @@ import {
   Radio
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 
@@ -42,7 +39,9 @@ const ADMIN_MENUS = [
 
 export default function AdminLayout() {
   const location = useLocation();
-  const navigate = useNavigate();
+  const now = new Date();
+  const formattedDate = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
+  const formattedWeekday = now.toLocaleDateString('en-US', { weekday: 'long' });
 
   return (
     <div className="flex min-h-screen bg-[#f8fafc] font-sans antialiased text-rendering-optimizeLegibility">
@@ -85,7 +84,7 @@ export default function AdminLayout() {
                <Settings className="w-5 h-5 text-gray-400" />
                <span>사이트 설정</span>
              </Link>
-             <Link to="/admin/errors" className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-black text-sm transition-all ${location.pathname === '/admin/errors' ? 'bg-purple-600 text-white shadow-xl shadow-purple-200' : 'text-gray-500 hover:bg-gray-50 hover:text-purple-600'}`}>
+             <Link to="/admin/diagnostics" className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-black text-sm transition-all ${(location.pathname === '/admin/diagnostics' || location.pathname === '/admin/errors') ? 'bg-purple-600 text-white shadow-xl shadow-purple-200' : 'text-gray-500 hover:bg-gray-50 hover:text-purple-600'}`}>
                <AlertTriangle className="w-5 h-5 text-gray-400" />
                <span>오류 로그 수집기</span>
              </Link>
@@ -103,8 +102,8 @@ export default function AdminLayout() {
                <AvatarFallback>AD</AvatarFallback>
              </Avatar>
              <div className="flex-1 overflow-hidden">
-               <p className="text-xs font-black text-gray-900 leading-none truncate">관리자(수석아키텍트)</p>
-               <p className="text-[10px] text-gray-400 font-bold mt-1">Super Admin</p>
+               <p className="text-xs font-black text-gray-900 leading-none truncate">시스템 관리자</p>
+               <p className="text-[10px] text-gray-400 font-bold mt-1">Administrator</p>
              </div>
            </div>
         </div>
@@ -141,8 +140,8 @@ export default function AdminLayout() {
             
             <div className="flex items-center gap-3 pl-6 border-l border-gray-100">
                <div className="text-right">
-                 <p className="text-sm font-black text-gray-900">2026.04.26</p>
-                 <p className="text-[10px] text-purple-600 font-black italic">Sunday Morning</p>
+                 <p className="text-sm font-black text-gray-900">{formattedDate}</p>
+                 <p className="text-[10px] text-purple-600 font-black italic">{formattedWeekday}</p>
                </div>
             </div>
           </div>

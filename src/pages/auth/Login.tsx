@@ -280,23 +280,23 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 py-32">
+    <div className="min-h-[calc(100dvh-3.5rem)] bg-gray-50 flex items-center justify-center px-4 py-8 sm:py-20">
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-[450px] bg-white rounded-[40px] shadow-2xl border border-gray-100 p-10 space-y-10"
+        className="w-full max-w-[450px] bg-white rounded-3xl sm:rounded-[40px] shadow-xl sm:shadow-2xl border border-gray-100 p-6 sm:p-10 space-y-7 sm:space-y-10"
       >
         {mode === 'login' ? (
           <>
             {/* Header */}
-            <div className="text-center space-y-6">
-              <Link to="/" className="inline-flex flex-col items-center gap-4">
-                 <div className="w-16 h-16 bg-purple-600 rounded-[22px] flex items-center justify-center shadow-2xl shadow-purple-200">
-                   <span className="text-white text-3xl font-black">BE</span>
+            <div className="text-center space-y-4 sm:space-y-6">
+              <Link to="/" className="inline-flex flex-col items-center gap-3 sm:gap-4">
+                 <div className="w-14 h-14 sm:w-16 sm:h-16 bg-purple-600 rounded-2xl sm:rounded-[22px] flex items-center justify-center shadow-xl shadow-purple-200">
+                   <span className="text-white text-2xl sm:text-3xl font-black">BE</span>
                  </div>
-                 <h1 className="text-3xl font-black tracking-tighter text-gray-900">당신의 성장이{'\n'}시작되는 곳</h1>
+                 <h1 className="text-2xl sm:text-3xl font-black tracking-tighter text-gray-900 whitespace-pre-line">당신의 성장이{'\n'}시작되는 곳</h1>
               </Link>
-              <p className="text-gray-400 font-medium whitespace-pre-line">
+              <p className="text-sm sm:text-base text-gray-400 font-medium whitespace-pre-line">
                 비원아카데미와 함께{'\n'}자본주의의 지도를 그려보세요.
               </p>
             </div>
@@ -310,7 +310,7 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="이메일을 입력하세요" 
-                  className="h-14 bg-gray-50 border-gray-50 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                  className="h-12 sm:h-14 bg-gray-50 border-gray-50 rounded-xl sm:rounded-2xl focus-visible:ring-purple-600 font-bold" 
                 />
               </div>
               <div className="space-y-2">
@@ -320,12 +320,12 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="비밀번호를 입력하세요" 
-                  className="h-14 bg-gray-50 border-gray-50 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                  className="h-12 sm:h-14 bg-gray-50 border-gray-50 rounded-xl sm:rounded-2xl focus-visible:ring-purple-600 font-bold" 
                 />
               </div>
               
-              <div className="flex items-center justify-between px-1 py-1.5 border-t border-b border-gray-50 mt-1">
-                 <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-1 py-2 border-t border-b border-gray-50 mt-1">
+                 <div className="flex items-center gap-2 sm:gap-3">
                    <button 
                      type="button" 
                      onClick={() => {
@@ -335,7 +335,7 @@ export default function Login() {
                        setFoundEmails([]);
                        setMode('findId');
                      }}
-                     className="text-[14px] font-extrabold text-gray-500 hover:text-purple-600 transition-colors cursor-pointer"
+                     className="text-xs sm:text-[14px] font-extrabold text-gray-500 hover:text-purple-600 transition-colors cursor-pointer"
                    >
                      아이디 찾기
                    </button>
@@ -346,20 +346,20 @@ export default function Login() {
                        setForgotEmail(email);
                        setMode('forgot');
                      }}
-                     className="text-[14px] font-extrabold text-gray-500 hover:text-purple-600 transition-colors cursor-pointer"
+                     className="text-xs sm:text-[14px] font-extrabold text-gray-500 hover:text-purple-600 transition-colors cursor-pointer"
                    >
                      비밀번호 찾기
                    </button>
                  </div>
                  <Link 
                    to={inviteParam ? `/auth/register?invite=${inviteParam}` : "/auth/register"} 
-                   className="text-[14px] font-black text-purple-600 hover:text-purple-700 underline underline-offset-4 decoration-2 decoration-purple-200 hover:decoration-purple-600 transition-all cursor-pointer"
+                   className="text-xs sm:text-[14px] font-black text-purple-600 hover:text-purple-700 underline underline-offset-4 decoration-2 decoration-purple-200 hover:decoration-purple-600 transition-all cursor-pointer"
                  >
                    회원가입 하기
                  </Link>
               </div>
 
-              <Button type="submit" disabled={loading} className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200 mt-4">
+              <Button type="submit" disabled={loading} className="w-full h-14 sm:h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-base sm:text-xl rounded-2xl shadow-xl shadow-purple-200 mt-4">
                 {loading ? '로그인 중...' : '매뉴얼 로그인'}
               </Button>
 
