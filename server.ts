@@ -3572,6 +3572,102 @@ async function startServer() {
         });
       }
 
+      // 6.55 MEMBER: 본인 확인(비밀번호) 후 영구 회원 탈퇴 및 DB 전체 삭제
+      if (action === "withdraw-account") {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+          return res.status(401).json({ status: "error", message: "로그인이 필요합니다." });
+        }
+
+        const token = authHeader.split(" ")[1];
+        const { password } = req.body;
+
+        if (!password || typeof password !== "string") {
+          return res.status(400).json({ status: "error", message: "본인 확인을 위해 비밀번호를 입력해 주세요." });
+        }
+
+        if (!supabaseAdmin) {
+          return res.status(500).json({ status: "error", message: "데이터베이스 연결이 초기화되지 않았습니다." });
+        }
+
+        const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+        if (userError || !user) {
+          return res.status(401).json({ status: "error", message: "유효하지 않은 인증 세션입니다. 다시 로그인해 주세요." });
+        }
+
+        const userId = user.id;
+        const userEmail = user.email || "";
+
+        const supUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+        const supAnon = process.env.VITE_SUPABASE_ANON_KEY || "";
+        const clientAuth = createClient(supUrl, supAnon);
+
+        const { error: signInErr } = await clientAuth.auth.signInWithPassword({
+          email: userEmail,
+          password: password.trim()
+        });
+
+        if (signInErr) {
+          return res.status(400).json({
+            status: "error",
+            message: "비밀번호가 일치하지 않습니다. 다시 확인해 주세요."
+          });
+        }
+
+        console.log(`[core-api withdraw-account] Starting complete DB cascade purge for user: ${userId} (${userEmail})`);
+
+        const purgeTable = async (tableName: string, colName: string = "user_id") => {
+          try {
+            const { error } = await supabaseAdmin.from(tableName).delete().eq(colName, userId);
+            if (error && !error.message?.includes("does not exist")) {
+              console.warn(`[core-api Purge Warning] table '${tableName}' deletion notice:`, error.message);
+            }
+          } catch (tErr: any) {
+            console.warn(`[core-api Purge Ignored] table '${tableName}':`, tErr?.message);
+          }
+        };
+
+        await purgeTable("lesson_progress", "user_id");
+        await purgeTable("enrollments", "user_id");
+        await purgeTable("course_enrollments", "user_id");
+        await purgeTable("orders", "user_id");
+        await purgeTable("payments", "user_id");
+        await purgeTable("payment_logs", "user_id");
+        await purgeTable("payment_api_logs", "user_id");
+        await purgeTable("transactions", "user_id");
+        await purgeTable("transaction_lines", "user_id");
+        await purgeTable("reviews", "user_id");
+
+        await purgeTable("post_comments", "user_id");
+        await purgeTable("post_reactions", "user_id");
+        await purgeTable("post_likes", "user_id");
+        await purgeTable("post_poll_votes", "user_id");
+        await purgeTable("post_attendance", "user_id");
+        await purgeTable("post_todo_checks", "user_id");
+        await purgeTable("posts", "user_id");
+        await purgeTable("board_replies", "user_id");
+        await purgeTable("board_posts", "user_id");
+        await purgeTable("community_members", "user_id");
+        await purgeTable("community_invitations", "user_id");
+        await purgeTable("message_reactions", "user_id");
+        await purgeTable("messages", "user_id");
+        await purgeTable("chat_messages", "user_id");
+        await purgeTable("chat_room_members", "user_id");
+        await purgeTable("chat_last_read", "user_id");
+
+        await purgeTable("profiles", "id");
+
+        const { error: authDelErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
+        if (authDelErr && !authDelErr.message?.toLowerCase().includes("not found")) {
+          console.error(`[core-api withdraw-account] Delete auth user failed:`, authDelErr);
+        }
+
+        return res.json({
+          status: "success",
+          message: "회원 탈퇴가 완료되었습니다. 그동안 비원아카데미를 이용해 주셔서 감사합니다."
+        });
+      }
+
       return res.status(400).json({ status: "error", message: `Action [${action}] is not supported on core-api routing.` });
 
     } catch (e: any) {

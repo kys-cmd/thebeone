@@ -323,11 +323,13 @@ export const authService = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify({ password })
+      body: JSON.stringify({ action: 'withdraw-account', password })
     });
 
-    // Fallback to core-api action if not found
-    if (response.status === 404) {
+    let result = await response.json().catch(() => null);
+
+    // Fallback to core-api action if not found or if routed to general router
+    if (response.status === 404 || (response.status === 400 && result?.message?.includes('routing'))) {
       response = await fetch('/api/core-api', {
         method: 'POST',
         headers: {
@@ -336,9 +338,9 @@ export const authService = {
         },
         body: JSON.stringify({ action: 'withdraw-account', password })
       });
+      result = await response.json().catch(() => null);
     }
 
-    const result = await response.json().catch(() => null);
     if (!response.ok || result?.status !== 'success') {
       throw new Error(result?.message || '회원 탈퇴 처리에 실패했습니다. 비밀번호를 다시 확인해 주세요.');
     }
