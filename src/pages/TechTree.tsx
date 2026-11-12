@@ -24,9 +24,9 @@ export default function TechTreePage() {
             transition={{ duration: 0.5 }}
             className="relative mx-auto w-40 h-40"
           >
-            <div className="absolute inset-0 bg-purple-600/10 rounded-[48px] animate-pulse" />
-            <div className="absolute inset-4 bg-purple-600/20 rounded-[40px] animate-pulse [animation-delay:0.2s]" />
-            <div className="absolute inset-8 bg-purple-600 rounded-[32px] shadow-2xl shadow-purple-200 flex items-center justify-center text-white">
+            <div className="absolute inset-0 bg-purple-600/10 rounded-2xl animate-pulse" />
+            <div className="absolute inset-4 bg-purple-600/20 rounded-2xl animate-pulse [animation-delay:0.2s]" />
+            <div className="absolute inset-8 bg-purple-600 rounded-xl shadow-2xl shadow-purple-200 flex items-center justify-center text-white">
               <Zap className="w-12 h-12 fill-current" />
             </div>
             
@@ -61,7 +61,7 @@ export default function TechTreePage() {
               to="/"
               className={cn(
                 buttonVariants({ variant: "default" }),
-                "h-16 px-10 rounded-[24px] bg-gray-900 hover:bg-gray-800 text-white font-black text-lg gap-3 transition-all hover:scale-105 active:scale-95 flex items-center justify-center border-none"
+                "h-16 px-10 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-black text-lg gap-3 transition-all hover:scale-105 active:scale-95 flex items-center justify-center border-none"
               )}
             >
               홈으로 돌아가기

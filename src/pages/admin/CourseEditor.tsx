@@ -1432,7 +1432,7 @@ export default function AdminCourseEditor() {
                         </div>
                       </div>
                     </div>
-                    <div className="p-10 rounded-3xl border border-dashed text-center relative overflow-hidden" style={{ backgroundColor: courseInfo.hero_bg_color, color: courseInfo.hero_text_color }}>
+                    <div className="p-10 rounded-xl border border-dashed text-center relative overflow-hidden" style={{ backgroundColor: courseInfo.hero_bg_color, color: courseInfo.hero_text_color }}>
                       {courseInfo.hero_image && (
                         <img src={courseInfo.hero_image} className="absolute inset-0 w-full h-full object-cover opacity-30" alt="" />
                       )}
@@ -1708,7 +1708,7 @@ export default function AdminCourseEditor() {
                           </div>
                         ))
                       ) : (
-                        <div className="text-center py-12 border-2 border-dashed rounded-3xl border-gray-100">
+                        <div className="text-center py-12 border-2 border-dashed rounded-xl border-gray-100">
                           <FileText className="w-12 h-12 text-gray-200 mx-auto mb-3" />
                           <p className="text-sm text-gray-400 font-medium">업로드된 교안이 없습니다.</p>
                         </div>
@@ -2090,7 +2090,7 @@ export default function AdminCourseEditor() {
 
                     {/* 수강 해제(취소) 확인 대화상자 */}
                     <Dialog open={isUnenrollConfirmOpen} onOpenChange={setIsUnenrollConfirmOpen}>
-                      <DialogContent className="max-w-md rounded-3xl p-6 bg-white gap-6">
+                      <DialogContent className="max-w-md rounded-xl p-6 bg-white gap-6">
                         <DialogHeader className="gap-2">
                           <DialogTitle className="text-xl font-black text-gray-900 flex items-center gap-2">
                             <span className="text-red-600">⚠️ 수강 권한 회수</span>
@@ -2131,7 +2131,7 @@ export default function AdminCourseEditor() {
 
                     {/* 개별 수강 기간 수정 대화상자 */}
                     <Dialog open={isEditExpiryModalOpen} onOpenChange={setIsEditExpiryModalOpen}>
-                      <DialogContent className="max-w-md rounded-3xl p-6 bg-white gap-6">
+                      <DialogContent className="max-w-md rounded-xl p-6 bg-white gap-6">
                         <DialogHeader className="gap-2">
                           <DialogTitle className="text-xl font-black text-gray-900 flex items-center gap-2">
                             <Clock className="w-5 h-5 text-purple-600" /> 수강 기간 수정
@@ -2189,7 +2189,7 @@ export default function AdminCourseEditor() {
 
                     {/* 일괄 수강 기간 수정 대화상자 */}
                     <Dialog open={isBulkExpiryModalOpen} onOpenChange={setIsBulkExpiryModalOpen}>
-                      <DialogContent className="max-w-md rounded-3xl p-6 bg-white gap-6">
+                      <DialogContent className="max-w-md rounded-xl p-6 bg-white gap-6">
                         <DialogHeader className="gap-2">
                           <DialogTitle className="text-xl font-black text-gray-900 flex items-center gap-2">
                             <Clock className="w-5 h-5 text-purple-600" /> 일괄 수강 기간 수정
@@ -2247,7 +2247,7 @@ export default function AdminCourseEditor() {
                     </Dialog>
 
                     <Dialog open={isEnrollModalOpen} onOpenChange={(open) => { if(!open) { setIsEnrollModalOpen(false); setSelectedMemberIds([]); } }}>
-                      <DialogContent className="max-w-3xl rounded-3xl p-6 bg-white gap-6">
+                      <DialogContent className="max-w-3xl rounded-xl p-6 bg-white gap-6">
                         <DialogHeader className="gap-2">
                           <DialogTitle className="text-xl font-black text-gray-900 flex items-center gap-2">
                             <UserPlus className="w-5 h-5 text-purple-600" /> 수강생 추가하기
@@ -2268,7 +2268,7 @@ export default function AdminCourseEditor() {
                           />
                         </div>
 
-                        <div className="border border-gray-100 rounded-3xl overflow-hidden bg-gray-50/20 max-h-[400px] overflow-y-auto">
+                        <div className="border border-gray-100 rounded-xl overflow-hidden bg-gray-50/20 max-h-[400px] overflow-y-auto">
                           {filteredAvailableMembers.length === 0 ? (
                             <div className="py-16 text-center text-gray-400 font-medium">
                               검색 결과와 일치하는 대상이 없거나 이미 모든 회원이 등록되었습니다.
@@ -2480,7 +2480,7 @@ export default function AdminCourseEditor() {
       {/* Database Schema Migration Guidance Dialog */}
       {missingSchemaError && (
         <Dialog open={!!missingSchemaError} onOpenChange={(open) => { if (!open) setMissingSchemaError(null); }}>
-          <DialogContent className="max-w-xl rounded-3xl p-6 bg-white gap-6">
+          <DialogContent className="max-w-xl rounded-xl p-6 bg-white gap-6">
             <DialogHeader className="gap-2">
               <DialogTitle className="text-xl font-black text-red-650 flex items-center gap-2">
                 <AlertCircle className="w-6 h-6 text-red-650 shrink-0" />

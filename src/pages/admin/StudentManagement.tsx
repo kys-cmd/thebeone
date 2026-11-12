@@ -571,7 +571,7 @@ export default function AdminStudentManagement() {
   return (
     <div className="space-y-8">
       {/* Upper header with abstract background card */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white rounded-[40px] p-8 md:p-12 shadow-2xl">
+      <div className="relative overflow-hidden bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white rounded-2xl p-8 md:p-12 shadow-2xl">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-300 via-pink-400 to-indigo-800" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-3">
@@ -625,7 +625,7 @@ export default function AdminStudentManagement() {
 
 
       {/* Filter and Search Panel */}
-      <Card className="border-none shadow-xl rounded-[32px] bg-slate-900 text-white p-6 relative overflow-hidden">
+      <Card className="border-none shadow-xl rounded-xl bg-slate-900 text-white p-6 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-purple-300 via-pink-400 to-indigo-800" />
         <div className="relative z-10 flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center">
           <div className="flex flex-wrap items-center gap-3 flex-1">
@@ -667,7 +667,7 @@ export default function AdminStudentManagement() {
       </Card>
 
       {/* Main Student Table */}
-      <Card className="border-none shadow-sm rounded-[32px] bg-white overflow-hidden">
+      <Card className="border-none shadow-sm rounded-xl bg-white overflow-hidden">
         <CardHeader className="px-8 pt-8 pb-4 flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-2">
@@ -783,7 +783,7 @@ export default function AdminStudentManagement() {
       
       {/* Attendance Sheet helper guide */}
       {selectedCourseId === 'all' && !isLoading && enrollments.length > 0 && (
-        <div className="bg-purple-50 rounded-[32px] p-6 border border-purple-100/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="bg-purple-50 rounded-xl p-6 border border-purple-100/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-start gap-4">
             <div className="p-3 bg-purple-100 rounded-2xl text-purple-600">
               <Printer className="w-6 h-6" />
@@ -819,7 +819,7 @@ export default function AdminStudentManagement() {
 
       {/* Attendance Check Dialog */}
       <Dialog open={isAttendanceModalOpen} onOpenChange={setIsAttendanceModalOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col gap-0 rounded-[32px] p-6 bg-white border border-slate-100 shadow-2xl">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col gap-0 rounded-xl p-6 bg-white border border-slate-100 shadow-2xl">
           <DialogHeader className="pb-4 border-b border-slate-100">
             <DialogTitle className="text-2xl font-black text-slate-900 flex items-center gap-2">
               <CalendarCheck className="w-6 h-6 text-emerald-600" />

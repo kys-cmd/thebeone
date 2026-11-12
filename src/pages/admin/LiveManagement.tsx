@@ -320,7 +320,7 @@ export default function AdminLiveManagement() {
 
       {/* Summary Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <Card className="rounded-3xl border-gray-100 shadow-sm bg-white overflow-hidden">
+        <Card className="rounded-xl border-gray-100 shadow-sm bg-white overflow-hidden">
           <CardContent className="p-6 flex items-center justify-between">
             <div className="space-y-1">
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">현재 진행 중인 방송</p>
@@ -345,7 +345,7 @@ export default function AdminLiveManagement() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-3xl border-gray-100 shadow-sm bg-white overflow-hidden">
+        <Card className="rounded-xl border-gray-100 shadow-sm bg-white overflow-hidden">
           <CardContent className="p-6 flex items-center justify-between">
             <div className="space-y-1">
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">누적 라이브 세션</p>
@@ -361,7 +361,7 @@ export default function AdminLiveManagement() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-3xl border-gray-100 shadow-sm bg-white overflow-hidden">
+        <Card className="rounded-xl border-gray-100 shadow-sm bg-white overflow-hidden">
           <CardContent className="p-6 flex items-center justify-between">
             <div className="space-y-1">
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">현재 접속 관리자</p>
@@ -402,12 +402,12 @@ export default function AdminLiveManagement() {
         </div>
 
         {loading ? (
-          <div className="p-12 text-center bg-white rounded-3xl border border-gray-100 shadow-sm text-gray-400 font-bold">
+          <div className="p-12 text-center bg-white rounded-xl border border-gray-100 shadow-sm text-gray-400 font-bold">
             <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-purple-600" />
             라이브 방송 상태를 확인 중입니다...
           </div>
         ) : activeSessions.length === 0 ? (
-          <Card className="rounded-3xl border border-gray-100 bg-white shadow-sm p-12 text-center">
+          <Card className="rounded-xl border border-gray-100 bg-white shadow-sm p-12 text-center">
             <div className="w-16 h-16 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center mx-auto mb-4">
               <Video className="w-8 h-8" />
             </div>
@@ -428,7 +428,7 @@ export default function AdminLiveManagement() {
             {activeSessions.map((session) => (
               <Card 
                 key={session.id} 
-                className="rounded-3xl border-2 border-red-500/20 bg-gradient-to-r from-white via-white to-red-50/20 shadow-md hover:shadow-lg transition-all overflow-hidden"
+                className="rounded-xl border-2 border-red-500/20 bg-gradient-to-r from-white via-white to-red-50/20 shadow-md hover:shadow-lg transition-all overflow-hidden"
               >
                 <CardContent className="p-6 md:p-8">
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -543,11 +543,11 @@ export default function AdminLiveManagement() {
         </div>
 
         {historySessions.length === 0 ? (
-          <div className="p-8 text-center bg-white rounded-3xl border border-gray-100 shadow-sm text-gray-400 text-xs font-bold">
+          <div className="p-8 text-center bg-white rounded-xl border border-gray-100 shadow-sm text-gray-400 text-xs font-bold">
             종료된 이전 방송 기록이 없습니다.
           </div>
         ) : (
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-gray-50 text-gray-500 font-bold text-xs uppercase border-b border-gray-100">
@@ -603,7 +603,7 @@ export default function AdminLiveManagement() {
       {/* ========================================================================= */}
       {showStartModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-[32px] p-8 max-w-lg w-full space-y-6 shadow-2xl relative border border-gray-100">
+          <div className="bg-white rounded-xl p-8 max-w-lg w-full space-y-6 shadow-2xl relative border border-gray-100">
             <div className="flex items-center gap-2 text-purple-600">
               <Radio className="w-5 h-5 animate-pulse" />
               <span className="font-black text-xs tracking-wider uppercase">Live Stream Setup</span>
@@ -695,7 +695,7 @@ export default function AdminLiveManagement() {
       {/* ========================================================================= */}
       {showConflictModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-[32px] p-8 max-w-lg w-full space-y-6 shadow-2xl relative border-2 border-amber-500/30">
+          <div className="bg-white rounded-xl p-8 max-w-lg w-full space-y-6 shadow-2xl relative border-2 border-amber-500/30">
             <div className="flex items-center gap-2 text-amber-600">
               <AlertTriangle className="w-6 h-6 animate-bounce" />
               <span className="font-black text-xs tracking-wider uppercase">Live Stream Conflict</span>
@@ -780,7 +780,7 @@ export default function AdminLiveManagement() {
       {/* ========================================================================= */}
       {selectedSessionToStop && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-[32px] p-8 max-w-md w-full space-y-6 shadow-2xl relative border border-gray-100">
+          <div className="bg-white rounded-xl p-8 max-w-md w-full space-y-6 shadow-2xl relative border border-gray-100">
             <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto">
               <Square className="w-6 h-6 fill-red-600" />
             </div>
@@ -834,7 +834,7 @@ export default function AdminLiveManagement() {
       {/* ========================================================================= */}
       {showStopAllConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-[32px] p-8 max-w-md w-full space-y-6 shadow-2xl relative border-2 border-red-500/20">
+          <div className="bg-white rounded-xl p-8 max-w-md w-full space-y-6 shadow-2xl relative border-2 border-red-500/20">
             <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-7 h-7" />
             </div>

@@ -60,7 +60,7 @@ export default function AdminLayout() {
              <Link 
               key={item.path} 
               to={item.path}
-              className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-black text-sm transition-all group ${
+              className={`w-full flex items-center gap-3 p-3.5 rounded-xl font-black text-sm transition-all group ${
                 location.pathname === item.path 
                   ? 'bg-purple-600 text-white shadow-xl shadow-purple-200' 
                   : 'text-gray-500 hover:bg-gray-50 hover:text-purple-600'
@@ -76,19 +76,19 @@ export default function AdminLayout() {
 
            <div className="pt-8 space-y-2">
              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 px-2">시스템 도구</p>
-             <Link to="/admin/support" className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-black text-sm transition-all ${location.pathname === '/admin/support' ? 'bg-purple-600 text-white shadow-xl shadow-purple-200' : 'text-gray-500 hover:bg-gray-50 hover:text-purple-600'}`}>
+             <Link to="/admin/support" className={`w-full flex items-center gap-3 p-3.5 rounded-xl font-black text-sm transition-all ${location.pathname === '/admin/support' ? 'bg-purple-600 text-white shadow-xl shadow-purple-200' : 'text-gray-500 hover:bg-gray-50 hover:text-purple-600'}`}>
                <MessageSquare className="w-5 h-5 text-gray-400" />
                <span>게시판 및 내역 관리</span>
              </Link>
-             <Link to="/admin/settings" className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-black text-sm transition-all ${location.pathname === '/admin/settings' ? 'bg-purple-600 text-white shadow-xl shadow-purple-200' : 'text-gray-500 hover:bg-gray-50 hover:text-purple-600'}`}>
+             <Link to="/admin/settings" className={`w-full flex items-center gap-3 p-3.5 rounded-xl font-black text-sm transition-all ${location.pathname === '/admin/settings' ? 'bg-purple-600 text-white shadow-xl shadow-purple-200' : 'text-gray-500 hover:bg-gray-50 hover:text-purple-600'}`}>
                <Settings className="w-5 h-5 text-gray-400" />
                <span>사이트 설정</span>
              </Link>
-             <Link to="/admin/diagnostics" className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-black text-sm transition-all ${(location.pathname === '/admin/diagnostics' || location.pathname === '/admin/errors') ? 'bg-purple-600 text-white shadow-xl shadow-purple-200' : 'text-gray-500 hover:bg-gray-50 hover:text-purple-600'}`}>
+             <Link to="/admin/diagnostics" className={`w-full flex items-center gap-3 p-3.5 rounded-xl font-black text-sm transition-all ${(location.pathname === '/admin/diagnostics' || location.pathname === '/admin/errors') ? 'bg-purple-600 text-white shadow-xl shadow-purple-200' : 'text-gray-500 hover:bg-gray-50 hover:text-purple-600'}`}>
                <AlertTriangle className="w-5 h-5 text-gray-400" />
                <span>오류 로그 수집기</span>
              </Link>
-             <Link to="/admin/font-demo" className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-black text-sm transition-all ${location.pathname === '/admin/font-demo' ? 'bg-purple-600 text-white shadow-xl shadow-purple-200' : 'text-gray-500 hover:bg-gray-50 hover:text-purple-600'}`}>
+             <Link to="/admin/font-demo" className={`w-full flex items-center gap-3 p-3.5 rounded-xl font-black text-sm transition-all ${location.pathname === '/admin/font-demo' ? 'bg-purple-600 text-white shadow-xl shadow-purple-200' : 'text-gray-500 hover:bg-gray-50 hover:text-purple-600'}`}>
                <Type className="w-5 h-5 text-gray-400" />
                <span>글꼴 타이포 검증</span>
              </Link>
@@ -96,7 +96,7 @@ export default function AdminLayout() {
         </nav>
 
         <div className="p-6 border-t border-gray-50">
-           <div className="bg-gray-50 p-4 rounded-2xl flex items-center gap-3">
+           <div className="bg-gray-50 p-4 rounded-xl flex items-center gap-3">
              <Avatar className="w-10 h-10 border-2 border-white shadow-sm">
                <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=Admin" />
                <AvatarFallback>AD</AvatarFallback>
@@ -117,7 +117,7 @@ export default function AdminLayout() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-purple-600 transition-colors" />
             <Input 
               placeholder="메뉴, 회원, 강의 통합 검색..." 
-              className="pl-12 h-11 bg-gray-50 border-none rounded-2xl font-bold text-sm focus-visible:ring-2 focus-visible:ring-purple-600 transition-all"
+              className="pl-12 h-11 bg-gray-50 border-none rounded-xl font-bold text-sm focus-visible:ring-2 focus-visible:ring-purple-600 transition-all"
             />
             <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 px-1.5 py-0.5 bg-white border border-gray-200 rounded-md text-[10px] font-black text-gray-400">
               <Command className="w-2.5 h-2.5" /> K

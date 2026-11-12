@@ -297,7 +297,7 @@ export function ChatWindow({ roomId, roomName, currentUserId }: ChatWindowProps)
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 border border-slate-200/50 rounded-3xl overflow-hidden shadow-sm">
+    <div className="flex flex-col h-full bg-slate-50 border border-slate-200/50 rounded-xl overflow-hidden shadow-sm">
       {/* Top Header */}
       <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-100 shrink-0">
         <div className="flex items-center gap-2.5">

@@ -58,7 +58,7 @@ export function PostList({
     return (
       <div className="space-y-6">
         {[1, 2, 3].map(i => (
-          <div key={i} className="p-5 bg-white rounded-3xl space-y-4">
+          <div key={i} className="p-5 bg-white rounded-xl space-y-4">
             <div className="flex items-center gap-3">
               <Skeleton className="w-10 h-10 rounded-full" />
               <div className="space-y-2">
@@ -75,7 +75,7 @@ export function PostList({
 
   if (posts.length === 0) {
     return (
-      <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-gray-100">
+      <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-gray-100">
         <p className="text-gray-400 font-bold">아직 등록된 게시글이 없습니다.</p>
         <p className="text-xs text-gray-300 mt-1">첫 번째 소식을 전해보세요!</p>
       </div>
@@ -97,7 +97,7 @@ export function PostList({
              transition={{ delay: Math.min(idx, 6) * 0.05 }}
           >
             {isEditing ? (
-              <div className="my-4 p-5 bg-white rounded-3xl border border-slate-200 shadow-lg">
+              <div className="my-4 p-5 bg-white rounded-xl border border-slate-200 shadow-lg">
                 <PostEditor
                   communityId={post.community_id}
                   initialPost={post}

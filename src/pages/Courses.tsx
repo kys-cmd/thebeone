@@ -62,7 +62,7 @@ export default function Courses() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white p-8 md:p-12 rounded-[40px] shadow-2xl text-center max-w-lg w-full space-y-8 border border-gray-100"
+          className="bg-white p-8 md:p-12 rounded-2xl shadow-2xl text-center max-w-lg w-full space-y-8 border border-gray-100"
         >
           <div className="w-24 h-24 bg-purple-50 rounded-full flex items-center justify-center mx-auto ring-8 ring-purple-50/50">
             <Lock className="w-12 h-12 text-purple-600" />
@@ -106,7 +106,7 @@ export default function Courses() {
                 transition={{ delay: idx * 0.04 }}
               >
                 <Link to={`/course/${course.id}`} className="group flex flex-col gap-3 sm:gap-4">
-                  <div className="relative aspect-[16/10] bg-slate-100 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xs group-hover:shadow-xl transition-all duration-300">
+                  <div className="relative aspect-[16/10] bg-slate-100 rounded-xl sm:rounded-2xl overflow-hidden shadow-xs group-hover:shadow-xl transition-all duration-300">
                     <img 
                       src={course.thumbnail || 'https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800'} 
                       referrerPolicy="no-referrer"

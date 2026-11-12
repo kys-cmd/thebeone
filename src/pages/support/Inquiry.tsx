@@ -96,7 +96,7 @@ export default function InquiryPage() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="bg-white p-5 sm:p-8 md:p-10 rounded-3xl sm:rounded-[48px] border border-gray-100 shadow-xl sm:shadow-2xl space-y-6 sm:space-y-8 max-w-3xl mx-auto w-full">
+          <form onSubmit={handleSubmit} className="bg-white p-5 sm:p-8 md:p-10 rounded-xl sm:rounded-2xl border border-gray-100 shadow-xl sm:shadow-2xl space-y-6 sm:space-y-8 max-w-3xl mx-auto w-full">
             <div className="space-y-5 sm:space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
@@ -155,7 +155,7 @@ export default function InquiryPage() {
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="상세한 내용을 기재해 주시면 더 정확한 안내가 가능합니다." 
-                  className="min-h-[160px] sm:min-h-[200px] bg-gray-50 border-none rounded-2xl sm:rounded-[24px] font-bold p-4 sm:p-6 text-sm focus-visible:ring-2 focus-visible:ring-blue-500" 
+                  className="min-h-[160px] sm:min-h-[200px] bg-gray-50 border-none rounded-xl font-bold p-4 sm:p-6 text-sm focus-visible:ring-2 focus-visible:ring-blue-500" 
                   required
                 />
               </div>
@@ -171,7 +171,7 @@ export default function InquiryPage() {
             <Button 
               type="submit" 
               disabled={isSubmitting}
-              className="w-full h-14 sm:h-16 bg-blue-600 hover:bg-blue-700 text-white font-black text-base sm:text-lg rounded-2xl sm:rounded-[24px] gap-3 shadow-xl shadow-blue-200 transition-all active:scale-95 duration-200 flex items-center justify-center"
+              className="w-full h-14 sm:h-16 bg-blue-600 hover:bg-blue-700 text-white font-black text-base sm:text-lg rounded-xl gap-3 shadow-xl shadow-blue-200 transition-all active:scale-95 duration-200 flex items-center justify-center"
             >
               {isSubmitting ? (
                 <>

@@ -116,7 +116,7 @@ function CourseCard({ course, type }: { course: Course, type: 'online' | 'offlin
 
   return (
     <Link to={`/course/${course.id}`} className="group flex flex-col gap-3 sm:gap-4">
-      <div className="relative aspect-[16/10] bg-slate-100 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xs group-hover:shadow-xl transition-all duration-300">
+      <div className="relative aspect-[16/10] bg-slate-100 rounded-xl sm:rounded-2xl overflow-hidden shadow-xs group-hover:shadow-xl transition-all duration-300">
         {course.thumbnail ? (
           <img 
             src={course.thumbnail} 
@@ -181,7 +181,7 @@ function CourseCard({ course, type }: { course: Course, type: 'online' | 'offlin
 
 function EmptyState({ icon }: { icon: React.ReactNode }) {
   return (
-    <div className="col-span-full py-20 text-center space-y-4 border-2 border-dashed border-gray-50 rounded-[40px]">
+    <div className="col-span-full py-20 text-center space-y-4 border-2 border-dashed border-gray-50 rounded-2xl">
       <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto">
         {icon}
       </div>

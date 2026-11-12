@@ -1171,7 +1171,7 @@ export default function AdminUserManagement() {
               </section>
 
               {/* Management Actions Section */}
-              <section className="space-y-6 bg-red-50/30 p-10 rounded-[32px] border border-red-100">
+              <section className="space-y-6 bg-red-50/30 p-10 rounded-xl border border-red-100">
                 <h3 className="text-xl font-bold flex items-center gap-2 text-red-700">
                   <ShieldAlert className="w-6 h-6" />
                   계정 위험 관리
@@ -1811,7 +1811,7 @@ export default function AdminUserManagement() {
       {/* Single Member Hard-Delete Confirmation Modal */}
       {showSingleHardDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-[24px] p-8 max-w-md w-full space-y-6 shadow-2xl border border-red-100">
+          <div className="bg-white rounded-xl p-8 max-w-md w-full space-y-6 shadow-2xl border border-red-100">
             <div className="space-y-3">
               <h3 className="text-xl font-black text-red-600 flex items-center gap-2">
                 <ShieldAlert className="w-6 h-6 text-red-600 shrink-0" />
@@ -1847,7 +1847,7 @@ export default function AdminUserManagement() {
       {/* Dynamic Custom Password Override Modal */}
       {isPasswordChangeOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-[24px] p-7 max-w-md w-full space-y-5 shadow-2xl border border-purple-100">
+          <div className="bg-white rounded-xl p-7 max-w-md w-full space-y-5 shadow-2xl border border-purple-100">
             <div className="space-y-2">
               <h3 className="text-xl font-black text-purple-800 flex items-center gap-2">
                 <Key className="w-6 h-6 text-purple-600 shrink-0" />
@@ -1950,7 +1950,7 @@ export default function AdminUserManagement() {
       {/* Default Password Reset Confirmation Modal */}
       {defaultResetConfirmUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-[24px] p-7 max-w-md w-full space-y-5 shadow-2xl border border-red-100">
+          <div className="bg-white rounded-xl p-7 max-w-md w-full space-y-5 shadow-2xl border border-red-100">
             <div className="space-y-2">
               <h3 className="text-xl font-black text-rose-700 flex items-center gap-2">
                 <RefreshCcw className="w-6 h-6 text-rose-600 shrink-0" />
@@ -1989,7 +1989,7 @@ export default function AdminUserManagement() {
       {/* Password Change Success Confirmation Modal */}
       {passwordChangeSuccessData && passwordChangeSuccessData.isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-[28px] p-8 max-w-md w-full space-y-5 shadow-2xl border border-emerald-100 text-center animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-xl p-8 max-w-md w-full space-y-5 shadow-2xl border border-emerald-100 text-center animate-in zoom-in-95 duration-200">
             <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
               <CheckCircle2 className="w-10 h-10" />
             </div>
@@ -2051,7 +2051,7 @@ export default function AdminUserManagement() {
       {/* Bulk Role Confirmation Modal */}
       {showBulkRoleModal && selectedBulkRole && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-[24px] p-8 max-w-md w-full space-y-6 shadow-2xl border border-purple-100 animate-in fade-in zoom-in duration-200">
+          <div className="bg-white rounded-xl p-8 max-w-md w-full space-y-6 shadow-2xl border border-purple-100 animate-in fade-in zoom-in duration-200">
             <div className="space-y-3">
               <h3 className="text-xl font-black text-purple-750 flex items-center gap-2">
                 <Shield className="w-6 h-6 text-purple-600 shrink-0" />

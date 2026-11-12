@@ -610,7 +610,7 @@ export default function LearningPlayer() {
                               <div 
                                 key={file.id}
                                 onClick={() => window.open(file.url, '_blank')}
-                                className="bg-gray-900 border border-gray-800 rounded-2xl md:rounded-3xl p-4 md:p-6 flex items-center justify-between group cursor-pointer hover:border-purple-500 transition-all"
+                                className="bg-gray-900 border border-gray-800 rounded-xl md:rounded-2xl p-4 md:p-6 flex items-center justify-between group cursor-pointer hover:border-purple-500 transition-all"
                               >
                                  <div className="flex items-center gap-3 md:gap-4 overflow-hidden text-left">
                                     <div className="w-10 h-10 md:w-12 md:h-12 bg-gray-800 rounded-xl md:rounded-2xl flex items-center justify-center shrink-0">
@@ -634,7 +634,7 @@ export default function LearningPlayer() {
                            ))}
                         </div>
                      ) : (
-                        <div className="bg-gray-900 border border-gray-800 rounded-2xl md:rounded-3xl p-8 md:p-12 text-center">
+                        <div className="bg-gray-900 border border-gray-800 rounded-xl md:rounded-2xl p-8 md:p-12 text-center">
                            <FileText className="w-8 h-8 md:w-12 md:h-12 text-gray-800 mx-auto mb-4" />
                            <p className="text-gray-500 font-bold text-sm">등록된 강의 자료가 없습니다.</p>
                         </div>
@@ -646,7 +646,7 @@ export default function LearningPlayer() {
                         <Star className="w-4 h-4 md:w-5 md:h-5 text-yellow-500" /> 강의 후기
                      </h3>
                      
-                     <div className="bg-gray-900 border border-gray-800 rounded-2xl md:rounded-3xl p-4 md:p-8 space-y-4 md:space-y-6">
+                     <div className="bg-gray-900 border border-gray-800 rounded-xl md:rounded-2xl p-4 md:p-8 space-y-4 md:space-y-6">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                            <p className="text-white font-bold text-sm text-left">강의는 어떠셨나요?</p>
                            <div className="flex items-center gap-1">
@@ -691,7 +691,7 @@ export default function LearningPlayer() {
                                   initial={{ opacity: 0, y: 10 }}
                                   animate={{ opacity: 1, y: 0 }}
                                   transition={{ delay: idx * 0.05 }}
-                                  className="relative bg-gray-900/50 border border-gray-800 p-4 md:p-6 rounded-2xl md:rounded-3xl space-y-3 md:space-y-4 text-left group"
+                                  className="relative bg-gray-900/50 border border-gray-800 p-4 md:p-6 rounded-xl md:rounded-2xl space-y-3 md:space-y-4 text-left group"
                                 >
                                    {isEditing ? (
                                       <div className="space-y-3 w-full">
@@ -788,7 +788,7 @@ export default function LearningPlayer() {
                               );
                            })
                         ) : (
-                           <div className="py-8 md:py-12 text-center bg-gray-900/30 rounded-2xl md:rounded-3xl border border-dashed border-gray-800">
+                           <div className="py-8 md:py-12 text-center bg-gray-900/30 rounded-xl md:rounded-2xl border border-dashed border-gray-800">
                               <MessageSquare className="w-8 h-8 md:w-10 md:h-10 text-gray-800 mx-auto mb-3" />
                               <p className="text-gray-500 font-medium text-xs md:text-sm">아직 올라온 후기가 없습니다.<br/>첫 번째 후기의 주인공이 되어보세요!</p>
                            </div>
@@ -796,14 +796,14 @@ export default function LearningPlayer() {
                      </div>
                   </section>
 
-                  <section className="bg-gray-900 border border-gray-800 rounded-2xl md:rounded-3xl p-6 md:p-8 space-y-4 md:space-y-6">
+                  <section className="bg-gray-900 border border-gray-800 rounded-xl md:rounded-2xl p-6 md:p-8 space-y-4 md:space-y-6">
                      <h3 className="text-lg md:text-xl font-black text-white flex items-center gap-2">
                         <User className="w-4 h-4 md:w-5 md:h-5 text-purple-500" /> 강사 정보
                      </h3>
                      <div className="flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-8">
                         <img 
                           src={course.instructor_image || "https://api.dicebear.com/7.x/avataaars/svg?seed=instructor"} 
-                          className="w-24 h-24 md:w-32 md:h-32 rounded-2xl md:rounded-3xl object-cover bg-gray-800 border-2 border-gray-800 shadow-2xl" 
+                          className="w-24 h-24 md:w-32 md:h-32 rounded-xl md:rounded-2xl object-cover bg-gray-800 border-2 border-gray-800 shadow-2xl" 
                           alt="" 
                         />
                         <div className="flex-1 space-y-2 md:space-y-4 text-center md:text-left">

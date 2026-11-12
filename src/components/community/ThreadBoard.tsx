@@ -109,7 +109,7 @@ export function ThreadBoard({ communityId, currentUserId }: ThreadBoardProps) {
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-5 p-5 bg-white border border-slate-200/60 rounded-3xl shadow-sm shrink-0"
+            className="mb-5 p-5 bg-white border border-slate-200/60 rounded-xl shadow-sm shrink-0"
           >
             <form onSubmit={handlePostSubmit} className="space-y-3.5 text-left">
               <div>
@@ -159,7 +159,7 @@ export function ThreadBoard({ communityId, currentUserId }: ThreadBoardProps) {
               게시글을 실시간으로 가져오는 중...
             </div>
           ) : posts.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-12 border border-dashed border-slate-200 bg-slate-50 rounded-3xl text-slate-400 space-y-3.5">
+            <div className="h-full flex flex-col items-center justify-center text-center p-12 border border-dashed border-slate-200 bg-slate-50 rounded-xl text-slate-400 space-y-3.5">
               <div className="bg-slate-100 p-4 rounded-full text-slate-500">
                 <FileText className="w-8 h-8" />
               </div>

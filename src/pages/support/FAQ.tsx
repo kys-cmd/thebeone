@@ -84,7 +84,7 @@ export default function FAQPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="궁금한 단어를 입력해 보세요..." 
-              className="h-12 sm:h-16 pl-11 sm:pl-14 pr-4 sm:pr-6 bg-white border border-slate-100 rounded-2xl sm:rounded-[24px] shadow-sm font-bold text-sm sm:text-lg focus-visible:ring-2 focus-visible:ring-purple-600 transition-all"
+              className="h-12 sm:h-16 pl-11 sm:pl-14 pr-4 sm:pr-6 bg-white border border-slate-100 rounded-xl shadow-sm font-bold text-sm sm:text-lg focus-visible:ring-2 focus-visible:ring-purple-600 transition-all"
             />
             <Search className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 sm:w-5 sm:h-5" />
           </div>
@@ -107,7 +107,7 @@ export default function FAQPage() {
           </div>
 
           {/* List Section */}
-          <div className="bg-white rounded-3xl sm:rounded-[40px] border border-gray-100 shadow-sm overflow-hidden p-4 sm:p-6 md:p-12 text-left">
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-4 sm:p-6 md:p-12 text-left">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-10">
                 <Loader2 className="w-8 h-8 text-purple-600 animate-spin mb-4" />

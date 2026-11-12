@@ -96,7 +96,7 @@ export default function MasterApplyPage() {
               { icon: Award, title: '최고의 대우', desc: '업계 최고 수준의 수익 쉐어' },
               { icon: Globe, title: '강력한 브랜딩', desc: '비원아카데미만의 전폭적인 마케팅 지원' },
             ].map((item, i) => (
-              <div key={i} className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-100 shadow-sm text-center space-y-4">
+              <div key={i} className="bg-white p-6 md:p-8 rounded-xl border border-slate-100 shadow-sm text-center space-y-4">
                 <div className="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 mx-auto">
                   <item.icon className="w-8 h-8" />
                 </div>
@@ -106,7 +106,7 @@ export default function MasterApplyPage() {
             ))}
           </div>
 
-          <div className="bg-white p-6 md:p-16 rounded-[48px] border border-slate-100 shadow-2xl space-y-10 max-w-4xl mx-auto w-full">
+          <div className="bg-white p-6 md:p-16 rounded-2xl border border-slate-100 shadow-2xl space-y-10 max-w-4xl mx-auto w-full">
             <div className="border-b-4 border-gray-900 pb-6">
               <h2 className="text-2xl font-black text-gray-900">강사 지원 양식</h2>
             </div>
@@ -158,7 +158,7 @@ export default function MasterApplyPage() {
                   value={experience}
                   onChange={(e) => setExperience(e.target.value)}
                   disabled={isSubmitting}
-                  className="min-h-[200px] bg-gray-50 border-none rounded-3xl font-bold p-6 text-sm focus-visible:ring-2 focus-visible:ring-purple-600 whitespace-pre-wrap" 
+                  className="min-h-[200px] bg-gray-50 border-none rounded-xl font-bold p-6 text-sm focus-visible:ring-2 focus-visible:ring-purple-600 whitespace-pre-wrap" 
                   placeholder="주요 경력, 현재 운영 중인 채널, 출간 서적 등을 기재해 주세요." 
                 />
               </div>
@@ -177,7 +177,7 @@ export default function MasterApplyPage() {
             <Button 
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="w-full h-20 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-[32px] gap-3 shadow-2xl hover:shadow-purple-200 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50"
+              className="w-full h-20 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-xl gap-3 shadow-2xl hover:shadow-purple-200 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>

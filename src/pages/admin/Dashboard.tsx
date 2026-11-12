@@ -132,7 +132,7 @@ export default function AdminDashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
          {statsItems.map((stat, i) => (
-           <Card key={i} className="p-8 rounded-[40px] border-none shadow-sm space-y-6">
+           <Card key={i} className="p-8 rounded-2xl border-none shadow-sm space-y-6">
               <div className="flex justify-between items-start">
                  <div className="p-3 bg-gray-50 rounded-2xl">{stat.icon}</div>
                  <Badge className={`border-none font-black ${stat.isUp ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
@@ -150,7 +150,7 @@ export default function AdminDashboard() {
 
       {/* Real-time Graph Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-         <Card className="lg:col-span-2 p-10 rounded-[48px] border-none shadow-sm space-y-8">
+         <Card className="lg:col-span-2 p-10 rounded-2xl border-none shadow-sm space-y-8">
             <div className="flex items-center justify-between">
                <h3 className="text-2xl font-black tracking-tighter text-gray-900">요일별 매출 분포 (단위: 만원)</h3>
                <div className="flex gap-2">
@@ -176,7 +176,7 @@ export default function AdminDashboard() {
             </div>
          </Card>
 
-         <Card className="p-10 rounded-[48px] border-none shadow-sm space-y-8 divide-y divide-gray-50">
+         <Card className="p-10 rounded-2xl border-none shadow-sm space-y-8 divide-y divide-gray-50">
             <div className="flex items-center justify-between pb-2">
               <h3 className="text-2xl font-black tracking-tighter text-gray-900">최근 결제</h3>
               <Badge className="bg-purple-100 text-purple-600 border-none font-bold">New {Math.min(completedOrders.length, 5)}</Badge>

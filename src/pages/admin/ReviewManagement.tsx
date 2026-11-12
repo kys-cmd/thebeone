@@ -83,7 +83,7 @@ export default function ReviewManagement() {
         </Badge>
       </div>
 
-      <Card className="rounded-[40px] border-none shadow-sm overflow-hidden">
+      <Card className="rounded-2xl border-none shadow-sm overflow-hidden">
         <CardContent className="p-8">
           <div className="flex flex-col md:flex-row gap-4 mb-8">
             <div className="relative flex-1 group">
@@ -102,14 +102,14 @@ export default function ReviewManagement() {
 
           <div className="space-y-6">
             {filteredReviews.length === 0 ? (
-              <div className="py-20 text-center text-gray-400 font-bold bg-gray-50 rounded-[40px] border-2 border-dashed border-gray-100">
+              <div className="py-20 text-center text-gray-400 font-bold bg-gray-50 rounded-2xl border-2 border-dashed border-gray-100">
                 검색 결과가 없거나 등록된 후기가 없습니다.
               </div>
             ) : (
               filteredReviews.map((review) => (
-                <div key={review.id} className="group bg-white p-8 rounded-[40px] border border-gray-50 hover:border-purple-100 hover:shadow-xl hover:shadow-purple-500/5 transition-all flex flex-col md:flex-row gap-8">
+                <div key={review.id} className="group bg-white p-8 rounded-2xl border border-gray-50 hover:border-purple-100 hover:shadow-xl hover:shadow-purple-500/5 transition-all flex flex-col md:flex-row gap-8">
                   <div className="flex-shrink-0 flex flex-col items-center gap-3">
-                    <div className="w-16 h-16 rounded-3xl overflow-hidden bg-gray-100 shadow-inner">
+                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 shadow-inner">
                       <img 
                         src={review.user_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${review.user_id}`} 
                         alt="User" 
@@ -145,7 +145,7 @@ export default function ReviewManagement() {
                       </div>
                     </div>
 
-                    <div className="bg-gray-50/50 p-6 rounded-3xl relative">
+                    <div className="bg-gray-50/50 p-6 rounded-xl relative">
                       <span className="absolute -top-3 -left-1 text-4xl text-purple-200 font-serif">"</span>
                       <p className="text-gray-700 font-medium leading-relaxed whitespace-pre-wrap">{review.content}</p>
                       <span className="absolute -bottom-6 -right-1 text-4xl text-purple-200 font-serif">"</span>

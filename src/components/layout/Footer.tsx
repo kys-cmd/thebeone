@@ -82,7 +82,7 @@ export default function Footer() {
 
           {/* Legal & Contact Col */}
           <div className="col-span-2 lg:col-span-1 space-y-4">
-            <div className="bg-slate-900/90 border border-slate-800/80 p-4 rounded-2xl">
+            <div className="bg-slate-900/90 border border-slate-800/80 p-4 rounded-xl">
               <p className="text-[11px] text-slate-400 mb-0.5">고객센터 수강문의</p>
               <p className="text-base sm:text-lg text-white font-extrabold tabular-nums">02-522-4777</p>
               <p className="text-[11px] text-slate-500 mt-0.5">평일 11:00 ~ 18:00 (주말·공휴일 휴무)</p>

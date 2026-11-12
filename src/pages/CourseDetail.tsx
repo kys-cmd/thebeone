@@ -92,7 +92,7 @@ function CourseReviews({ courseId }: { courseId: string }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
       {reviews.length === 0 ? (
-        <div className="col-span-full py-14 sm:py-20 text-center bg-slate-50 rounded-2xl sm:rounded-[32px] border border-dashed border-slate-200">
+        <div className="col-span-full py-14 sm:py-20 text-center bg-slate-50 rounded-xl sm:rounded-2xl border border-dashed border-slate-200">
           <MessageSquare className="w-10 h-10 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-400 font-bold text-sm">아직 작성된 후기가 없습니다.</p>
         </div>
@@ -102,7 +102,7 @@ function CourseReviews({ courseId }: { courseId: string }) {
           const isEditing = editingId === review.id;
 
           return (
-            <div key={review.id} className="relative bg-white p-5 sm:p-8 rounded-2xl sm:rounded-[32px] border border-slate-100 shadow-xs space-y-4 flex flex-col justify-between group">
+            <div key={review.id} className="relative bg-white p-5 sm:p-8 rounded-xl sm:rounded-2xl border border-slate-100 shadow-xs space-y-4 flex flex-col justify-between group">
               {isEditing ? (
                 <div className="space-y-4 w-full text-left">
                   <div className="flex items-center gap-1 text-amber-400">
@@ -578,8 +578,8 @@ export default function CourseDetail() {
             </div>
 
             {/* Quick Purchase Card (Desktop) */}
-            <div className="w-full lg:w-[420px] bg-white rounded-[40px] shadow-2xl p-8 sticky top-28 text-slate-900 border border-slate-100 hidden lg:block">
-              <div className="aspect-video rounded-3xl overflow-hidden mb-8 relative border border-slate-100">
+            <div className="w-full lg:w-[420px] bg-white rounded-2xl shadow-2xl p-8 sticky top-28 text-slate-900 border border-slate-100 hidden lg:block">
+              <div className="aspect-video rounded-xl overflow-hidden mb-8 relative border border-slate-100">
                 {course.thumbnail ? (
                   <img src={course.thumbnail} referrerPolicy="no-referrer" className="w-full h-full object-cover" alt={course.title} />
                 ) : (
@@ -682,7 +682,7 @@ export default function CourseDetail() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4 pt-4 sm:pt-8">
                 {(course.outcomes && course.outcomes.length > 0 && course.outcomes[0] !== '') ? (
                   course.outcomes.map((text, i) => (
-                    <div key={i} className="flex gap-3.5 p-5 sm:p-7 bg-slate-50 rounded-2xl sm:rounded-[28px] items-start border border-slate-100">
+                    <div key={i} className="flex gap-3.5 p-5 sm:p-7 bg-slate-50 rounded-xl sm:rounded-2xl items-start border border-slate-100">
                       <div className="w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center shrink-0">
                         <CheckCircle2 className="text-white w-4.5 h-4.5" />
                       </div>
@@ -696,7 +696,7 @@ export default function CourseDetail() {
                     '평생 소장 가능한 실무 템플릿 제공',
                     '수강생 전용 프라이빗 커뮤니티 권한'
                   ].map((text, i) => (
-                    <div key={i} className="flex gap-3.5 p-5 sm:p-7 bg-slate-50 rounded-2xl sm:rounded-[28px] items-start border border-slate-100">
+                    <div key={i} className="flex gap-3.5 p-5 sm:p-7 bg-slate-50 rounded-xl sm:rounded-2xl items-start border border-slate-100">
                       <div className="w-9 h-9 bg-purple-600 rounded-xl flex items-center justify-center shrink-0">
                         <Trophy className="text-white w-4.5 h-4.5" />
                       </div>
@@ -719,7 +719,7 @@ export default function CourseDetail() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:gap-4">
                 {course.recommended_for.map((text, i) => (
-                  <div key={i} className="flex items-center gap-4 sm:gap-6 p-5 sm:p-7 bg-white border border-slate-100 rounded-2xl sm:rounded-[28px] hover:border-purple-200 transition-colors">
+                  <div key={i} className="flex items-center gap-4 sm:gap-6 p-5 sm:p-7 bg-white border border-slate-100 rounded-xl sm:rounded-2xl hover:border-purple-200 transition-colors">
                     <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-black text-sm shrink-0 tabular-nums">
                       {i + 1}
                     </div>
@@ -743,14 +743,14 @@ export default function CourseDetail() {
               {course.curriculum?.map((section) => (
                 <div key={section.id} className="space-y-3">
                   <div className="flex items-center justify-between gap-3 px-1">
-                    <p className="text-sm sm:text-base font-black text-purple-600 tracking-tight break-keep">
+                    <p className="text-sm sm:base font-black text-purple-600 tracking-tight break-keep">
                       {section.title}
                     </p>
                     <span className="text-xs text-slate-400 font-bold shrink-0 tabular-nums">
                       {isOffline ? `${section.items.length}개 세션` : `${section.items.length}강`}
                     </span>
                   </div>
-                  <div className="bg-white rounded-2xl sm:rounded-[28px] border border-slate-100 shadow-xs overflow-hidden divide-y divide-slate-100">
+                  <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-100 shadow-xs overflow-hidden divide-y divide-slate-100">
                     {section.items.map((item, itemIdx) => {
                       if (isOffline) {
                         return (
@@ -808,7 +808,7 @@ export default function CourseDetail() {
           </section>
 
           {/* Instructor Section */}
-          <section id="instructor" className="bg-slate-900 text-white rounded-3xl md:rounded-[44px] p-6 sm:p-10 md:p-16 relative overflow-hidden scroll-mt-28">
+          <section id="instructor" className="bg-slate-900 text-white rounded-xl md:rounded-2xl p-6 sm:p-10 md:p-16 relative overflow-hidden scroll-mt-28">
             <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6 sm:gap-10 md:gap-12 text-center md:text-left">
               <div className="w-24 h-24 sm:w-36 sm:h-36 md:w-44 md:h-44 rounded-full border-4 sm:border-8 border-white/10 overflow-hidden shrink-0">
                 <img

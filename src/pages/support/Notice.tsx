@@ -202,7 +202,7 @@ export default function NoticePage() {
           </div>
 
           {/* Traditional Board Table Section */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-24">
                 <Loader2 className="w-8 h-8 text-purple-600 animate-spin mb-4" />
@@ -288,7 +288,7 @@ export default function NoticePage() {
                               className="overflow-hidden border-t border-slate-150 bg-slate-50/30"
                             >
                               <div className="px-3.5 py-4 sm:px-6 sm:py-8 md:px-14 md:py-10 text-left border-b border-slate-200/60">
-                                <div className="editor-content bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-10 shadow-sm">
+                                <div className="editor-content bg-white border border-slate-200 rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-10 shadow-sm">
                                   {/* Inner Title & Date bar */}
                                   <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 sm:pb-5 border-b border-slate-100 mb-5 sm:mb-6 gap-3">
                                     <h2 className="text-base md:text-lg font-black text-slate-900 flex items-start sm:items-center gap-2 break-keep">

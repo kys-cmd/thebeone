@@ -194,7 +194,7 @@ export default function Register() {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-[600px] bg-white rounded-3xl sm:rounded-[40px] shadow-xl sm:shadow-2xl border border-gray-100 p-6 sm:p-10 md:p-14 space-y-7 sm:space-y-12"
+        className="w-full max-w-[600px] bg-white rounded-xl sm:rounded-xl shadow-xl sm:shadow-2xl border border-gray-100 p-6 sm:p-10 md:p-14 space-y-7 sm:space-y-12"
       >
         {/* Header */}
         <div className="text-center space-y-2.5 sm:space-y-4">
@@ -209,7 +209,7 @@ export default function Register() {
               type="button"
               onClick={() => handleSocialLogin('google')}
               disabled={loading}
-              className="w-full h-14 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-extrabold text-xs rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2"
+              className="w-full h-14 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-extrabold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-2"
             >
               <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.69c-.29 1.5-1.14 2.78-2.4 3.63v3.02h3.88c2.27-2.08 3.57-5.15 3.57-8.5z"/>
@@ -222,7 +222,7 @@ export default function Register() {
           </div>
 
           {oauthErrorDetail && (
-            <div className="mt-4 p-4 rounded-2xl bg-amber-50/50 border border-amber-200/60 text-amber-900 space-y-3 block text-left">
+            <div className="mt-4 p-4 rounded-xl bg-amber-50/50 border border-amber-200/60 text-amber-900 space-y-3 block text-left">
               <div className="flex items-start gap-2.5">
                 <span className="text-xl shrink-0">⚠️</span>
                 <div>
@@ -285,7 +285,7 @@ export default function Register() {
                    value={formData.email || ''}
                    onChange={(e) => setFormData({...formData, email: e.target.value})}
                    placeholder="example@email.com" 
-                   className="h-14 bg-gray-50 border-gray-50 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                   className="h-14 bg-gray-50 border-gray-50 rounded-xl focus-visible:ring-purple-600 font-bold" 
                  />
               </div>
               <div className="space-y-2">
@@ -295,7 +295,7 @@ export default function Register() {
                   value={formData.fullName || ''}
                   onChange={(e) => setFormData({...formData, fullName: e.target.value})}
                   placeholder="실명을 입력하세요" 
-                  className="h-14 bg-gray-50 border-gray-50 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                  className="h-14 bg-gray-50 border-gray-50 rounded-xl focus-visible:ring-purple-600 font-bold" 
                 />
               </div>
               <div className="space-y-2">
@@ -306,7 +306,7 @@ export default function Register() {
                   value={formData.password || ''}
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
                   placeholder="8자 이상 입력" 
-                  className="h-14 bg-gray-50 border-gray-50 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                  className="h-14 bg-gray-50 border-gray-50 rounded-xl focus-visible:ring-purple-600 font-bold" 
                 />
               </div>
               <div className="space-y-2">
@@ -317,7 +317,7 @@ export default function Register() {
                   value={formData.confirmPassword || ''}
                   onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
                   placeholder="비밀번호 재입력" 
-                  className="h-14 bg-gray-50 border-gray-50 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                  className="h-14 bg-gray-50 border-gray-50 rounded-xl focus-visible:ring-purple-600 font-bold" 
                 />
               </div>
               <div className="space-y-2">
@@ -327,7 +327,7 @@ export default function Register() {
                   value={formData.nickname || ''}
                   onChange={(e) => setFormData({...formData, nickname: e.target.value})}
                   placeholder="커뮤니티 활동명" 
-                  className="h-14 bg-gray-50 border-gray-50 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                  className="h-14 bg-gray-50 border-gray-50 rounded-xl focus-visible:ring-purple-600 font-bold" 
                 />
               </div>
               <div className="space-y-2">
@@ -342,7 +342,7 @@ export default function Register() {
                   placeholder="010-0000-0000"
                   maxLength={13}
                   aria-invalid={duplicatePhone}
-                  className={`h-14 rounded-2xl font-bold ${
+                  className={`h-14 rounded-xl font-bold ${
                     duplicatePhone
                       ? 'bg-red-50 border-red-200 focus-visible:ring-red-500'
                       : 'bg-gray-50 border-gray-50 focus-visible:ring-purple-600'
@@ -384,12 +384,12 @@ export default function Register() {
                   type="date"
                   value={formData.birthday || ''}
                   onChange={(e) => setFormData({...formData, birthday: e.target.value})}
-                  className="h-14 bg-gray-50 border-gray-50 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                  className="h-14 bg-gray-50 border-gray-50 rounded-xl focus-visible:ring-purple-600 font-bold" 
                 />
               </div>
            </div>
 
-           <div className="bg-purple-50 p-4 sm:p-6 rounded-2xl sm:rounded-3xl space-y-2 sm:space-y-3">
+           <div className="bg-purple-50 p-4 sm:p-6 rounded-xl sm:rounded-xl space-y-2 sm:space-y-3">
               <div className="flex items-center gap-2 text-purple-600 font-black text-xs sm:text-sm">
                 <Info className="w-4 h-4 shrink-0" /> 이용약관 고지
               </div>
@@ -398,7 +398,7 @@ export default function Register() {
               </p>
            </div>
 
-           <Button type="submit" disabled={loading} className="w-full h-14 sm:h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-base sm:text-xl rounded-2xl shadow-xl shadow-purple-200">
+           <Button type="submit" disabled={loading} className="w-full h-14 sm:h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-base sm:text-xl rounded-xl shadow-xl shadow-purple-200">
              {loading ? '처리 중...' : '회원가입 완료하기'}
            </Button>
 

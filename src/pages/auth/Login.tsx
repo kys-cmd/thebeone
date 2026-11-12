@@ -284,14 +284,14 @@ export default function Login() {
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-[450px] bg-white rounded-3xl sm:rounded-[40px] shadow-xl sm:shadow-2xl border border-gray-100 p-6 sm:p-10 space-y-7 sm:space-y-10"
+        className="w-full max-w-[450px] bg-white rounded-xl sm:rounded-xl shadow-xl sm:shadow-2xl border border-gray-100 p-6 sm:p-10 space-y-7 sm:space-y-10"
       >
         {mode === 'login' ? (
           <>
             {/* Header */}
             <div className="text-center space-y-4 sm:space-y-6">
               <Link to="/" className="inline-flex flex-col items-center gap-3 sm:gap-4">
-                 <div className="w-14 h-14 sm:w-16 sm:h-16 bg-purple-600 rounded-2xl sm:rounded-[22px] flex items-center justify-center shadow-xl shadow-purple-200">
+                 <div className="w-14 h-14 sm:w-16 sm:h-16 bg-purple-600 rounded-xl flex items-center justify-center shadow-xl shadow-purple-200">
                    <span className="text-white text-2xl sm:text-3xl font-black">BE</span>
                  </div>
                  <h1 className="text-2xl sm:text-3xl font-black tracking-tighter text-gray-900 whitespace-pre-line">당신의 성장이{'\n'}시작되는 곳</h1>
@@ -310,7 +310,7 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="이메일을 입력하세요" 
-                  className="h-12 sm:h-14 bg-gray-50 border-gray-50 rounded-xl sm:rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                  className="h-12 sm:h-14 bg-gray-50 border-gray-50 rounded-xl sm:rounded-xl focus-visible:ring-purple-600 font-bold" 
                 />
               </div>
               <div className="space-y-2">
@@ -320,7 +320,7 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="비밀번호를 입력하세요" 
-                  className="h-12 sm:h-14 bg-gray-50 border-gray-50 rounded-xl sm:rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                  className="h-12 sm:h-14 bg-gray-50 border-gray-50 rounded-xl sm:rounded-xl focus-visible:ring-purple-600 font-bold" 
                 />
               </div>
               
@@ -359,7 +359,7 @@ export default function Login() {
                  </Link>
               </div>
 
-              <Button type="submit" disabled={loading} className="w-full h-14 sm:h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-base sm:text-xl rounded-2xl shadow-xl shadow-purple-200 mt-4">
+              <Button type="submit" disabled={loading} className="w-full h-14 sm:h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-base sm:text-xl rounded-xl shadow-xl shadow-purple-200 mt-4">
                 {loading ? '로그인 중...' : '매뉴얼 로그인'}
               </Button>
 
@@ -374,7 +374,7 @@ export default function Login() {
                   type="button"
                   onClick={() => handleSocialLogin('google')}
                   disabled={loading}
-                  className="w-full h-14 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-extrabold text-xs rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2"
+                  className="w-full h-14 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-extrabold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-2"
                 >
                   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.69c-.29 1.5-1.14 2.78-2.4 3.63v3.02h3.88c2.27-2.08 3.57-5.15 3.57-8.5z"/>
@@ -387,7 +387,7 @@ export default function Login() {
               </div>
 
               {oauthErrorDetail && (
-                <div className="mt-4 p-4 rounded-2xl bg-amber-50/50 border border-amber-200/60 text-amber-900 space-y-3 block text-left">
+                <div className="mt-4 p-4 rounded-xl bg-amber-50/50 border border-amber-200/60 text-amber-900 space-y-3 block text-left">
                   <div className="flex items-start gap-2.5">
                     <span className="text-xl shrink-0">⚠️</span>
                     <div>
@@ -441,7 +441,7 @@ export default function Login() {
                 {/* Step 1: Email Input */}
                 <div className="text-center space-y-6">
                   <div className="inline-flex flex-col items-center gap-4">
-                     <div className="w-16 h-16 bg-purple-100 rounded-[22px] flex items-center justify-center text-purple-600 shadow-xl border border-purple-200">
+                     <div className="w-16 h-16 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 shadow-xl border border-purple-200">
                        <Mail className="w-8 h-8" />
                      </div>
                      <h1 className="text-3xl font-black tracking-tighter text-gray-900">비밀번호 찾기</h1>
@@ -459,11 +459,11 @@ export default function Login() {
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
                       placeholder="가입한 이메일을 입력하세요" 
-                      className="h-14 bg-gray-50 border-gray-100 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                      className="h-14 bg-gray-50 border-gray-100 rounded-xl focus-visible:ring-purple-600 font-bold" 
                     />
                   </div>
 
-                  <Button type="submit" disabled={loading} className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200 mt-4 cursor-pointer transition-all">
+                  <Button type="submit" disabled={loading} className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-xl shadow-xl shadow-purple-200 mt-4 cursor-pointer transition-all">
                     {loading ? '인증 코드 발송 중...' : '인증번호 발송'}
                   </Button>
 
@@ -486,7 +486,7 @@ export default function Login() {
                 {/* Step 2: Verification Code Input */}
                 <div className="text-center space-y-6">
                   <div className="inline-flex flex-col items-center gap-4">
-                     <div className="w-16 h-16 bg-amber-100 rounded-[22px] flex items-center justify-center text-amber-600 shadow-xl border border-amber-200">
+                     <div className="w-16 h-16 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 shadow-xl border border-amber-200">
                        <Key className="w-8 h-8 animate-pulse" />
                      </div>
                      <h1 className="text-3xl font-black tracking-tighter text-gray-900">인증번호 입력</h1>
@@ -515,19 +515,19 @@ export default function Login() {
                       value={verificationCode}
                       onChange={(e) => setVerificationCode(e.target.value.replace(/[^0-9]/g, ''))}
                       placeholder="인증번호 6자리 입력" 
-                      className="h-14 bg-gray-50 border-gray-100 rounded-2xl focus-visible:ring-purple-600 font-black text-center text-2xl tracking-[0.5em] text-purple-700" 
+                      className="h-14 bg-gray-50 border-gray-100 rounded-xl focus-visible:ring-purple-600 font-black text-center text-2xl tracking-[0.5em] text-purple-700" 
                     />
                   </div>
 
                   {demoOtpNotice && (
-                    <div className="p-4 rounded-2xl bg-purple-50/70 border border-purple-200/80 text-left text-xs text-purple-950 font-semibold space-y-1 block leading-relaxed my-2">
+                    <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200/80 text-left text-xs text-purple-950 font-semibold space-y-1 block leading-relaxed my-2">
                       <span className="font-extrabold text-purple-800 flex items-center gap-1">💡 Sandbox 디버그 지원 가이드</span>
                       메일 전송 환경이 아닐 경우, 아래 인증값을 사용하여 성공적으로 비밀번호를 검증 및 변경할 수 있습니다.<br/>
                       <span className="bg-white px-2.5 py-1 rounded-md text-purple-700 font-black text-lg block text-center border border-purple-200 tracking-widest mt-2">{demoOtpNotice}</span>
                     </div>
                   )}
 
-                  <Button type="submit" disabled={loading} className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200 mt-4 cursor-pointer transition-all">
+                  <Button type="submit" disabled={loading} className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-xl shadow-xl shadow-purple-200 mt-4 cursor-pointer transition-all">
                     {loading ? '인증 확인 중...' : '인증번호 확인'}
                   </Button>
 
@@ -559,7 +559,7 @@ export default function Login() {
                 {/* Step 3: Password Update Form */}
                 <div className="text-center space-y-6">
                   <div className="inline-flex flex-col items-center gap-4">
-                     <div className="w-16 h-16 bg-green-100 rounded-[22px] flex items-center justify-center text-green-600 shadow-xl border border-green-200">
+                     <div className="w-16 h-16 bg-green-100 rounded-xl flex items-center justify-center text-green-600 shadow-xl border border-green-200">
                        <ShieldCheck className="w-8 h-8" />
                      </div>
                      <h1 className="text-3xl font-black tracking-tighter text-gray-900 font-sans">새 비밀번호 설정</h1>
@@ -577,7 +577,7 @@ export default function Login() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="새 비밀번호 (6자 이상)" 
-                      className="h-14 bg-gray-50 border-gray-100 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                      className="h-14 bg-gray-50 border-gray-100 rounded-xl focus-visible:ring-purple-600 font-bold" 
                     />
                   </div>
 
@@ -588,11 +588,11 @@ export default function Login() {
                       value={confirmNewPassword}
                       onChange={(e) => setConfirmNewPassword(e.target.value)}
                       placeholder="새 비밀번호 다시 입력" 
-                      className="h-14 bg-gray-50 border-gray-50 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                      className="h-14 bg-gray-50 border-gray-50 rounded-xl focus-visible:ring-purple-600 font-bold" 
                     />
                   </div>
 
-                  <Button type="submit" disabled={loading} className="w-full h-16 bg-green-600 hover:bg-green-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-green-200 mt-4 cursor-pointer transition-all">
+                  <Button type="submit" disabled={loading} className="w-full h-16 bg-green-600 hover:bg-green-700 text-white font-black text-xl rounded-xl shadow-xl shadow-green-200 mt-4 cursor-pointer transition-all">
                     {loading ? '비밀번호 재설정 중...' : '새 비밀번호 설정 완료'}
                   </Button>
                 </form>
@@ -606,7 +606,7 @@ export default function Login() {
               <>
                 <div className="text-center space-y-6">
                   <div className="inline-flex flex-col items-center gap-4">
-                     <div className="w-16 h-16 bg-purple-100 rounded-[22px] flex items-center justify-center text-purple-600 shadow-xl border border-purple-200">
+                     <div className="w-16 h-16 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 shadow-xl border border-purple-200">
                        <User className="w-8 h-8" />
                      </div>
                      <h1 className="text-3xl font-black tracking-tighter text-gray-900">아이디 찾기</h1>
@@ -624,7 +624,7 @@ export default function Login() {
                       value={findIdName}
                       onChange={(e) => setFindIdName(e.target.value)}
                       placeholder="이름을 입력하세요" 
-                      className="h-14 bg-gray-50 border-gray-100 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                      className="h-14 bg-gray-50 border-gray-100 rounded-xl focus-visible:ring-purple-600 font-bold" 
                     />
                   </div>
 
@@ -635,11 +635,11 @@ export default function Login() {
                       value={findIdPhone}
                       onChange={(e) => setFindIdPhone(e.target.value)}
                       placeholder="휴대전화번호를 입력하세요 (- 없이 입력)" 
-                      className="h-14 bg-gray-50 border-gray-100 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+                      className="h-14 bg-gray-50 border-gray-100 rounded-xl focus-visible:ring-purple-600 font-bold" 
                     />
                   </div>
 
-                  <Button type="submit" disabled={loading} className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200 mt-4 cursor-pointer transition-all">
+                  <Button type="submit" disabled={loading} className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-xl shadow-xl shadow-purple-200 mt-4 cursor-pointer transition-all">
                     {loading ? '아이디 조회 중...' : '이메일 아이디 찾기'}
                   </Button>
 
@@ -658,7 +658,7 @@ export default function Login() {
               <>
                 <div className="text-center space-y-6">
                   <div className="inline-flex flex-col items-center gap-4">
-                     <div className="w-16 h-16 bg-green-100 rounded-[22px] flex items-center justify-center text-green-600 shadow-xl border border-green-200">
+                     <div className="w-16 h-16 bg-green-100 rounded-xl flex items-center justify-center text-green-600 shadow-xl border border-green-200">
                        <ShieldCheck className="w-8 h-8" />
                      </div>
                      <h1 className="text-3xl font-black tracking-tighter text-gray-900">아이디 조회 결과</h1>
@@ -673,7 +673,7 @@ export default function Login() {
                     {foundEmails.map((emailAddr, idx) => (
                       <div 
                         key={idx}
-                        className="py-4 px-5 bg-purple-50/50 border border-purple-100 rounded-2xl flex items-center gap-3"
+                        className="py-4 px-5 bg-purple-50/50 border border-purple-100 rounded-xl flex items-center gap-3"
                       >
                         <Mail className="w-5 h-5 text-purple-600 shrink-0" />
                         <span className="font-extrabold text-gray-900 text-lg tracking-wide">{emailAddr}</span>
@@ -691,7 +691,7 @@ export default function Login() {
                         setFoundEmails([]);
                       }} 
                       variant="outline" 
-                      className="flex-1 h-14 border-gray-200 rounded-2xl font-bold cursor-pointer"
+                      className="flex-1 h-14 border-gray-200 rounded-xl font-bold cursor-pointer"
                     >
                       다시 찾기
                     </Button>
@@ -700,7 +700,7 @@ export default function Login() {
                       onClick={() => {
                         setMode('login');
                       }} 
-                      className="flex-1 h-14 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-2xl cursor-pointer"
+                      className="flex-1 h-14 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl cursor-pointer"
                     >
                       로그인 하러가기
                     </Button>

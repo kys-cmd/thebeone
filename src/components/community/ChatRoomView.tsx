@@ -187,7 +187,7 @@ export function ChatRoomView({ communityId, room, onBack, isAdmin }: ChatRoomVie
   if (!room) return null;
 
   return (
-    <div className="flex flex-col h-[500px] bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="flex flex-col h-[500px] bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
       {/* Header */}
       <div className="p-3 px-4 border-b border-gray-50 flex items-center justify-between bg-white sticky top-0 z-10">
         <div className="flex items-center gap-2.5">
@@ -264,7 +264,7 @@ export function ChatRoomView({ communityId, room, onBack, isAdmin }: ChatRoomVie
                   isMe ? "flex-row-reverse" : "flex-row"
                 )}>
                   <div className={cn(
-                    "relative p-2.5 px-3 rounded-[18px] text-[15px] font-medium shadow-xs transition-all",
+                    "relative p-2.5 px-3 rounded-lg text-[15px] font-medium shadow-xs transition-all",
                     isMe 
                       ? "bg-purple-600 text-white rounded-tr-none" 
                       : "bg-white text-gray-900 rounded-tl-none border border-gray-100"
@@ -405,7 +405,7 @@ export function ChatRoomView({ communityId, room, onBack, isAdmin }: ChatRoomVie
 
       {/* Leave Confirmation Dialog */}
       <Dialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm}>
-        <DialogContent className="rounded-[40px] sm:max-w-md p-10 border-none shadow-2xl">
+        <DialogContent className="rounded-2xl sm:max-w-md p-10 border-none shadow-2xl">
           <DialogHeader className="space-y-4">
             <DialogTitle className="text-2xl font-black tracking-tight text-gray-900 flex items-center gap-4">
               <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center">

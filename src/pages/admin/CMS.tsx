@@ -257,7 +257,7 @@ export default function AdminCMS() {
 
         {/* 1. 배너 관리 */}
         <TabsContent value="banners" className="mt-6 space-y-6">
-          <div className="bg-gradient-to-r from-purple-600 to-indigo-700 rounded-3xl p-8 text-white mb-8 relative overflow-hidden shadow-xl shadow-purple-900/10">
+          <div className="bg-gradient-to-r from-purple-600 to-indigo-700 rounded-xl p-8 text-white mb-8 relative overflow-hidden shadow-xl shadow-purple-900/10">
             <div className="relative z-10 space-y-2">
               <Badge className="bg-white/20 text-white border-white/30 backdrop-blur-md mb-2">Notice</Badge>
               <h2 className="text-3xl font-black tracking-tight">HERO 영역 디자인 설정</h2>
@@ -302,7 +302,7 @@ export default function AdminCMS() {
           
           <div className="grid grid-cols-1 gap-8">
             {banners.sort((a, b) => a.order - b.order).map((banner) => (
-              <Card key={banner.id} className="group overflow-hidden border-none shadow-md hover:shadow-xl transition-all duration-300 rounded-3xl">
+              <Card key={banner.id} className="group overflow-hidden border-none shadow-md hover:shadow-xl transition-all duration-300 rounded-xl">
                 <div className="flex flex-col">
                   {/* Media Preview Area - Always on TOP */}
                   <div className="w-full bg-gray-50 relative group/img">
@@ -406,7 +406,7 @@ export default function AdminCMS() {
                       </div>
                     ) : (
                       <div className="aspect-[21/9] md:aspect-[5/1] w-full flex flex-col items-center justify-center p-8 text-center bg-gray-50 border-b border-gray-100">
-                        <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center shadow-sm mb-4">
+                        <div className="w-20 h-20 bg-white rounded-xl flex items-center justify-center shadow-sm mb-4">
                           <ImageIcon className="w-10 h-10 text-gray-200" />
                         </div>
                         <p className="text-sm text-gray-600 font-bold mb-1">배너 미디어가 등록되지 않았습니다.</p>
@@ -521,7 +521,7 @@ export default function AdminCMS() {
                         value={banner.html_content || ''} 
                         onChange={e => handleUpdateBanner(banner.id, 'html_content', e.target.value)} 
                         placeholder="배너 위에 겹쳐서 보여줄 HTML 코드를 입력하세요"
-                        className="w-full min-h-[160px] p-5 text-sm font-mono bg-gray-950 text-emerald-400 rounded-3xl border-none focus:ring-4 focus:ring-purple-500/10 outline-none scrollbar-thin overflow-auto leading-relaxed shadow-inner"
+                        className="w-full min-h-[160px] p-5 text-sm font-mono bg-gray-950 text-emerald-400 rounded-xl border-none focus:ring-4 focus:ring-purple-500/10 outline-none scrollbar-thin overflow-auto leading-relaxed shadow-inner"
                       />
                     </div>
 
@@ -595,7 +595,7 @@ export default function AdminCMS() {
           </div>
 
           <div className="flex justify-center pt-8">
-            <Button onClick={handleAddBanner} variant="outline" className="h-16 px-12 rounded-3xl border-dashed border-2 border-gray-200 text-gray-400 hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50 transition-all font-bold group">
+            <Button onClick={handleAddBanner} variant="outline" className="h-16 px-12 rounded-xl border-dashed border-2 border-gray-200 text-gray-400 hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50 transition-all font-bold group">
               <Plus className="w-5 h-5 mr-3 group-hover:scale-125 transition-transform" /> 새로운 배너 추가
             </Button>
           </div>
@@ -674,7 +674,7 @@ export default function AdminCMS() {
                 </div>
               </div>
 
-              <div className="p-6 border rounded-3xl bg-gray-50 space-y-4">
+              <div className="p-6 border rounded-xl bg-gray-50 space-y-4">
                 <Label className="text-xs font-bold text-gray-400 uppercase tracking-widest">미리보기</Label>
                 <div 
                   className="w-full py-3 px-4 rounded-xl text-center text-sm font-bold shadow-sm"
@@ -924,7 +924,7 @@ export default function AdminCMS() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="h-64 flex flex-col items-center justify-center bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200 m-6">
+            <CardContent className="h-64 flex flex-col items-center justify-center bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 m-6">
               <BookOpen className="w-12 h-12 text-gray-300 mb-4" />
               <p className="text-gray-500 font-bold">디자인 테마 설정 기능은 현재 준비 중입니다.</p>
               <p className="text-xs text-gray-400 mt-2 text-center">브랜드 아이덴티티에 맞는<br/>글로벌 테마 시스템이 곧 업데이트될 예정입니다.</p>

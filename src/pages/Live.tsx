@@ -424,7 +424,7 @@ export default function LivePage() {
       <div className="container mx-auto px-0 lg:px-4 py-0 lg:py-8 flex-1 flex flex-col lg:block min-h-0">
         {/* Admin Controls (Desktop) */}
         {isAdmin && (
-          <div className="hidden lg:flex mb-6 bg-gradient-to-r from-gray-900 via-gray-900 to-black p-5 rounded-3xl items-center justify-between border border-white/15 shadow-xl">
+          <div className="hidden lg:flex mb-6 bg-gradient-to-r from-gray-900 via-gray-900 to-black p-5 rounded-xl items-center justify-between border border-white/15 shadow-xl">
             <div className="text-white space-y-1">
               <div className="flex items-center gap-2.5">
                 <span className="text-sm font-black tracking-tight text-white flex items-center gap-2">
@@ -498,7 +498,7 @@ export default function LivePage() {
           
           {/* Main Video Area: Pinned at top on mobile, 3-col on desktop */}
           <div className="lg:col-span-3 flex flex-col shrink-0 lg:shrink space-y-0 lg:space-y-6 relative bg-black z-20">
-            <div className="relative aspect-video w-full bg-gray-900 lg:rounded-[32px] overflow-hidden shadow-2xl border-b lg:border border-white/10 flex flex-col items-center justify-center">
+            <div className="relative aspect-video w-full bg-gray-900 lg:rounded-xl overflow-hidden shadow-2xl border-b lg:border border-white/10 flex flex-col items-center justify-center">
               {/* The Live Video Player: Always visible to everyone without requiring login */}
               <LiveVideoPlayer embedCode={displayEmbedCode} />
               <div className="absolute top-3 left-3 sm:top-6 sm:left-6 z-10 flex items-center gap-3 pointer-events-none">
@@ -571,7 +571,7 @@ export default function LivePage() {
             </div>
 
             {/* Desktop Title Banner (hidden lg:flex) */}
-            <div className="hidden lg:flex bg-white/5 backdrop-blur-md p-8 rounded-[32px] border border-white/10 items-center justify-between">
+            <div className="hidden lg:flex bg-white/5 backdrop-blur-md p-8 rounded-xl border border-white/10 items-center justify-between">
               <div className="space-y-2">
                  <h1 className="text-2xl font-black text-white tracking-tighter">
                    {displayTitle}
@@ -585,7 +585,7 @@ export default function LivePage() {
           </div>
 
           {/* Chat Area: Fills 100% of remaining height on mobile; 1-col sidebar on desktop */}
-          <div className="lg:col-span-1 flex-1 min-h-0 flex flex-col bg-white lg:rounded-[32px] overflow-hidden shadow-2xl border-t lg:border border-gray-100 relative">
+          <div className="lg:col-span-1 flex-1 min-h-0 flex flex-col bg-white lg:rounded-xl overflow-hidden shadow-2xl border-t lg:border border-gray-100 relative">
             
             {/* Chat Header */}
             <div className="px-4 py-2.5 sm:py-3.5 border-b flex items-center justify-between bg-gray-50/90 shrink-0">
@@ -730,7 +730,7 @@ export default function LivePage() {
 
       {showSettingsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white rounded-3xl sm:rounded-[32px] p-6 sm:p-8 max-w-lg w-full space-y-6 sm:space-y-8 shadow-2xl relative my-auto">
+          <div className="bg-white rounded-xl sm:rounded-xl p-6 sm:p-8 max-w-lg w-full space-y-6 sm:space-y-8 shadow-2xl relative my-auto">
             <div className="absolute top-6 left-6 flex items-center gap-2 text-red-600">
               <Zap className="w-5 h-5" />
               <span className="font-black">LIVE SETUP</span>
@@ -809,7 +809,7 @@ export default function LivePage() {
       {/* Conflict Resolution Modal */}
       {showConflictModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
-          <div className="bg-white rounded-3xl sm:rounded-[32px] p-6 sm:p-8 max-w-lg w-full space-y-5 sm:space-y-6 shadow-2xl relative border-2 border-amber-500/30 my-auto">
+          <div className="bg-white rounded-xl sm:rounded-xl p-6 sm:p-8 max-w-lg w-full space-y-5 sm:space-y-6 shadow-2xl relative border-2 border-amber-500/30 my-auto">
             <div className="flex items-center gap-2 text-amber-600">
               <AlertTriangle className="w-6 h-6 animate-bounce" />
               <span className="font-black text-xs tracking-wider uppercase">라이브 방송 중복 감지</span>

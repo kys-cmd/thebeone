@@ -17,9 +17,9 @@ export default function MembershipPage() {
             transition={{ duration: 0.45 }}
             className="relative mx-auto w-28 h-28 sm:w-36 sm:h-36"
           >
-            <div className="absolute inset-0 bg-purple-600/10 rounded-[36px] sm:rounded-[44px] animate-pulse" />
-            <div className="absolute inset-3 sm:inset-4 bg-purple-600/20 rounded-[28px] sm:rounded-[36px] animate-pulse [animation-delay:0.2s]" />
-            <div className="absolute inset-6 sm:inset-8 bg-purple-600 rounded-[22px] sm:rounded-[28px] shadow-2xl shadow-purple-200 flex items-center justify-center text-white">
+            <div className="absolute inset-0 bg-purple-600/10 rounded-xl sm:rounded-2xl animate-pulse" />
+            <div className="absolute inset-3 sm:inset-4 bg-purple-600/20 rounded-xl sm:rounded-xl animate-pulse [animation-delay:0.2s]" />
+            <div className="absolute inset-6 sm:inset-8 bg-purple-600 rounded-lg sm:rounded-xl shadow-2xl shadow-purple-200 flex items-center justify-center text-white">
               <Award className="w-9 h-9 sm:w-11 sm:h-11" />
             </div>
             <motion.div

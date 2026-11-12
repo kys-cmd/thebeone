@@ -53,7 +53,7 @@ export default function FontDemo() {
   return (
     <div className="space-y-8 select-none">
       {/* ─────────────────── [HEADER SECTION] ─────────────────── */}
-      <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-3">
+      <div className="bg-white p-8 rounded-xl border border-gray-100 shadow-sm space-y-3">
         <div className="flex items-center gap-2 text-purple-600">
           <Type className="w-5 h-5 text-purple-600 animate-pulse" />
           <span className="text-xs font-black uppercase tracking-widest">Aesthetic typography validator</span>
@@ -69,7 +69,7 @@ export default function FontDemo() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Testing Controls Panel */}
-        <Card className="lg:col-span-1 p-6 bg-white border border-gray-150 rounded-3xl shadow-sm space-y-6">
+        <Card className="lg:col-span-1 p-6 bg-white border border-gray-150 rounded-xl shadow-sm space-y-6">
           <div className="flex items-center gap-2 pb-4 border-b border-slate-50">
             <Sliders className="w-4 h-4 text-purple-600" />
             <h3 className="font-black text-slate-900 text-sm">타이포 최적화 컨트롤 조절기</h3>
@@ -187,7 +187,7 @@ export default function FontDemo() {
         </Card>
 
         {/* Real-time Rendering Playground Card */}
-        <Card className="lg:col-span-2 p-6 bg-white border border-gray-150 rounded-3xl shadow-sm flex flex-col space-y-4">
+        <Card className="lg:col-span-2 p-6 bg-white border border-gray-150 rounded-xl shadow-sm flex flex-col space-y-4">
           <div className="flex items-center justify-between pb-4 border-b border-slate-50">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-purple-600" />
@@ -221,7 +221,7 @@ export default function FontDemo() {
       </div>
 
       {/* ─────────────────── [RECOMMENDED TYPOGRAPHY COMBINATIONS] ─────────────────── */}
-      <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-6">
+      <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm space-y-6">
         <div className="flex items-center justify-between pb-6 border-b border-gray-50">
           <h2 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
             <Layers className="w-5 h-5 text-purple-600" />
@@ -265,7 +265,7 @@ export default function FontDemo() {
       </div>
 
       {/* ─────────────────── [DIAGNOSTICS & COMPARISON DATA] ─────────────────── */}
-      <div className="bg-slate-900 text-slate-100 rounded-3xl p-8 space-y-6">
+      <div className="bg-slate-900 text-slate-100 rounded-xl p-8 space-y-6">
         <div className="space-y-1.5">
           <h3 className="font-black text-lg flex items-center gap-2 text-purple-400">
             <LayoutGrid className="w-5 h-5 text-purple-400" />

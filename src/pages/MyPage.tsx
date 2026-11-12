@@ -18,7 +18,9 @@ import {
   MessageSquare,
   X,
   LayoutGrid,
-  List
+  List,
+  AlertTriangle,
+  Lock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -274,6 +276,33 @@ export default function MyPage() {
   const isGoogleUser = provider === 'google';
   const isIncomplete = isProfileIncomplete(user, provider);
 
+  // Withdrawal States
+  const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
+  const [withdrawPassword, setWithdrawPassword] = useState('');
+  const [withdrawing, setWithdrawing] = useState(false);
+
+  const handleWithdrawal = async () => {
+    if (!withdrawPassword.trim()) {
+      toast.error('본인 확인을 위해 현재 비밀번호를 입력해 주세요.');
+      return;
+    }
+
+    try {
+      setWithdrawing(true);
+      await authService.withdrawAccount(withdrawPassword.trim());
+      setUser(null, null);
+      setWithdrawModalOpen(false);
+      setWithdrawPassword('');
+      toast.success('회원 탈퇴가 완료되었습니다. 이용해 주셔서 감사합니다.');
+      navigate('/');
+    } catch (error: any) {
+      console.error('Withdrawal failed:', error);
+      toast.error(error.message || '회원 탈퇴 처리에 실패했습니다. 비밀번호를 확인해 주세요.');
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
   // Auto populate on user load
   React.useEffect(() => {
     if (user) {
@@ -457,9 +486,9 @@ export default function MyPage() {
           
           {/* Sidebar */}
           <aside className="w-full lg:w-[320px] space-y-3 sm:space-y-5 shrink-0 lg:sticky lg:top-28">
-             <div className="bg-white rounded-2xl sm:rounded-3xl lg:rounded-[40px] shadow-sm border border-gray-100 p-4 sm:p-6 lg:p-8 flex items-center lg:flex-col gap-4 lg:gap-5 text-left lg:text-center">
+             <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6 lg:p-8 flex items-center lg:flex-col gap-4 lg:gap-5 text-left lg:text-center">
                 <div className="relative inline-block shrink-0">
-                  <Avatar className="w-14 h-14 sm:w-20 sm:h-20 lg:w-24 lg:h-24 rounded-2xl sm:rounded-[28px] lg:rounded-[32px] border-2 sm:border-4 border-purple-50 shadow-inner">
+                  <Avatar className="w-14 h-14 sm:w-20 sm:h-20 lg:w-24 lg:h-24 rounded-xl sm:rounded-2xl border-2 sm:border-4 border-purple-50 shadow-inner">
                     <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`} />
                     <AvatarFallback>{user?.name?.[0]}</AvatarFallback>
                   </Avatar>
@@ -473,7 +502,7 @@ export default function MyPage() {
                 </div>
              </div>
 
-             <nav className="bg-white rounded-2xl sm:rounded-3xl lg:rounded-[40px] shadow-sm border border-gray-100 p-1.5 sm:p-2 lg:p-4 grid grid-cols-4 lg:flex lg:flex-col gap-1">
+             <nav className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 p-1.5 sm:p-2 lg:p-4 grid grid-cols-4 lg:flex lg:flex-col gap-1">
                 {[
                   { id: 'dashboard', icon: <TrendingUp className="w-4 h-4 lg:w-5 lg:h-5" />, label: '대시보드', shortLabel: '대시보드' },
                   { id: 'courses', icon: <BookOpen className="w-4 h-4 lg:w-5 lg:h-5" />, label: '내 강의실', shortLabel: '내 강의실' },
@@ -484,7 +513,7 @@ export default function MyPage() {
                     key={item.id}
                     onClick={() => handleMenuClick(item.id)}
                     disabled={isIncomplete && item.id !== 'settings'}
-                    className={`w-full flex flex-col lg:flex-row items-center justify-center lg:justify-between gap-1 lg:gap-3 py-2.5 px-1.5 lg:p-4 rounded-xl lg:rounded-3xl transition-all font-black text-[11px] sm:text-xs lg:text-base min-h-[52px] lg:min-h-0 ${activeMenu === item.id ? 'bg-purple-600 text-white shadow-md lg:shadow-xl shadow-purple-200' : (isIncomplete && item.id !== 'settings') ? 'text-gray-300 cursor-not-allowed opacity-40' : 'text-gray-500 hover:bg-gray-50'}`}
+                    className={`w-full flex flex-col lg:flex-row items-center justify-center lg:justify-between gap-1 lg:gap-3 py-2.5 px-1.5 lg:p-4 rounded-lg lg:rounded-xl transition-all font-black text-[11px] sm:text-xs lg:text-base min-h-[52px] lg:min-h-0 ${activeMenu === item.id ? 'bg-purple-600 text-white shadow-md lg:shadow-xl shadow-purple-200' : (isIncomplete && item.id !== 'settings') ? 'text-gray-300 cursor-not-allowed opacity-40' : 'text-gray-500 hover:bg-gray-50'}`}
                   >
                     <div className="flex flex-col lg:flex-row items-center gap-1 lg:gap-3">
                       {item.icon}
@@ -512,7 +541,7 @@ export default function MyPage() {
                      {loading ? (
                        <div className="col-span-full text-center py-16 sm:py-20 text-gray-400 font-bold font-sans">강의 정보를 불러오고 있습니다...</div>
                      ) : myCourses.length === 0 ? (
-                       <div className="col-span-full bg-white p-10 sm:p-20 rounded-3xl sm:rounded-[40px] text-center border-2 border-dashed border-gray-100 space-y-5 sm:space-y-6">
+                       <div className="col-span-full bg-white p-10 sm:p-20 rounded-xl sm:rounded-2xl text-center border-2 border-dashed border-gray-100 space-y-5 sm:space-y-6">
                          <BookOpen className="w-12 h-12 sm:w-16 sm:h-16 text-gray-200 mx-auto" />
                          <div>
                            <p className="text-lg sm:text-xl font-black text-gray-900">아직 수강 중인 강의가 없습니다.</p>
@@ -529,7 +558,7 @@ export default function MyPage() {
                        myCourses.map((course) => {
                          const isExpired = isExpiredCourse(course);
                          return (
-                         <Card key={course.id} className="overflow-hidden border-none shadow-sm rounded-3xl sm:rounded-[40px] group hover:shadow-2xl transition-all bg-white flex flex-col justify-between">
+                         <Card key={course.id} className="overflow-hidden border-none shadow-sm rounded-xl sm:rounded-2xl group hover:shadow-2xl transition-all bg-white flex flex-col justify-between">
                            <div>
                              <div className="aspect-[16/9] bg-gray-100 relative">
                                 <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
@@ -682,7 +711,7 @@ export default function MyPage() {
                     {loading ? (
                       <div className="col-span-full text-center py-16 sm:py-20 text-gray-400 font-bold">강의 정보를 불러오고 있습니다...</div>
                     ) : filteredCourses.length === 0 ? (
-                      <div className="col-span-full bg-white p-10 sm:p-20 rounded-3xl sm:rounded-[40px] text-center border-2 border-dashed border-gray-100 space-y-5 sm:space-y-6">
+                      <div className="col-span-full bg-white p-10 sm:p-20 rounded-xl sm:rounded-2xl text-center border-2 border-dashed border-gray-100 space-y-5 sm:space-y-6">
                         <BookOpen className="w-12 h-12 sm:w-16 sm:h-16 text-gray-200 mx-auto" />
                         {statusFilter === 'active' && myCourses.length > 0 ? (
                           <>
@@ -692,7 +721,7 @@ export default function MyPage() {
                             </div>
                             <Button
                               variant="outline"
-                              className="border-gray-100 text-gray-700 font-black px-8 h-12 sm:h-14 rounded-2xl hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200"
+                              className="border-gray-100 text-gray-700 font-black px-8 h-12 sm:h-14 rounded-xl hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200"
                               onClick={() => handleStatusFilterChange('all')}
                             >
                               전체 강의 보기
@@ -705,7 +734,7 @@ export default function MyPage() {
                               <p className="text-sm text-gray-400 font-bold mt-1">비원아카데미의 프리미엄 강의들을 만나보세요!</p>
                             </div>
                             <Button
-                              className="bg-purple-600 hover:bg-purple-700 text-white font-black px-8 h-12 sm:h-14 rounded-2xl"
+                              className="bg-purple-600 hover:bg-purple-700 text-white font-black px-8 h-12 sm:h-14 rounded-xl"
                               onClick={() => navigate('/courses')}
                             >
                               강의 둘러보기
@@ -719,7 +748,7 @@ export default function MyPage() {
                         
                         if (viewType === 'list') {
                           return (
-                            <Card key={course.id} className="overflow-hidden border-none shadow-xs rounded-2xl sm:rounded-[32px] group hover:shadow-xl transition-all bg-white flex flex-col md:flex-row items-stretch md:items-center justify-between p-4 sm:p-6 gap-4 sm:gap-6">
+                            <Card key={course.id} className="overflow-hidden border-none shadow-xs rounded-xl sm:rounded-2xl group hover:shadow-xl transition-all bg-white flex flex-col md:flex-row items-stretch md:items-center justify-between p-4 sm:p-6 gap-4 sm:gap-6">
                               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 flex-1 min-w-0">
                                 {/* Thumbnail */}
                                 <div className="w-full sm:w-44 aspect-[16/9] bg-gray-100 relative rounded-xl sm:rounded-2xl overflow-hidden shrink-0">
@@ -781,7 +810,7 @@ export default function MyPage() {
 
                         // Default Card Layout
                         return (
-                          <Card key={course.id} className="overflow-hidden border-none shadow-sm rounded-3xl sm:rounded-[40px] group hover:shadow-2xl transition-all bg-white flex flex-col justify-between">
+                          <Card key={course.id} className="overflow-hidden border-none shadow-sm rounded-xl sm:rounded-2xl group hover:shadow-2xl transition-all bg-white flex flex-col justify-between">
                             <div>
                               <div className="aspect-[16/9] bg-gray-100 relative">
                                  <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
@@ -845,14 +874,14 @@ export default function MyPage() {
 
             {activeMenu === 'settings' && user && (
               <div className="max-w-2xl mx-auto space-y-6 sm:space-y-8 pb-10">
-                <div className="bg-white rounded-3xl sm:rounded-[48px] shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                   <div className="p-6 sm:p-10 border-b border-gray-50 bg-gray-50/50">
                     <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">계정 정보 설정</h3>
                     <p className="text-xs sm:text-base text-gray-400 font-bold mt-1.5 sm:mt-2">비원아카데미에서 사용하실 개인 정보를 관리하세요.</p>
                   </div>
                   
                   {isIncomplete && (
-                    <div className="mx-5 sm:mx-10 mt-6 sm:mt-8 mb-2 p-5 sm:p-6 bg-purple-50 rounded-2xl sm:rounded-[24px] border border-purple-100 space-y-2.5 sm:space-y-3">
+                    <div className="mx-5 sm:mx-10 mt-6 sm:mt-8 mb-2 p-5 sm:p-6 bg-purple-50 rounded-lg sm:rounded-xl border border-purple-100 space-y-2.5 sm:space-y-3">
                       <div className="flex items-center gap-2.5 sm:gap-3 text-purple-700">
                         <Star className="w-5 h-5 fill-purple-600 text-purple-600 shrink-0" />
                         <h4 className="text-sm sm:text-base font-black">구글 간편 회원 정보 등록 단계</h4>
@@ -968,7 +997,7 @@ export default function MyPage() {
 
                     <div className="pt-8 border-t border-gray-50">
                       <Button 
-                        className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-3xl shadow-xl shadow-purple-100 transition-all active:scale-[0.98]"
+                        className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-xl shadow-purple-100 transition-all active:scale-[0.98]"
                         onClick={async () => {
                           if (!name.trim()) {
                             toast.error('이름(실명)을 입력해주세요.');
@@ -1046,7 +1075,7 @@ export default function MyPage() {
                 </div>
 
                 {/* 비밀번호 변경 영역 */}
-                <div className="bg-white rounded-3xl sm:rounded-[48px] shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                   <div className="p-6 sm:p-10 border-b border-gray-50 bg-gray-50/50">
                     <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">비밀번호 변경</h3>
                     <p className="text-xs sm:text-base text-gray-400 font-bold mt-1.5 sm:mt-2">새로운 비밀번호를 설정하여 계정을 안전하게 보호하세요.</p>
@@ -1062,7 +1091,7 @@ export default function MyPage() {
                               placeholder="새 비밀번호 입력 (6자 이상)"
                               value={newPassword}
                               onChange={(e) => setNewPassword(e.target.value)}
-                              className="w-full h-14 px-5 bg-white border border-gray-100 focus:ring-2 focus:ring-purple-600/10 focus:border-purple-600 rounded-2xl text-gray-900 font-black text-sm transition-all" 
+                              className="w-full h-14 px-5 bg-white border border-gray-100 focus:ring-2 focus:ring-purple-600/10 focus:border-purple-600 rounded-xl text-gray-900 font-black text-sm transition-all" 
                             />
                           </div>
                         </div>
@@ -1074,7 +1103,7 @@ export default function MyPage() {
                               placeholder="새 비밀번호 다시 입력"
                               value={confirmPassword}
                               onChange={(e) => setConfirmPassword(e.target.value)}
-                              className="w-full h-14 px-5 bg-white border border-gray-100 focus:ring-2 focus:ring-purple-600/10 focus:border-purple-600 rounded-2xl text-gray-900 font-black text-sm transition-all" 
+                              className="w-full h-14 px-5 bg-white border border-gray-100 focus:ring-2 focus:ring-purple-600/10 focus:border-purple-600 rounded-xl text-gray-900 font-black text-sm transition-all" 
                             />
                           </div>
                         </div>
@@ -1083,7 +1112,7 @@ export default function MyPage() {
 
                     <div className="pt-8 border-t border-gray-50">
                       <Button 
-                        className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-3xl shadow-xl shadow-purple-100 transition-all active:scale-[0.98]"
+                        className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-xl shadow-purple-100 transition-all active:scale-[0.98]"
                         onClick={async () => {
                           if (!newPassword) {
                             toast.error('새 비밀번호를 입력해주세요.');
@@ -1120,12 +1149,21 @@ export default function MyPage() {
                   </div>
                 </div>
 
-                <div className="bg-red-50/50 rounded-3xl sm:rounded-[40px] p-5 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="bg-red-50/50 rounded-xl sm:rounded-2xl p-5 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-red-100/60">
                   <div>
                     <h4 className="text-base font-black text-red-600">회원 탈퇴</h4>
-                    <p className="text-xs sm:text-sm font-bold text-red-400 mt-1 break-keep">계정을 삭제하시면 모든 학습 데이터가 삭제되며 복구할 수 없습니다.</p>
+                    <p className="text-xs sm:text-sm font-bold text-red-400 mt-1 break-keep">계정을 삭제하시면 수강 중인 강의 내역, 결제 내역, 마일리지 등 모든 정보가 삭제되며 복구할 수 없습니다.</p>
                   </div>
-                  <Button variant="ghost" className="text-red-600 font-bold hover:bg-red-100 rounded-xl shrink-0 self-end sm:self-auto">탈퇴 신청</Button>
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => {
+                      setWithdrawPassword('');
+                      setWithdrawModalOpen(true);
+                    }}
+                    className="text-red-600 font-black hover:bg-red-100 hover:text-red-700 rounded-xl shrink-0 self-end sm:self-auto cursor-pointer border border-red-200/50"
+                  >
+                    탈퇴 신청
+                  </Button>
                 </div>
               </div>
             )}
@@ -1133,7 +1171,7 @@ export default function MyPage() {
             {activeMenu === 'payments' && (
               <div className="flex-1 space-y-6 sm:space-y-10 animate-in fade-in slide-in-from-bottom-3 duration-500">
                 {/* 1. Mileage Points Balance Card */}
-                <div className="bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-800 rounded-3xl sm:rounded-[48px] p-6 sm:p-10 text-white shadow-2xl relative overflow-hidden">
+                <div className="bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-800 rounded-xl sm:rounded-2xl p-6 sm:p-10 text-white shadow-2xl relative overflow-hidden">
                   <div className="absolute right-0 bottom-0 opacity-10 translate-x-12 translate-y-12">
                      <CreditCard className="w-64 h-64 sm:w-96 sm:h-96" />
                   </div>
@@ -1166,10 +1204,10 @@ export default function MyPage() {
                 </div>
 
                 {/* 2. Mileage Policy Guidelines Card */}
-                <div className="bg-white rounded-3xl sm:rounded-[40px] p-6 sm:p-8 border border-gray-100 shadow-sm space-y-4 sm:space-y-6">
+                <div className="bg-white rounded-xl sm:rounded-2xl p-6 sm:p-8 border border-gray-100 shadow-sm space-y-4 sm:space-y-6">
                   <h3 className="text-lg sm:text-xl font-black text-gray-900">마일리지 사용 안내</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                    <div className="p-5 sm:p-6 bg-purple-50/50 rounded-2xl sm:rounded-3xl space-y-2.5 sm:space-y-3">
+                    <div className="p-5 sm:p-6 bg-purple-50/50 rounded-lg sm:rounded-xl space-y-2.5 sm:space-y-3">
                       <h4 className="font-extrabold text-purple-800 flex items-center gap-2 text-sm sm:text-base">
                         <span className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-xs shrink-0">1</span>
                         결제 시 현금처럼 사용
@@ -1178,7 +1216,7 @@ export default function MyPage() {
                         장바구니(수강 바구니) 페이지에서 결제 시 보유한 마일리지를 자유롭게 입력하여 수강료에서 할인받을 수 있습니다.
                       </p>
                     </div>
-                    <div className="p-5 sm:p-6 bg-purple-50/50 rounded-2xl sm:rounded-3xl space-y-2.5 sm:space-y-3">
+                    <div className="p-5 sm:p-6 bg-purple-50/50 rounded-lg sm:rounded-xl space-y-2.5 sm:space-y-3">
                       <h4 className="font-extrabold text-purple-800 flex items-center gap-2 text-sm sm:text-base">
                         <span className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-xs shrink-0">2</span>
                         포인트 적립 정책
@@ -1191,7 +1229,7 @@ export default function MyPage() {
                 </div>
 
                 {/* 3. Payment history board */}
-                <div className="bg-white rounded-3xl sm:rounded-[40px] shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                   <div className="p-6 sm:p-10 border-b border-gray-50 bg-gray-50/50 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
                     <div>
                       <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">결제 내역</h3>
@@ -1263,7 +1301,7 @@ export default function MyPage() {
       </div>
 
       <Dialog open={reviewModalOpen} onOpenChange={setReviewModalOpen}>
-        <DialogContent className="rounded-3xl sm:rounded-[40px] border-none shadow-2xl p-0 overflow-hidden max-w-[calc(100vw-2rem)] sm:max-w-[500px]">
+        <DialogContent className="rounded-xl sm:rounded-2xl border-none shadow-2xl p-0 overflow-hidden max-w-[calc(100vw-2rem)] sm:max-w-[500px]">
           <DialogHeader className="p-6 sm:p-8 bg-purple-600 text-white">
             <DialogTitle className="text-xl sm:text-2xl font-black tracking-tighter">수강후기 작성</DialogTitle>
             <DialogDescription className="text-purple-100 font-bold text-xs sm:text-sm">
@@ -1297,7 +1335,7 @@ export default function MyPage() {
               <Label className="text-sm font-black text-gray-400 uppercase tracking-widest">후기 내용</Label>
               <Textarea 
                 placeholder="강의를 통해 배운 점이나 좋았던 점을 적어주세요 (최소 5자)"
-                className="min-h-[150px] rounded-2xl border-gray-100 focus:ring-purple-600 focus:border-purple-600 p-4"
+                className="min-h-[150px] rounded-xl border-gray-100 focus:ring-purple-600 focus:border-purple-600 p-4"
                 value={reviewContent}
                 onChange={(e) => setReviewContent(e.target.value)}
               />
@@ -1317,6 +1355,92 @@ export default function MyPage() {
               disabled={submittingReview}
             >
               {submittingReview ? '등록 중...' : '후기 등록하기'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 회원 탈퇴 확인 및 비밀번호 입력 모달 */}
+      <Dialog open={withdrawModalOpen} onOpenChange={(open) => {
+        if (!withdrawing) {
+          setWithdrawModalOpen(open);
+          if (!open) setWithdrawPassword('');
+        }
+      }}>
+        <DialogContent className="rounded-xl sm:rounded-2xl border border-red-100 shadow-2xl p-0 overflow-hidden max-w-[calc(100vw-2rem)] sm:max-w-[480px]">
+          <DialogHeader className="p-6 sm:p-8 bg-gradient-to-br from-red-600 to-rose-700 text-white text-left">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center mb-3">
+              <AlertTriangle className="w-6 h-6 text-white" />
+            </div>
+            <DialogTitle className="text-xl sm:text-2xl font-black tracking-tight">회원 탈퇴 안내 및 본인 확인</DialogTitle>
+            <DialogDescription className="text-red-100 font-bold text-xs sm:text-sm mt-1">
+              탈퇴 전 아래 유의사항을 반드시 확인해 주시기 바랍니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-6 sm:p-8 space-y-6">
+            {/* 경고문 안내 박스 */}
+            <div className="bg-red-50 border border-red-200/80 rounded-2xl p-4 sm:p-5 space-y-2.5 text-left">
+              <div className="flex items-center gap-2 text-red-700 font-black text-sm">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>회원 탈퇴 시 모든 정보가 영구 삭제됩니다</span>
+              </div>
+              <ul className="text-xs text-red-600 space-y-1.5 list-disc list-inside font-semibold leading-relaxed">
+                <li><strong className="font-black text-red-700">수강 중인 강의 내역 및 학습 진행도</strong>가 완전히 삭제되며 재수강이 불가합니다.</li>
+                <li><strong className="font-black text-red-700">결제 내역 및 보유 마일리지 포인트</strong>가 영구 소멸되며 복구되지 않습니다.</li>
+                <li>커뮤니티 및 채팅방 활동 기록 등 <strong className="font-black text-red-700">모든 회원 데이터가 데이터베이스에서 즉시 영구 삭제</strong>됩니다.</li>
+                <li>탈퇴 후에는 동일한 계정 정보로 복구가 절대 불가능합니다.</li>
+              </ul>
+            </div>
+
+            {/* 본인 확인 비밀번호 입력 */}
+            <div className="space-y-2.5 text-left">
+              <Label className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-red-600" />
+                <span>본인 확인 비밀번호</span>
+                <Badge className="bg-red-100 text-red-700 border-none text-[9px] px-1.5 py-0">필수</Badge>
+              </Label>
+              <input
+                type="password"
+                placeholder="현재 로그인 비밀번호를 입력하세요"
+                value={withdrawPassword}
+                onChange={(e) => setWithdrawPassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !withdrawing) {
+                    handleWithdrawal();
+                  }
+                }}
+                disabled={withdrawing}
+                className="w-full h-13 px-4 bg-gray-50 border border-gray-200 focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-600 rounded-2xl text-gray-900 font-black text-sm transition-all"
+              />
+              <p className="text-[11px] text-gray-400 font-medium pl-1">
+                안전한 계정 삭제를 위해 현재 로그인된 계정의 비밀번호를 확인합니다.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="p-6 bg-gray-50 flex gap-2.5 sm:justify-end items-center border-t border-gray-100">
+            <Button 
+              type="button"
+              variant="outline" 
+              onClick={() => {
+                if (!withdrawing) {
+                  setWithdrawModalOpen(false);
+                  setWithdrawPassword('');
+                }
+              }}
+              disabled={withdrawing}
+              className="flex-1 sm:flex-none h-12 px-5 rounded-xl font-bold border-gray-200 text-gray-700 hover:bg-gray-100"
+            >
+              취소
+            </Button>
+            <Button 
+              type="button"
+              className="flex-1 sm:flex-none h-12 px-6 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black shadow-lg shadow-red-200 transition-all cursor-pointer"
+              onClick={handleWithdrawal}
+              disabled={withdrawing || !withdrawPassword.trim()}
+            >
+              {withdrawing ? '탈퇴 처리 중...' : '모든 정보 삭제 및 회원 탈퇴'}
             </Button>
           </DialogFooter>
         </DialogContent>

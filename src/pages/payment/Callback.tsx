@@ -261,7 +261,7 @@ export default function PaymentCallback() {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white p-6 md:p-12 rounded-[40px] shadow-2xl text-center max-w-lg w-full space-y-6"
+        className="bg-white p-6 md:p-12 rounded-2xl shadow-2xl text-center max-w-lg w-full space-y-6"
       >
         {status === 'loading' && (
           <div className="flex flex-col items-center space-y-4">
@@ -308,7 +308,7 @@ export default function PaymentCallback() {
             </p>
             
             {/* PG Result Code Precision Diagnostics Dashboard */}
-            <div className="text-left w-full bg-slate-900 text-slate-100 p-6 rounded-3xl text-xs space-y-3.5 border border-slate-800 font-mono relative overflow-hidden">
+            <div className="text-left w-full bg-slate-900 text-slate-100 p-6 rounded-xl text-xs space-y-3.5 border border-slate-800 font-mono relative overflow-hidden">
               <div className="absolute right-3 top-3 opacity-10">
                 <ShieldAlert className="w-16 h-16 text-red-500" />
               </div>

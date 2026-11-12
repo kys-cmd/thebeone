@@ -78,7 +78,7 @@ export default function SuggestionPage() {
             </p>
           </div>
 
-          <div className="bg-white p-6 md:p-10 rounded-[48px] border border-slate-100 shadow-xl space-y-8 max-w-3xl mx-auto w-full">
+          <div className="bg-white p-6 md:p-10 rounded-2xl border border-slate-100 shadow-xl space-y-8 max-w-3xl mx-auto w-full">
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="text-sm font-extrabold text-gray-900 ml-1">희망하는 강의 주제 <span className="text-red-500">*</span></label>
@@ -98,7 +98,7 @@ export default function SuggestionPage() {
                   onChange={(e) => setContent(e.target.value)}
                   placeholder="어떤 내용을 중점적으로 배우고 싶으신가요? 최대한 구체적으로 써 주시면 적극 반영됩니다." 
                   disabled={isSubmitting}
-                  className="min-h-[200px] bg-gray-50 border-none rounded-3xl font-bold p-6 focus-visible:ring-2 focus-visible:ring-purple-600 transition-all text-sm md:text-base" 
+                  className="min-h-[200px] bg-gray-50 border-none rounded-xl font-bold p-6 focus-visible:ring-2 focus-visible:ring-purple-600 transition-all text-sm md:text-base" 
                 />
               </div>
 
@@ -117,7 +117,7 @@ export default function SuggestionPage() {
             <Button 
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-lg rounded-[24px] gap-3 shadow-xl hover:shadow-purple-200 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50"
+              className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-lg rounded-xl gap-3 shadow-xl hover:shadow-purple-200 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>

@@ -197,7 +197,7 @@ function CommunitySection({
             >
               <button 
                 onClick={() => onSelect(community)}
-                className="w-full text-left bg-white rounded-[32px] overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-500 h-full flex flex-col"
+                className="w-full text-left bg-white rounded-xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-500 h-full flex flex-col"
               >
                 <div className="h-40 relative overflow-hidden">
                   <img src={banner} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" alt="" />
@@ -1168,10 +1168,10 @@ export default function CommunityPage() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white p-8 md:p-12 rounded-[40px] shadow-2xl text-center max-w-lg w-full space-y-8 border border-gray-100"
+          className="bg-white p-8 md:p-12 rounded-2xl shadow-2xl text-center max-w-lg w-full space-y-8 border border-gray-100"
         >
           {inviteIdFromUrl ? (
-            <div className="w-24 h-24 bg-purple-100 rounded-3xl flex items-center justify-center mx-auto ring-8 ring-purple-50/50">
+            <div className="w-24 h-24 bg-purple-100 rounded-xl flex items-center justify-center mx-auto ring-8 ring-purple-50/50">
               <MailOpen className="w-12 h-12 text-purple-600 animate-bounce" />
             </div>
           ) : (
@@ -2043,7 +2043,7 @@ export default function CommunityPage() {
             {selectedCommunity && hasActiveAccess && (
               <div className="space-y-6">
                 {/* 🔲 헤더 (상단): 커뮤니티 썸네일 (메인 타이틀/배너 영역) 및 [초대], [옵션] 버튼 */}
-                <div className="bg-white rounded-[28px] overflow-hidden shadow-sm border border-slate-100 text-left">
+                <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100 text-left">
                   <div className="h-40 relative">
                     <img 
                       src={selectedCommunity.banner_url || "https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=800&q=80"} 
@@ -2120,7 +2120,7 @@ export default function CommunityPage() {
 
             {/* Private Space Invitation Approval Block */}
             {selectedCommunity && !hasActiveAccess ? (
-              <div className="bg-white rounded-3xl border border-slate-105 p-8 shadow-sm text-center flex flex-col items-center">
+              <div className="bg-white rounded-xl border border-slate-105 p-8 shadow-sm text-center flex flex-col items-center">
                 <div className="w-16 h-16 rounded-2xl bg-purple-50 flex items-center justify-center text-purple-600 mb-5 border border-purple-100">
                   <Lock className="w-7 h-7" />
                 </div>
@@ -2289,7 +2289,7 @@ export default function CommunityPage() {
             ) : activeMenu === 'schedule' ? (
               
               /* INTERACTIVE MONTHLY LECTURE CALENDAR */
-              <div className="bg-white rounded-3xl border border-slate-100 p-4 md:p-6 space-y-6 shadow-sm text-left animate-fade-in">
+              <div className="bg-white rounded-xl border border-slate-100 p-4 md:p-6 space-y-6 shadow-sm text-left animate-fade-in">
                 
                 {/* Header Title Bar */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
@@ -2619,7 +2619,7 @@ export default function CommunityPage() {
                           {/* ✍️ 입력창: 게시글 입력창 */}
                           {canWritePost ? (
                             isPostEditorExpanded ? (
-                              <div id="post-editor-section" className="bg-white rounded-[26px] overflow-hidden border border-slate-150 shadow-md transition-all animate-fade-in">
+                              <div id="post-editor-section" className="bg-white rounded-xl overflow-hidden border border-slate-150 shadow-md transition-all animate-fade-in">
                                 <PostEditor 
                                   communityId={selectedCommunity.id} 
                                   key={editorInitialData ? 'with-data' : 'empty'}
@@ -2672,7 +2672,7 @@ export default function CommunityPage() {
 
                           {/* Feed Posts (전체 펼쳐진 형태) */}
                           {feedPosts.length === 0 ? (
-                            <div className="py-20 text-center bg-white rounded-3xl border border-slate-100 shadow-xs">
+                            <div className="py-20 text-center bg-white rounded-xl border border-slate-100 shadow-xs">
                               <p className="text-xs text-slate-400 font-extrabold leading-normal">아직 등록된 게시글이 없습니다. 첫 이야기를 남겨보세요!</p>
                             </div>
                           ) : (
@@ -2711,7 +2711,7 @@ export default function CommunityPage() {
 
                     {/* B. MISSIONS TAB CONTENT */}
                     {communityDetailTab === 'missions' && (
-                      <div className="bg-white border border-slate-100 rounded-[30px] p-6 text-left space-y-8 animate-fade-in shadow-xs font-sans">
+                      <div className="bg-white border border-slate-100 rounded-xl p-6 text-left space-y-8 animate-fade-in shadow-xs font-sans">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b">
                           <div className="space-y-1">
                             <h2 className="text-lg font-black text-slate-900">🎯 스터디원 실천 인증 미션 챌린지</h2>
@@ -2731,7 +2731,7 @@ export default function CommunityPage() {
                         <div className="space-y-4">
                           <h3 className="text-sm font-black text-purple-700 flex items-center gap-1.5">🏆 챌린지 미션 보드</h3>
                           {posts.filter(p => p.type === 'mission_template' && !p.is_deleted).length === 0 ? (
-                            <div className="py-12 border border-slate-100 rounded-3xl bg-slate-50/40 text-center text-xs text-slate-400 font-extrabold leading-normal">
+                            <div className="py-12 border border-slate-100 rounded-xl bg-slate-50/40 text-center text-xs text-slate-400 font-extrabold leading-normal">
                               등록된 고정 챌린지 미션이 없습니다.{isAdmin ? " 우측 상단의 '새 미션 등록하기' 버튼을 눌각 기수의 목표 미션을 생성해 연동해 보셔요." : " 강사진이 등록해줄 일일 도전을 기다리고 있습니다."}
                             </div>
                           ) : (
@@ -2748,7 +2748,7 @@ export default function CommunityPage() {
                                 return (
                                   <div 
                                     key={mission.id} 
-                                    className="border border-slate-100 bg-slate-50/30 rounded-3xl p-5 flex flex-col justify-between gap-5 hover:border-purple-200 transition-all shadow-xs"
+                                    className="border border-slate-100 bg-slate-50/30 rounded-xl p-5 flex flex-col justify-between gap-5 hover:border-purple-200 transition-all shadow-xs"
                                   >
                                     <div className="space-y-2.5">
                                       <div className="flex items-center justify-between">
@@ -2804,7 +2804,7 @@ export default function CommunityPage() {
                             <p className="text-xs text-slate-500 font-bold">도전 중인 회원들이 올린 후기 피드입니다. 좋아요와 격려 댓글로 동반 성장해보세요!</p>
                           </div>
                           {posts.filter(p => p.type === 'mission_verification' && !p.is_deleted).length === 0 ? (
-                            <div className="py-12 border border-slate-100 rounded-3xl bg-slate-50/10 text-center text-xs text-slate-400 font-extrabold leading-normal">
+                            <div className="py-12 border border-slate-100 rounded-xl bg-slate-50/10 text-center text-xs text-slate-400 font-extrabold leading-normal">
                               아직 등록된 회원들의 인증글이 없습니다. 첫 주인공으로 오늘 가장 뜻깊었던 실천을 뽐내보셔요!
                             </div>
                           ) : (
@@ -2822,7 +2822,7 @@ export default function CommunityPage() {
                                   <div
                                     key={post.id}
                                     onClick={() => handlePostClick(post)}
-                                    className="p-5 border border-slate-100 bg-white/70 hover:bg-white hover:border-purple-200 rounded-3xl hover:shadow-md transition-all cursor-pointer space-y-3.5 flex flex-col justify-between group"
+                                    className="p-5 border border-slate-100 bg-white/70 hover:bg-white hover:border-purple-200 rounded-xl hover:shadow-md transition-all cursor-pointer space-y-3.5 flex flex-col justify-between group"
                                   >
                                     <div className="space-y-2.5">
                                       <div className="flex items-center justify-between">
@@ -2868,7 +2868,7 @@ export default function CommunityPage() {
 
                         {/* 미션 등록 다이얼로그 */}
                         <Dialog open={isMissionModalOpen} onOpenChange={setIsMissionModalOpen}>
-                          <DialogContent className="sm:max-w-md bg-white rounded-3xl p-6 border font-sans select-text">
+                          <DialogContent className="sm:max-w-md bg-white rounded-xl p-6 border font-sans select-text">
                             <DialogHeader className="space-y-1 text-left">
                               <DialogTitle className="text-base font-black text-slate-900 flex items-center gap-1.5">🎯 새로운 챌린지 미션 등록</DialogTitle>
                               <p className="text-xs text-slate-500 font-bold leading-normal">수강생들이 완수해 나갈 명확한 미션 제목과 지령 본문을 예쁘게 기재해 등록해 주셔요.</p>
@@ -2923,7 +2923,7 @@ export default function CommunityPage() {
 
                     {/* D. MEMBERS TAB CONTENT */}
                     {communityDetailTab === 'members' && (
-                      <div className="bg-white border border-slate-100 rounded-[30px] p-6 text-left space-y-6 animate-fade-in shadow-xs font-sans">
+                      <div className="bg-white border border-slate-100 rounded-xl p-6 text-left space-y-6 animate-fade-in shadow-xs font-sans">
                         <div className="space-y-1 pb-4 border-b flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                           <div>
                             <h2 className="text-lg font-black text-slate-900">👥 우리 기수 스터디 챌린저 명단</h2>
@@ -3015,7 +3015,7 @@ export default function CommunityPage() {
 
                     {/* A. TenReels High Density Consolidated Post Feed */}
                     {feedPosts.length === 0 ? (
-                      <div className="py-20 text-center bg-white rounded-3xl border border-slate-100 shadow-xs">
+                      <div className="py-20 text-center bg-white rounded-xl border border-slate-100 shadow-xs">
                         <p className="text-xs text-slate-400 font-extrabold leading-normal">
                           아직 등록된 게시글이 없네요. 첫번째 게시글을 기록해보세요!
                         </p>
@@ -3059,7 +3059,7 @@ export default function CommunityPage() {
 
       {/* Floating Detailed Overlay Dialog Popup to read or write detailed threads cleanly */}
       <Dialog open={!!selectedDetailPost} onOpenChange={(open) => !open && setSelectedDetailPost(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] p-6 overflow-y-auto bg-white rounded-3xl border-none shadow-2xl">
+        <DialogContent className="max-w-3xl max-h-[85vh] p-6 overflow-y-auto bg-white rounded-xl border-none shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-2">
               📂 게시글 자세히 보기
@@ -3096,7 +3096,7 @@ export default function CommunityPage() {
 
         {/* Invitation Modal */}
         <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
-          <DialogContent className="rounded-[32px] sm:max-w-md p-8">
+          <DialogContent className="rounded-xl sm:max-w-md p-8">
             <DialogHeader className="space-y-4">
               <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
                 <div className="w-10 h-10 bg-purple-100 rounded-2xl flex items-center justify-center">
@@ -3111,7 +3111,7 @@ export default function CommunityPage() {
             <div className="space-y-6 py-4">
               {/* Copy Invitation Link Section */}
               {selectedCommunity && (
-                <div className="p-5 bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100/80 rounded-3xl space-y-3 shadow-inner">
+                <div className="p-5 bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100/80 rounded-xl space-y-3 shadow-inner">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black text-purple-700 uppercase tracking-widest pl-1 flex items-center gap-1.5">
                       <LinkIcon className="w-3.5 h-3.5 text-purple-600" />
@@ -3172,7 +3172,7 @@ export default function CommunityPage() {
               )}
 
               {inviteeProfile && (
-                <div className="p-6 bg-purple-50 rounded-3xl border border-purple-100 space-y-6">
+                <div className="p-6 bg-purple-50 rounded-xl border border-purple-100 space-y-6">
                   <div className="flex items-center gap-4">
                     <Avatar className="w-14 h-14 rounded-2xl shadow-sm">
                       <AvatarImage src={inviteeProfile.avatar_url} />
@@ -3197,7 +3197,7 @@ export default function CommunityPage() {
 
         {/* Community Settings Modal */}
         <Dialog open={showSettingsModal} onOpenChange={setShowSettingsModal}>
-          <DialogContent className="rounded-[32px] sm:max-w-md p-8">
+          <DialogContent className="rounded-xl sm:max-w-md p-8">
             <DialogHeader className="space-y-4">
               <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
                 <div className="w-10 h-10 bg-gray-100 rounded-2xl flex items-center justify-center">
@@ -3243,7 +3243,7 @@ export default function CommunityPage() {
 
         {/* New Chat Room Modal */}
         <Dialog open={showNewChatModal} onOpenChange={setShowNewChatModal}>
-          <DialogContent className="rounded-[32px] sm:max-w-md p-8">
+          <DialogContent className="rounded-xl sm:max-w-md p-8">
             <DialogHeader className="space-y-4">
               <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
                 <div className="w-10 h-10 bg-purple-100 rounded-2xl flex items-center justify-center">
@@ -3347,7 +3347,7 @@ export default function CommunityPage() {
 
         {/* Community Specific New Chat Room Dialog */}
         <Dialog open={isCreatingCommunityRoom} onOpenChange={setIsCreatingCommunityRoom}>
-          <DialogContent className="rounded-[32px] sm:max-w-md p-8">
+          <DialogContent className="rounded-xl sm:max-w-md p-8">
             <DialogHeader className="space-y-4">
               <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
                 <div className="w-10 h-10 bg-purple-100 rounded-2xl flex items-center justify-center">
@@ -3462,7 +3462,7 @@ export default function CommunityPage() {
 
       {/* Edit Comment Dialog */}
       <Dialog open={!!editingComment} onOpenChange={(open) => !open && setEditingComment(null)}>
-        <DialogContent className="sm:max-w-[500px] rounded-[40px] p-8 border-none shadow-2xl">
+        <DialogContent className="sm:max-w-[500px] rounded-2xl p-8 border-none shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-black text-gray-900 tracking-tight">댓글 수정</DialogTitle>
             <DialogDescription className="text-gray-400 font-bold text-[10px] uppercase tracking-widest pt-1">댓글 내용을 수정하세요</DialogDescription>
@@ -3472,7 +3472,7 @@ export default function CommunityPage() {
               value={editCommentContent}
               onChange={(e) => setEditCommentContent(e.target.value)}
               placeholder="내용을 입력하세요"
-              className="min-h-[120px] bg-gray-50 border-none rounded-3xl font-medium p-6 focus-visible:ring-2 focus-visible:ring-purple-600 transition-all leading-relaxed resize-none"
+              className="min-h-[120px] bg-gray-50 border-none rounded-xl font-medium p-6 focus-visible:ring-2 focus-visible:ring-purple-600 transition-all leading-relaxed resize-none"
             />
           </div>
           <DialogFooter className="gap-2">
@@ -3490,7 +3490,7 @@ export default function CommunityPage() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent className="sm:max-w-[400px] rounded-[40px] p-8 border-none shadow-2xl text-center">
+        <DialogContent className="sm:max-w-[400px] rounded-2xl p-8 border-none shadow-2xl text-center">
           <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <Trash2 className="w-8 h-8 text-red-500" />
           </div>
@@ -3524,7 +3524,7 @@ export default function CommunityPage() {
 
       {/* Create Community Dialog */}
       <Dialog open={isCreatingNewCommunity} onOpenChange={setIsCreatingNewCommunity}>
-        <DialogContent className="sm:max-w-[480px] rounded-[32px] p-8 border-none shadow-2xl text-left bg-white font-sans">
+        <DialogContent className="sm:max-w-[480px] rounded-xl p-8 border-none shadow-2xl text-left bg-white font-sans">
           <DialogHeader>
             <DialogTitle className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-1.5">
               <span>🆕 새 밴드 개설하기</span>

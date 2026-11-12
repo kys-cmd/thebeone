@@ -701,7 +701,7 @@ export default function AdminCommunityManagement() {
 
         {/* Chat Room Delete Confirmation Modal */}
         <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-          <DialogContent className="rounded-[40px] sm:max-w-md p-10 border-none shadow-2xl overflow-hidden">
+          <DialogContent className="rounded-2xl sm:max-w-md p-10 border-none shadow-2xl overflow-hidden">
             <DialogHeader className="space-y-4">
               <DialogTitle className="text-2xl font-black tracking-tight text-gray-900 flex items-center gap-4">
                 <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center shrink-0">

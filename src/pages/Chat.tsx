@@ -1003,7 +1003,7 @@ export default function ChatPage() {
   if (!user) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50 p-4">
-        <div className="bg-white p-12 rounded-[40px] shadow-2xl text-center max-w-lg w-full space-y-8 border border-gray-100">
+        <div className="bg-white p-12 rounded-2xl shadow-2xl text-center max-w-lg w-full space-y-8 border border-gray-100">
           <div className="w-24 h-24 bg-purple-50 rounded-full flex items-center justify-center mx-auto">
             <Lock className="w-12 h-12 text-purple-600" />
           </div>
@@ -1726,7 +1726,7 @@ export default function ChatPage() {
 
   return (
     <div className={isPopup ? "w-screen h-screen bg-slate-50 flex items-center justify-center overflow-hidden font-sans" : `font-sans flex flex-col min-h-screen bg-[#F8F9FA] ${activeRoom ? 'h-screen w-screen md:w-auto md:h-auto pt-0 pb-0 px-0 md:pt-20 md:pb-4 md:px-4 overflow-hidden' : 'pt-5 md:pt-20 pb-4 px-4'}`}>
-      <div className={isPopup ? "w-full max-w-[1000px] h-full bg-white flex border-l border-r border-slate-205 shadow-2xl overflow-hidden" : `w-full bg-white flex ${activeRoom ? 'h-screen md:h-[78vh] max-w-7xl mx-auto rounded-none border-none shadow-none md:rounded-[32px] md:border border-slate-200/50 md:shadow-2xl' : 'max-w-7xl mx-auto h-[78vh] rounded-none border-none shadow-none md:rounded-[32px] md:border border-slate-200/50 md:shadow-2xl'}`}>
+      <div className={isPopup ? "w-full max-w-[1000px] h-full bg-white flex border-l border-r border-slate-205 shadow-2xl overflow-hidden" : `w-full bg-white flex ${activeRoom ? 'h-screen md:h-[78vh] max-w-7xl mx-auto rounded-none border-none shadow-none md:rounded-xl md:border border-slate-200/50 md:shadow-2xl' : 'max-w-7xl mx-auto h-[78vh] rounded-none border-none shadow-none md:rounded-xl md:border border-slate-200/50 md:shadow-2xl'}`}>
         
         {/* ===================================
             1. LEFT WORKSPACE SIDEBAR (Eggplant/Slate Black on Desktop, Beautiful Native Chat List on Mobile)
@@ -2329,7 +2329,7 @@ export default function ChatPage() {
 
                   {/* Floating Emoji vs Tenor GIFs Tabbed Popover */}
                   {showEmojiPicker && (
-                    <div className="absolute bottom-14 left-4 z-50 w-76 h-84 bg-white border border-slate-200 rounded-3xl shadow-2xl flex flex-col overflow-hidden text-left animate-in fade-in slide-in-from-bottom-2 duration-150">
+                    <div className="absolute bottom-14 left-4 z-50 w-76 h-84 bg-white border border-slate-200 rounded-xl shadow-2xl flex flex-col overflow-hidden text-left animate-in fade-in slide-in-from-bottom-2 duration-150">
                       {/* Tab selection */}
                       <div className="flex border-b border-slate-105 bg-slate-50/70 shrink-0">
                         <button
@@ -2972,7 +2972,7 @@ export default function ChatPage() {
           SLACK WORKSPACE NEW ROOM DIALOG
           =================================== */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="rounded-[32px] sm:max-w-md p-8 text-left bg-white border border-slate-100 shadow-2xl">
+        <DialogContent className="rounded-xl sm:max-w-md p-8 text-left bg-white border border-slate-100 shadow-2xl">
           <DialogHeader className="space-y-3.5 text-left">
             <DialogTitle className="text-[22px] font-black tracking-tight flex items-center gap-2.5 text-slate-800">
               <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center shrink-0">
@@ -3115,7 +3115,7 @@ export default function ChatPage() {
           PARTICIPANT INVITATION DIALOG
           =================================== */}
       <Dialog open={isInviteModalOpen} onOpenChange={setIsInviteModalOpen}>
-        <DialogContent className="rounded-[32px] sm:max-w-md p-8 text-left">
+        <DialogContent className="rounded-xl sm:max-w-md p-8 text-left">
           <DialogHeader className="space-y-3 text-left">
             <DialogTitle className="text-xl font-black tracking-tight flex items-center gap-2.5">
               <div className="w-9 h-9 bg-purple-100 rounded-xl flex items-center justify-center">
@@ -3164,7 +3164,7 @@ export default function ChatPage() {
           CHANNEL DELETE CONFIRM DIALOG
           =================================== */}
       <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
-        <DialogContent className="rounded-[32px] sm:max-w-md p-8 text-left">
+        <DialogContent className="rounded-xl sm:max-w-md p-8 text-left">
           <DialogHeader className="space-y-3 text-left">
             <DialogTitle className="text-xl font-black tracking-tight flex items-center gap-2.5 text-rose-600">
               <div className="w-9 h-9 bg-rose-50 rounded-xl flex items-center justify-center">
@@ -3203,7 +3203,7 @@ export default function ChatPage() {
           handleDeclineInvite();
         }
       }}>
-        <DialogContent className="rounded-[24px] sm:max-w-md p-6 text-left bg-white border border-slate-150 shadow-2xl">
+        <DialogContent className="rounded-xl sm:max-w-md p-6 text-left bg-white border border-slate-150 shadow-2xl">
           <DialogHeader className="space-y-3 text-left">
             <DialogTitle className="text-lg font-black tracking-tight flex items-center gap-2.5 text-slate-800">
               <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
@@ -3259,7 +3259,7 @@ export default function ChatPage() {
           setRoomPasswordInput('');
         }
       }}>
-        <DialogContent className="rounded-[24px] sm:max-w-md p-6 text-left bg-white border border-slate-150 shadow-2xl">
+        <DialogContent className="rounded-xl sm:max-w-md p-6 text-left bg-white border border-slate-150 shadow-2xl">
           <DialogHeader className="space-y-3 text-left">
             <DialogTitle className="text-lg font-black tracking-tight flex items-center gap-2.5 text-slate-800">
               <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">

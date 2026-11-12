@@ -317,7 +317,7 @@ export default function Header() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="end"
-                  className="w-[calc(100vw-24px)] max-w-[340px] max-h-[440px] p-2 shadow-2xl rounded-2xl border border-slate-100 mt-2 flex flex-col"
+                  className="w-[calc(100vw-24px)] max-w-[340px] max-h-[440px] p-2 shadow-2xl rounded-xl border border-slate-100 mt-2 flex flex-col"
                 >
                   <div className="p-3 border-b flex justify-between items-center bg-slate-50/70 rounded-t-xl shrink-0">
                     <span className="font-extrabold text-xs text-slate-800">새로운 알림</span>
@@ -412,7 +412,7 @@ export default function Header() {
                       </AvatarFallback>
                     </Avatar>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-60 p-2 shadow-2xl rounded-2xl border-slate-100 mt-2">
+                  <DropdownMenuContent align="end" className="w-60 p-2 shadow-2xl rounded-xl border-slate-100 mt-2">
                     <div className="p-3">
                       <div className="flex flex-col gap-0.5">
                         <span className="font-extrabold text-sm text-slate-900 truncate">

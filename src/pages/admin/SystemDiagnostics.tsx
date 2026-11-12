@@ -329,7 +329,7 @@ ${ticks}
   return (
     <div className="space-y-8 select-none">
       {/* ─────────────────── [HEADER SECTION] ─────────────────── */}
-      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 bg-white p-8 rounded-xl border border-gray-100 shadow-sm">
         <div className="space-y-1.5 flex-1">
           <div className="flex items-center gap-2 text-indigo-600">
             <Bug className="w-5 h-5 animate-pulse text-indigo-600" />
@@ -372,7 +372,7 @@ ${ticks}
       {activeTab === 'system' && (
         <div className="space-y-8">
           {/* Quick Actions Panel */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-purple-50/20 border border-purple-100 rounded-3xl gap-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-purple-50/20 border border-purple-100 rounded-xl gap-4">
             <div className="space-y-0.5">
               <h3 className="font-black text-gray-900 text-sm">로컬 예외 테스팅 & 유틸리티</h3>
               <p className="text-xs text-gray-500 font-bold">인위적인 에러를 일으켜 감지 추적 상태가 바르게 진행되는지 점검해 보십시오.</p>
@@ -408,7 +408,7 @@ ${ticks}
 
           {/* Grid Summary */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <Card className="p-6 bg-white border border-gray-100 rounded-3xl shadow-sm flex items-center justify-between">
+            <Card className="p-6 bg-white border border-gray-100 rounded-xl shadow-sm flex items-center justify-between">
               <div className="space-y-1">
                 <p className="text-xs font-black text-gray-400 uppercase">전체 오류 로그</p>
                 <p className="text-3xl font-black text-gray-900">{(Array.isArray(logs) ? logs.length : 0)} <span className="text-sm font-bold text-gray-400">건</span></p>
@@ -418,7 +418,7 @@ ${ticks}
               </div>
             </Card>
 
-            <Card className="p-6 bg-white border border-gray-100 rounded-3xl shadow-sm flex items-center justify-between">
+            <Card className="p-6 bg-white border border-gray-100 rounded-xl shadow-sm flex items-center justify-between">
               <div className="space-y-1">
                 <p className="text-xs font-black text-gray-400 uppercase">런타임 오류 (Runtime)</p>
                 <p className="text-3xl font-black text-red-600">{countByType('runtime')} <span className="text-sm font-bold text-gray-400">건</span></p>
@@ -428,7 +428,7 @@ ${ticks}
               </div>
             </Card>
 
-            <Card className="p-6 bg-white border border-gray-100 rounded-3xl shadow-sm flex items-center justify-between">
+            <Card className="p-6 bg-white border border-gray-100 rounded-xl shadow-sm flex items-center justify-between">
               <div className="space-y-1">
                 <p className="text-xs font-black text-gray-400 uppercase">비동기 프로미스 거부 (Promise)</p>
                 <p className="text-3xl font-black text-amber-600">{countByType('promise')} <span className="text-sm font-bold text-gray-400">건</span></p>
@@ -438,7 +438,7 @@ ${ticks}
               </div>
             </Card>
 
-            <Card className="p-6 bg-white border border-gray-100 rounded-3xl shadow-sm flex items-center justify-between">
+            <Card className="p-6 bg-white border border-gray-100 rounded-xl shadow-sm flex items-center justify-between">
               <div className="space-y-1">
                 <p className="text-xs font-black text-gray-400 uppercase">수동 호출 로그 (Manual)</p>
                 <p className="text-3xl font-black text-blue-600">{countByType('manual')} <span className="text-sm font-bold text-gray-400">건</span></p>
@@ -450,7 +450,7 @@ ${ticks}
           </div>
 
           {/* Logs Table / List */}
-          <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+          <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
             <div className="flex items-center justify-between pb-6 mb-6 border-b border-gray-50">
               <h2 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-gray-400" />
@@ -605,7 +605,7 @@ ${ticks}
       {activeTab === 'payment' && (
         <div className="space-y-6">
           {/* Main Controls Header & Filters */}
-          <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-6">
+          <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm space-y-6">
             
             {/* Search & Actions block */}
             <div className="flex flex-col md:flex-row justify-between gap-4">
@@ -676,7 +676,7 @@ ${ticks}
           </div>
 
           {/* List Section */}
-          <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+          <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
             <div className="flex items-center justify-between pb-6 mb-6 border-b border-gray-50">
               <h2 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
                 <Database className="w-5 h-5 text-gray-400" />

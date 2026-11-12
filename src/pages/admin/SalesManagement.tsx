@@ -430,7 +430,7 @@ export default function AdminSalesManagement() {
       </header>
 
       {/* 💳 전체 결제 시스템 제어 및 활성화 통제 패널 */}
-      <Card className="rounded-[32px] border-none shadow-sm overflow-hidden bg-white">
+      <Card className="rounded-xl border-none shadow-sm overflow-hidden bg-white">
         <CardContent className="p-6 md:p-8 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
           <div className="flex gap-4 items-start">
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md ${
@@ -490,7 +490,7 @@ export default function AdminSalesManagement() {
 
 
       {/* Filter Bar */}
-      <Card className="rounded-[32px] border-none shadow-sm overflow-hidden">
+      <Card className="rounded-xl border-none shadow-sm overflow-hidden">
         <CardContent className="p-6 md:p-8">
           <div className="flex flex-col md:flex-row gap-6">
             <div className="flex-1 relative">
@@ -517,7 +517,7 @@ export default function AdminSalesManagement() {
       </Card>
 
       {/* Main Table */}
-      <Card className="rounded-[40px] border-none shadow-sm overflow-hidden bg-white">
+      <Card className="rounded-2xl border-none shadow-sm overflow-hidden bg-white">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>

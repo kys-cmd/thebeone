@@ -316,10 +316,10 @@ export default function SupportInquiries() {
 
         {/* List & Edit Area */}
         {isEditing ? (
-          <div className="mt-8 bg-zinc-100 p-1 md:p-4 rounded-3xl">
+          <div className="mt-8 bg-zinc-100 p-1 md:p-4 rounded-xl">
             {activeTab === 'notices' ? (
               <div className="space-y-4 animate-fade-in">
-                <Card className="border border-slate-200 shadow-2xl rounded-3xl overflow-hidden p-4 md:p-6 bg-zinc-50">
+                <Card className="border border-slate-200 shadow-2xl rounded-xl overflow-hidden p-4 md:p-6 bg-zinc-50">
                   <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-slate-200 mb-4 bg-white p-4 rounded-2xl shadow-sm gap-4">
                     <div>
                       <h3 className="text-lg font-black text-slate-900">
@@ -384,7 +384,7 @@ export default function SupportInquiries() {
                 </Card>
               </div>
             ) : activeTab === 'schedules' ? (
-              <Card className="border border-slate-150 shadow-2xl rounded-3xl overflow-hidden animate-fade-in bg-white">
+              <Card className="border border-slate-150 shadow-2xl rounded-xl overflow-hidden animate-fade-in bg-white">
                 <CardHeader className="bg-slate-50 border-b p-6 flex flex-row items-center justify-between">
                   <div>
                     <CardTitle className="text-xl font-black text-slate-900">
@@ -507,7 +507,7 @@ export default function SupportInquiries() {
                 </CardContent>
               </Card>
             ) : (
-              <Card className="border border-slate-100 shadow-2xl rounded-3xl overflow-hidden animate-fade-in bg-white">
+              <Card className="border border-slate-100 shadow-2xl rounded-xl overflow-hidden animate-fade-in bg-white">
                 <CardHeader className="bg-slate-50 border-b p-6 flex flex-row items-center justify-between">
                   <div>
                     <CardTitle className="text-xl font-black text-slate-900">

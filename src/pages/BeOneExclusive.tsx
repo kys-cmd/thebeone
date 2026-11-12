@@ -90,8 +90,8 @@ export default function BeOneExclusive() {
   if (!isAuthorized) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center pt-[100px] pb-20 px-4 font-sans">
-        <div className="max-w-xl w-full bg-white rounded-[48px] shadow-2xl p-10 md:p-14 border border-emerald-50 text-center space-y-8">
-          <div className="w-24 h-24 bg-emerald-50 rounded-[40px] flex items-center justify-center mx-auto text-[#1C8436] shadow-inner">
+        <div className="max-w-xl w-full bg-white rounded-2xl shadow-2xl p-10 md:p-14 border border-emerald-50 text-center space-y-8">
+          <div className="w-24 h-24 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto text-[#1C8436] shadow-inner">
             <span className="text-4xl">🔐</span>
           </div>
           
@@ -152,7 +152,7 @@ export default function BeOneExclusive() {
 function CourseCard({ course }: { course: Course }) {
   return (
     <Link to={`/course/${course.id}`} className="group flex flex-col gap-4">
-      <div className="relative aspect-[16/10] bg-gray-100 rounded-3xl overflow-hidden shadow-sm group-hover:shadow-2xl transition-all duration-500">
+      <div className="relative aspect-[16/10] bg-gray-100 rounded-xl overflow-hidden shadow-sm group-hover:shadow-2xl transition-all duration-500">
         {course.thumbnail ? (
           <img 
             src={course.thumbnail} 
@@ -199,7 +199,7 @@ function CourseCard({ course }: { course: Course }) {
 
 function EmptyState() {
   return (
-    <div className="col-span-full py-20 text-center space-y-4 border-2 border-dashed border-gray-50 rounded-[40px]">
+    <div className="col-span-full py-20 text-center space-y-4 border-2 border-dashed border-gray-50 rounded-2xl">
       <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto">
         <Video className="w-10 h-10 text-gray-200" />
       </div>

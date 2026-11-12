@@ -393,7 +393,7 @@ export default function Home() {
                 <motion.div
                   key={review.id || idx}
                   whileHover={{ y: -4 }}
-                  className="w-[82vw] max-w-[320px] sm:w-auto sm:max-w-none shrink-0 snap-start bg-white p-5 sm:p-7 rounded-2xl sm:rounded-3xl shadow-xs border border-slate-100 flex flex-col justify-between"
+                  className="w-[82vw] max-w-[320px] sm:w-auto sm:max-w-none shrink-0 snap-start bg-white p-5 sm:p-7 rounded-xl sm:rounded-2xl shadow-xs border border-slate-100 flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex items-center gap-1 text-amber-400 mb-3.5 sm:mb-5">
@@ -427,7 +427,7 @@ export default function Home() {
               ))}
             </div>
           ) : (
-            <div className="w-full text-center py-12 bg-white rounded-2xl sm:rounded-3xl border border-slate-100 text-slate-500 font-bold text-sm">
+            <div className="w-full text-center py-12 bg-white rounded-xl sm:rounded-2xl border border-slate-100 text-slate-500 font-bold text-sm">
               베스트 수강후기가 아직 없습니다.
             </div>
           )}
@@ -504,7 +504,7 @@ function CourseSection({ title, subtitle, items, type = 'regular', moreLink = '/
             className="w-[78vw] max-w-[300px] sm:w-[46%] sm:max-w-none lg:w-[calc(25%-18px)] shrink-0 group snap-start"
           >
             <div className="flex flex-col gap-3 sm:gap-4">
-              <div className="relative aspect-[16/10] bg-slate-100 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xs group-hover:shadow-lg transition-all duration-300">
+              <div className="relative aspect-[16/10] bg-slate-100 rounded-xl sm:rounded-2xl overflow-hidden shadow-xs group-hover:shadow-lg transition-all duration-300">
                 <img
                   src={item.thumbnail}
                   referrerPolicy="no-referrer"

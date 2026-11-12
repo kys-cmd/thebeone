@@ -98,7 +98,7 @@ export default function AdminStatistics() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="rounded-[32px] border-none shadow-sm p-2">
+        <Card className="rounded-xl border-none shadow-sm p-2">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-black text-gray-400 uppercase tracking-widest">총 매출 (누적)</CardTitle>
             <div className="p-2 bg-purple-50 rounded-lg text-purple-600"><DollarSign className="w-4 h-4" /></div>
@@ -112,7 +112,7 @@ export default function AdminStatistics() {
           </CardContent>
         </Card>
         
-        <Card className="rounded-[32px] border-none shadow-sm p-2">
+        <Card className="rounded-xl border-none shadow-sm p-2">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-black text-gray-400 uppercase tracking-widest">총 결제 건수</CardTitle>
             <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><CreditCard className="w-4 h-4" /></div>
@@ -126,7 +126,7 @@ export default function AdminStatistics() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-[32px] border-none shadow-sm p-2">
+        <Card className="rounded-xl border-none shadow-sm p-2">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-black text-gray-400 uppercase tracking-widest">활성 수강생</CardTitle>
             <div className="p-2 bg-orange-50 rounded-lg text-orange-600"><Users className="w-4 h-4" /></div>
@@ -140,7 +140,7 @@ export default function AdminStatistics() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-[32px] border-none shadow-sm p-2">
+        <Card className="rounded-xl border-none shadow-sm p-2">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-black text-gray-400 uppercase tracking-widest">평균 객단가</CardTitle>
             <div className="p-2 bg-green-50 rounded-lg text-green-600"><ArrowUpRight className="w-4 h-4" /></div>
@@ -156,7 +156,7 @@ export default function AdminStatistics() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card className="rounded-[40px] border-none shadow-sm overflow-hidden p-6 md:p-10">
+        <Card className="rounded-2xl border-none shadow-sm overflow-hidden p-6 md:p-10">
           <CardHeader className="px-0 pt-0 pb-10">
             <CardTitle className="text-xl font-black tracking-tight text-gray-900">월별 매출 추이</CardTitle>
             <CardDescription className="text-xs font-bold text-gray-400 mt-1 italic">최근 6개월간의 실제 매출 데이터 흐름입니다.</CardDescription>
@@ -187,7 +187,7 @@ export default function AdminStatistics() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-[40px] border-none shadow-sm overflow-hidden p-6 md:p-10">
+        <Card className="rounded-2xl border-none shadow-sm overflow-hidden p-6 md:p-10">
           <CardHeader className="px-0 pt-0 pb-10">
             <CardTitle className="text-xl font-black tracking-tight text-gray-900">요일별 결제 분포</CardTitle>
             <CardDescription className="text-xs font-bold text-gray-400 mt-1 italic">플랫폼의 요일별 결제 트래픽을 분석합니다.</CardDescription>

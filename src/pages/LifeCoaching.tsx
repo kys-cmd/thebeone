@@ -114,7 +114,7 @@ export default function LifeCoaching() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="mt-12 p-6 sm:p-8 bg-white border border-slate-200/80 rounded-3xl shadow-xl shadow-slate-100/50 text-left max-w-3xl mx-auto relative overflow-hidden"
+            className="mt-12 p-6 sm:p-8 bg-white border border-slate-200/80 rounded-xl shadow-xl shadow-slate-100/50 text-left max-w-3xl mx-auto relative overflow-hidden"
           >
             <div className="absolute right-0 top-0 w-32 h-32 bg-purple-500/5 blur-2xl rounded-full" />
             <h3 className="text-xs font-black text-purple-600 uppercase tracking-widest mb-3 flex items-center gap-1">
@@ -159,7 +159,7 @@ export default function LifeCoaching() {
       {/* SECTION 3: THE BADUK BOARD */}
       <section className="py-16 sm:py-24 bg-slate-50 border-b border-slate-100">
         <div className="max-w-4xl mx-auto px-6">
-          <div className="bg-gradient-to-tr from-slate-900 to-slate-800 text-white p-8 sm:p-12 rounded-3xl shadow-2xl relative overflow-hidden border border-slate-800">
+          <div className="bg-gradient-to-tr from-slate-900 to-slate-800 text-white p-8 sm:p-12 rounded-xl shadow-2xl relative overflow-hidden border border-slate-800">
             <div className="absolute top-0 right-0 p-8 opacity-10">
               <Globe className="w-56 h-56" />
             </div>
@@ -301,7 +301,7 @@ export default function LifeCoaching() {
             
             {/* Image & Key Books */}
             <div className="md:col-span-4 flex flex-col items-center">
-              <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-3xl overflow-hidden shadow-xl border-4 border-white bg-slate-100 mb-6 relative">
+              <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-xl overflow-hidden shadow-xl border-4 border-white bg-slate-100 mb-6 relative">
                 {/* Fallback image style structure with extremely polished fallback graphic representation */}
                 <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center text-center p-4 text-white relative">
                   <Award className="w-12 h-12 text-yellow-500/80 mb-2" />
@@ -369,7 +369,7 @@ export default function LifeCoaching() {
       {/* SECTION 6: CONSULTING APPLICATION CTA */}
       <section id="apply-form" className="py-16 sm:py-24 bg-[#FAF9F6]">
         <div className="max-w-3xl mx-auto px-6">
-          <div className="bg-white border border-slate-200 rounded-3xl p-8 sm:p-12 shadow-xl shadow-slate-100/80 text-center relative overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-xl p-8 sm:p-12 shadow-xl shadow-slate-100/80 text-center relative overflow-hidden">
             
             {/* Top design strip */}
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500" />

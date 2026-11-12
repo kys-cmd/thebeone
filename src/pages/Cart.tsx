@@ -176,7 +176,7 @@ export default function Cart() {
   if (!user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
-        <Card className="p-8 sm:p-12 max-w-md w-full text-center space-y-6 rounded-3xl sm:rounded-[32px] shadow-sm border border-gray-100">
+        <Card className="p-8 sm:p-12 max-w-md w-full text-center space-y-6 rounded-xl sm:rounded-2xl shadow-sm border border-gray-100">
           <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mx-auto">
             <ShoppingCart className="w-8 h-8" />
           </div>
@@ -222,7 +222,7 @@ export default function Cart() {
             <div className="lg:col-span-2 space-y-4">
               
               {items.length > 0 ? (
-                <div className="bg-white rounded-2xl sm:rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                   
                   {/* Board Controls */}
                   <div className="py-3.5 px-4 sm:px-6 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-500">
@@ -332,7 +332,7 @@ export default function Cart() {
                   </div>
                 </div>
               ) : (
-                <div className="py-20 sm:py-24 px-4 bg-white rounded-3xl sm:rounded-[32px] border border-dashed border-slate-200 text-center space-y-5">
+                <div className="py-20 sm:py-24 px-4 bg-white rounded-xl sm:rounded-2xl border border-dashed border-slate-200 text-center space-y-5">
                   <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-300">
                     <ShoppingCart className="w-7 h-7" />
                   </div>
@@ -351,7 +351,7 @@ export default function Cart() {
 
             {/* Right Column: Checkout Summary Panel */}
             <aside className="space-y-4 lg:sticky lg:top-28">
-              <Card className="rounded-2xl sm:rounded-[32px] border border-slate-100 shadow-md overflow-hidden bg-white">
+              <Card className="rounded-xl sm:rounded-2xl border border-slate-100 shadow-md overflow-hidden bg-white">
                 <div className="p-5 sm:p-8 space-y-5 sm:space-y-6">
                   <h3 className="text-base sm:text-lg font-black text-slate-800 tracking-tight border-b pb-3.5 sm:pb-4">수강료 결제 청약</h3>
 

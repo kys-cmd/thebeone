@@ -304,5 +304,46 @@ export const authService = {
       throw error;
     }
     return updatedProfile;
+  },
+
+  /**
+   * 회원 본인 확인(비밀번호) 후 영구 회원 탈퇴 및 DB 삭제를 수행한다.
+   */
+  async withdrawAccount(password: string): Promise<void> {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) {
+      throw new Error('로그인이 필요합니다.');
+    }
+
+    // Try core-api / express route
+    let response = await fetch('/api/auth/withdraw-account', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ password })
+    });
+
+    // Fallback to core-api action if not found
+    if (response.status === 404) {
+      response = await fetch('/api/core-api', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ action: 'withdraw-account', password })
+      });
+    }
+
+    const result = await response.json().catch(() => null);
+    if (!response.ok || result?.status !== 'success') {
+      throw new Error(result?.message || '회원 탈퇴 처리에 실패했습니다. 비밀번호를 다시 확인해 주세요.');
+    }
+
+    // Sign out from client Supabase auth
+    await supabase.auth.signOut().catch(() => {});
   }
 };

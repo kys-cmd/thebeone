@@ -16,7 +16,7 @@ export default function AboutPage() {
             transition={{ duration: 0.8 }}
             className="flex justify-center"
           >
-            <div className="w-20 h-20 bg-purple-600 rounded-[24px] flex items-center justify-center shadow-2xl shadow-purple-200">
+            <div className="w-20 h-20 bg-purple-600 rounded-xl flex items-center justify-center shadow-2xl shadow-purple-200">
                <span className="text-white text-4xl font-black">B</span>
             </div>
           </motion.div>
@@ -89,10 +89,10 @@ export default function AboutPage() {
             </div>
 
             <div className="relative">
-              <div className="aspect-square bg-purple-600 rounded-[80px] rotate-3 overflow-hidden shadow-2xl">
+              <div className="aspect-square bg-purple-600 rounded-2xl rotate-3 overflow-hidden shadow-2xl">
                  <img src="https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&q=80&w=1000" className="w-full h-full object-cover opacity-80" alt="" />
               </div>
-              <div className="absolute -bottom-10 -left-10 w-64 h-64 bg-white p-8 rounded-[40px] shadow-2xl border border-gray-100 space-y-4 -rotate-6">
+              <div className="absolute -bottom-10 -left-10 w-64 h-64 bg-white p-8 rounded-2xl shadow-2xl border border-gray-100 space-y-4 -rotate-6">
                  <div className="flex items-center gap-3">
                    <div className="flex -space-x-4">
                      {[1,2,3].map(i => <div key={i} className="w-10 h-10 rounded-full border-2 border-white bg-gray-200 overflow-hidden"><img src={`https://i.pravatar.cc/150?u=${i}`} alt="" /></div>)}
@@ -147,10 +147,10 @@ export default function AboutPage() {
             어제와 다른 오늘을 위해,{'\n'}비원아카데미가 함께합니다.
           </h2>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-             <Button size="lg" className="bg-white text-purple-600 hover:bg-gray-50 h-20 px-12 text-2xl font-black rounded-3xl shadow-2xl">
+             <Button size="lg" className="bg-white text-purple-600 hover:bg-gray-50 h-20 px-12 text-2xl font-black rounded-xl shadow-2xl">
                지금 바로 합류하기
              </Button>
-             <Button size="lg" variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20 h-20 px-12 text-2xl font-black rounded-3xl backdrop-blur-md">
+             <Button size="lg" variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20 h-20 px-12 text-2xl font-black rounded-xl backdrop-blur-md">
                강의 무료 맛보기
              </Button>
           </div>

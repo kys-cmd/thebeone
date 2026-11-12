@@ -105,12 +105,12 @@ export default function ResetPassword() {
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-[450px] bg-white rounded-[40px] shadow-2xl border border-gray-100 p-10 space-y-10"
+        className="w-full max-w-[450px] bg-white rounded-xl shadow-2xl border border-gray-100 p-10 space-y-10"
       >
         {/* Header */}
         <div className="text-center space-y-6">
           <div className="inline-flex flex-col items-center gap-4">
-             <div className="w-16 h-16 bg-purple-600 rounded-[22px] flex items-center justify-center shadow-2xl shadow-purple-200">
+             <div className="w-16 h-16 bg-purple-600 rounded-xl flex items-center justify-center shadow-2xl shadow-purple-200">
                <span className="text-white text-3xl font-black">BE</span>
              </div>
              <h1 className="text-3xl font-black tracking-tighter text-gray-900">새 비밀번호 설정</h1>
@@ -129,7 +129,7 @@ export default function ResetPassword() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="새 비밀번호 (6자 이상)" 
-              className="h-14 bg-gray-50 border-gray-50 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+              className="h-14 bg-gray-50 border-gray-50 rounded-xl focus-visible:ring-purple-600 font-bold" 
             />
           </div>
 
@@ -140,11 +140,11 @@ export default function ResetPassword() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="새 비밀번호 확인" 
-              className="h-14 bg-gray-50 border-gray-50 rounded-2xl focus-visible:ring-purple-600 font-bold" 
+              className="h-14 bg-gray-50 border-gray-50 rounded-xl focus-visible:ring-purple-600 font-bold" 
             />
           </div>
 
-          <Button type="submit" disabled={loading} className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-2xl shadow-xl shadow-purple-200 mt-4">
+          <Button type="submit" disabled={loading} className="w-full h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-xl rounded-xl shadow-xl shadow-purple-200 mt-4">
             {loading ? '변경 중...' : '비밀번호 변경하기'}
           </Button>
         </form>
