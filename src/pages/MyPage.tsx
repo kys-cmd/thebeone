@@ -20,7 +20,9 @@ import {
   LayoutGrid,
   List,
   AlertTriangle,
-  Lock
+  Lock,
+  Ticket,
+  Coins
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -52,6 +54,15 @@ import { courseService } from '@/services/courseService';
 import { reviewService } from '@/services/reviewService';
 import { profileService } from '@/services/profileService';
 import { authService } from '@/services/authService';
+import {
+  couponMileageService,
+  formatCourseStartDateLabel,
+  isCourseAfterEndDate,
+  isCourseBeforeStartDate,
+  MemberCouponItem,
+  MemberMileageLogItem,
+} from '@/services/couponMileageService';
+import { Input } from '@/components/ui/input';
 import { Course } from '@/types';
 import {
   DUPLICATE_PHONE_MESSAGE,
@@ -86,6 +97,7 @@ const QUERY_TO_MENU: Record<string, string> = {
   courses: 'courses',
   dashboard: 'dashboard',
   payments: 'payments',
+  coupons: 'payments',
   settings: 'settings',
 };
 
@@ -352,16 +364,35 @@ export default function MyPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
 
-  // Mileage and Points States
+  // Mileage, Coupons and Payments States
   const [myMileage, setMyMileage] = useState(0);
   const [myPayments, setMyPayments] = useState<any[]>([]);
+  const [myCoupons, setMyCoupons] = useState<MemberCouponItem[]>([]);
+  const [myMileageLogs, setMyMileageLogs] = useState<MemberMileageLogItem[]>([]);
+  const [couponTabFilter, setCouponTabFilter] = useState<'available' | 'history'>('available');
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [redeemTargetCoupon, setRedeemTargetCoupon] = useState<MemberCouponItem | null>(null);
+  const [couponDateWarningInfo, setCouponDateWarningInfo] = useState<{
+    mode: 'not_started' | 'already_ended';
+    courseTitle?: string;
+    targetDate?: string | null;
+  } | null>(null);
+  const [redeemingCoupon, setRedeemingCoupon] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
+
+  const availableCoupons = React.useMemo(
+    () => myCoupons.filter((c) => c.status === 'available'),
+    [myCoupons]
+  );
+  const historyCoupons = React.useMemo(
+    () => myCoupons.filter((c) => c.status !== 'available'),
+    [myCoupons]
+  );
 
   const fetchMileageAndPayments = async () => {
     if (!user) return;
     try {
       setPaymentLoading(true);
-      // Fetch latest user profile to get fresh mileage from profiles table
       const { data: profile, error: pErr } = await supabase
         .from('profiles')
         .select('*')
@@ -371,21 +402,104 @@ export default function MyPage() {
         setMyMileage((profile as any).mileage || 0);
       }
 
-      // Fetch payments history from orders table where status is PAID (or not PENDING)
-      const { data: payData, error: payErr } = await supabase
-        .from('orders')
-        .select('*, courses(*)')
-        .eq('user_id', user.id)
-        .neq('status', 'PENDING')
-        .order('created_at', { ascending: false });
+      const [payRes, couponMileageRes] = await Promise.allSettled([
+        supabase
+          .from('orders')
+          .select('*, courses(*)')
+          .eq('user_id', user.id)
+          .neq('status', 'PENDING')
+          .order('created_at', { ascending: false }),
+        couponMileageService.getMyCouponsAndMileage(),
+      ]);
 
-      if (!payErr && payData) {
-        setMyPayments(payData);
+      if (payRes.status === 'fulfilled' && !payRes.value.error && payRes.value.data) {
+        setMyPayments(payRes.value.data);
+      }
+      if (couponMileageRes.status === 'fulfilled') {
+        setMyCoupons(couponMileageRes.value.coupons);
+        setMyMileageLogs(couponMileageRes.value.mileageLogs);
+        setMyMileage(couponMileageRes.value.mileage);
       }
     } catch (err) {
       console.error('[Points Fetch Error]:', err);
     } finally {
       setPaymentLoading(false);
+    }
+  };
+
+  const handleConfirmRedeemCoupon = async (coupon?: MemberCouponItem | null, manualCode?: string) => {
+    const code = (manualCode || '').trim().toUpperCase();
+    if (!coupon && !code) {
+      toast.error('사용할 쿠폰을 선택하거나 쿠폰 코드를 입력해 주세요.');
+      return;
+    }
+
+    const matchedLocalCoupon =
+      coupon || availableCoupons.find((c) => c.code.trim().toUpperCase() === code) || null;
+
+    if (matchedLocalCoupon && isCourseBeforeStartDate(matchedLocalCoupon.course_start_date)) {
+      const startLabel = formatCourseStartDateLabel(matchedLocalCoupon.course_start_date);
+      toast.warning(
+        startLabel
+          ? `강의 개시일 이후에 사용할 수 있습니다. (개시 예정일: ${startLabel})`
+          : '강의 개시일 이후에 사용할 수 있습니다.'
+      );
+      setRedeemTargetCoupon(matchedLocalCoupon);
+      return;
+    }
+
+    if (
+      matchedLocalCoupon &&
+      isCourseAfterEndDate(
+        matchedLocalCoupon.course_end_date,
+        matchedLocalCoupon.course_is_duration_based
+      )
+    ) {
+      const endLabel = formatCourseStartDateLabel(matchedLocalCoupon.course_end_date);
+      toast.warning(
+        endLabel
+          ? `이미 종료된 강의입니다. (강의 종료일: ${endLabel})`
+          : '이미 종료된 강의입니다.'
+      );
+      setRedeemTargetCoupon(matchedLocalCoupon);
+      return;
+    }
+
+    try {
+      setRedeemingCoupon(true);
+      const res = await couponMileageService.redeemCoupon({
+        userCouponId: coupon?.id,
+        couponCode: code || undefined,
+      });
+      toast.success(res.message);
+      setRedeemTargetCoupon(null);
+      setCouponCodeInput('');
+      await Promise.all([fetchMyCourses(), fetchMileageAndPayments()]);
+    } catch (err: any) {
+      const errMsg = String(err?.message || '');
+      if (err?.code === 'COURSE_NOT_STARTED' || errMsg.includes('강의 개시일 이후에 사용할 수 있습니다')) {
+        toast.warning(err.message || '강의 개시일 이후에 사용할 수 있습니다.');
+        if (!redeemTargetCoupon) {
+          setCouponDateWarningInfo({
+            mode: 'not_started',
+            courseTitle: err?.courseTitle,
+            targetDate: err?.courseStartDate || null,
+          });
+        }
+      } else if (err?.code === 'COURSE_ALREADY_ENDED' || errMsg.includes('이미 종료된 강의입니다')) {
+        toast.warning(err.message || '이미 종료된 강의입니다.');
+        if (!redeemTargetCoupon) {
+          setCouponDateWarningInfo({
+            mode: 'already_ended',
+            courseTitle: err?.courseTitle,
+            targetDate: err?.courseEndDate || null,
+          });
+        }
+      } else {
+        toast.error(err.message || '쿠폰 사용 처리에 실패했습니다.');
+      }
+    } finally {
+      setRedeemingCoupon(false);
     }
   };
 
@@ -506,7 +620,7 @@ export default function MyPage() {
                 {[
                   { id: 'dashboard', icon: <TrendingUp className="w-4 h-4 lg:w-5 lg:h-5" />, label: '대시보드', shortLabel: '대시보드' },
                   { id: 'courses', icon: <BookOpen className="w-4 h-4 lg:w-5 lg:h-5" />, label: '내 강의실', shortLabel: '내 강의실' },
-                  { id: 'payments', icon: <CreditCard className="w-4 h-4 lg:w-5 lg:h-5" />, label: '결제 및 포인트', shortLabel: '결제·포인트' },
+                  { id: 'payments', icon: <Ticket className="w-4 h-4 lg:w-5 lg:h-5" />, label: '쿠폰 · 마일리지 · 결제', shortLabel: '쿠폰·포인트' },
                   { id: 'settings', icon: <Settings className="w-4 h-4 lg:w-5 lg:h-5" />, label: '계정 설정', shortLabel: '계정 설정' },
                 ].map((item) => (
                   <button 
@@ -530,6 +644,30 @@ export default function MyPage() {
           <main className="w-full min-w-0 flex-1 space-y-8 sm:space-y-10">
             {activeMenu === 'dashboard' && (
               <div className="space-y-8 sm:space-y-10">
+                {availableCoupons.length > 0 && (
+                  <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl p-5 sm:p-6 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md">
+                    <div className="flex items-start sm:items-center gap-3.5">
+                      <div className="w-10 h-10 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                        <Ticket className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm sm:text-base font-black">
+                          사용 가능한 무료 수강 쿠폰이 <span className="underline tabular-nums">{availableCoupons.length}장</span> 있습니다!
+                        </p>
+                        <p className="text-xs font-bold text-purple-100 mt-0.5 break-keep">
+                          쿠폰을 사용하는 즉시 설정된 기간 동안 해당 강의를 무료로 수강하실 수 있습니다.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => handleMenuClick('payments')}
+                      className="bg-white text-purple-700 hover:bg-purple-50 font-black rounded-lg h-10 px-4 text-xs sm:text-sm whitespace-nowrap shrink-0 self-end sm:self-auto"
+                    >
+                      내 쿠폰함 확인하기
+                    </Button>
+                  </div>
+                )}
+
                 {/* 수강 중인 강의 리스트 */}
                 <div className="space-y-5 sm:space-y-6">
                    <div className="flex items-center justify-between">
@@ -1170,6 +1308,208 @@ export default function MyPage() {
 
             {activeMenu === 'payments' && (
               <div className="flex-1 space-y-6 sm:space-y-10 animate-in fade-in slide-in-from-bottom-3 duration-500">
+                {/* 0. 무료 수강 쿠폰함 (Coupon Wallet & Redemption) */}
+                <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="p-6 sm:p-8 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Ticket className="w-5 h-5 text-purple-600" />
+                        <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
+                          내 무료 수강 쿠폰함
+                        </h3>
+                        <Badge className="bg-purple-100 text-purple-700 border-none font-black text-xs tabular-nums">
+                          사용 가능 {availableCoupons.length}장
+                        </Badge>
+                      </div>
+                      <p className="text-xs sm:text-sm text-gray-500 font-bold mt-1 break-keep">
+                        쿠폰의 [사용하기] 버튼을 누르시면 사용한 시점부터 지정된 일수만큼 해당 강의를 무료로 수강하실 수 있습니다.
+                      </p>
+                    </div>
+
+                    <div className="flex bg-slate-100 p-1 rounded-lg gap-1 self-start md:self-auto shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setCouponTabFilter('available')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-black transition-all whitespace-nowrap cursor-pointer ${
+                          couponTabFilter === 'available'
+                            ? 'bg-white text-purple-700 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        사용 가능 ({availableCoupons.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCouponTabFilter('history')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-black transition-all whitespace-nowrap cursor-pointer ${
+                          couponTabFilter === 'history'
+                            ? 'bg-white text-purple-700 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        사용 완료 · 내역 ({historyCoupons.length})
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 쿠폰 코드 직접 입력 바 */}
+                  <div className="px-6 sm:px-8 py-4 bg-slate-50/70 border-b border-gray-100 flex flex-col sm:flex-row gap-2">
+                    <Input
+                      value={couponCodeInput}
+                      onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
+                      placeholder="보유 쿠폰 코드 직접 입력 (예: CPN-XXXX-XXXX)"
+                      className="h-10 rounded-lg border-slate-200 bg-white font-mono text-xs sm:text-sm font-bold"
+                    />
+                    <Button
+                      type="button"
+                      disabled={!couponCodeInput.trim() || redeemingCoupon}
+                      onClick={() => handleConfirmRedeemCoupon(null, couponCodeInput)}
+                      className="h-10 px-5 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-lg text-xs sm:text-sm whitespace-nowrap shrink-0"
+                    >
+                      코드로 즉시 사용
+                    </Button>
+                  </div>
+
+                  <div className="p-6 sm:p-8">
+                    {paymentLoading ? (
+                      <div className="py-12 text-center text-gray-400 font-bold text-sm">
+                        쿠폰 정보를 불러오는 중입니다...
+                      </div>
+                    ) : couponTabFilter === 'available' ? (
+                      availableCoupons.length === 0 ? (
+                        <div className="py-12 text-center space-y-2 bg-slate-50/60 rounded-xl border border-dashed border-slate-200">
+                          <Ticket className="w-10 h-10 text-slate-300 mx-auto" />
+                          <p className="text-sm font-black text-slate-600">현재 사용 가능한 쿠폰이 없습니다.</p>
+                          <p className="text-xs font-bold text-slate-400">지급받은 무료 수강 쿠폰이 이곳에 표시됩니다.</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {availableCoupons.map((cpn) => {
+                            const isBeforeStart = isCourseBeforeStartDate(cpn.course_start_date);
+                            const isAfterEnd =
+                              !isBeforeStart &&
+                              isCourseAfterEndDate(cpn.course_end_date, cpn.course_is_duration_based);
+                            const startLabel = formatCourseStartDateLabel(cpn.course_start_date);
+                            const endLabel = formatCourseStartDateLabel(cpn.course_end_date);
+                            return (
+                              <div
+                                key={cpn.id}
+                                className="p-5 rounded-xl border border-purple-200/80 bg-gradient-to-br from-white to-purple-50/30 flex flex-col justify-between gap-4 shadow-xs"
+                              >
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <Badge className="bg-purple-600 text-white border-none text-[11px] font-black rounded-md px-2.5 py-0.5 tabular-nums">
+                                      사용 시작부터 {cpn.duration_days}일 무료 수강
+                                    </Badge>
+                                    <span className="font-mono text-[11px] font-bold text-slate-400">{cpn.code}</span>
+                                  </div>
+                                  <h4 className="text-base sm:text-lg font-black text-slate-900 break-keep">
+                                    {cpn.coupon_name}
+                                  </h4>
+                                  <p className="text-xs sm:text-sm font-extrabold text-purple-700 break-keep">
+                                    대상 강의: {cpn.course_title}
+                                  </p>
+                                  {isBeforeStart && (
+                                    <div className="flex items-start gap-1.5 px-2.5 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold break-keep">
+                                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                                      <span>
+                                        개시 예정 강의{startLabel ? ` (${startLabel})` : ''} · 강의 개시일 이후에 사용할 수 있습니다.
+                                      </span>
+                                    </div>
+                                  )}
+                                  {isAfterEnd && (
+                                    <div className="flex items-start gap-1.5 px-2.5 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold break-keep">
+                                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                                      <span>
+                                        종료일 경과{endLabel ? ` (${endLabel})` : ''} · 이미 종료된 강의입니다.
+                                      </span>
+                                    </div>
+                                  )}
+                                  {cpn.issue_memo && (
+                                    <p className="text-xs font-bold text-slate-500 break-keep">{cpn.issue_memo}</p>
+                                  )}
+                                  <p className="text-[11px] font-medium text-slate-400 tabular-nums">
+                                    지급일: {new Date(cpn.issued_at).toLocaleDateString('ko-KR')}
+                                  </p>
+                                </div>
+
+                                <Button
+                                  type="button"
+                                  disabled={!cpn.course_available || redeemingCoupon}
+                                  onClick={() => setRedeemTargetCoupon(cpn)}
+                                  className={
+                                    isAfterEnd
+                                      ? 'w-full h-11 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-lg text-sm whitespace-nowrap'
+                                      : isBeforeStart
+                                        ? 'w-full h-11 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-lg text-sm whitespace-nowrap'
+                                        : 'w-full h-11 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-lg text-sm whitespace-nowrap'
+                                  }
+                                >
+                                  {!cpn.course_available
+                                    ? '삭제된 강의'
+                                    : isAfterEnd
+                                      ? '쿠폰 사용하기 (종료 안내 확인)'
+                                      : isBeforeStart
+                                        ? '쿠폰 사용하기 (개시일 확인)'
+                                        : '쿠폰 사용하기 (무료 수강 시작)'}
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )
+                    ) : historyCoupons.length === 0 ? (
+                      <div className="py-12 text-center text-sm font-bold text-slate-400">
+                        사용 완료되거나 만료된 쿠폰 내역이 없습니다.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-100">
+                        {historyCoupons.map((cpn) => (
+                          <div
+                            key={cpn.id}
+                            className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  className={`text-[11px] font-black border-none rounded-md ${
+                                    cpn.status === 'used'
+                                      ? 'bg-emerald-100 text-emerald-700'
+                                      : 'bg-slate-200 text-slate-600'
+                                  }`}
+                                >
+                                  {cpn.status === 'used' ? '사용완료' : '회수됨'}
+                                </Badge>
+                                <span className="text-sm font-black text-slate-800">{cpn.coupon_name}</span>
+                              </div>
+                              <p className="text-xs font-bold text-slate-600">
+                                강의: {cpn.course_title} ({cpn.duration_days}일권)
+                              </p>
+                              {cpn.used_at && cpn.enrollment_expires_at && (
+                                <p className="text-[11px] font-bold text-purple-600 tabular-nums">
+                                  적용 수강기간: {new Date(cpn.used_at).toLocaleDateString('ko-KR')} ~{' '}
+                                  {new Date(cpn.enrollment_expires_at).toLocaleDateString('ko-KR')} 23:59
+                                </p>
+                              )}
+                            </div>
+
+                            {cpn.status === 'used' && cpn.course_id && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => navigate(`/course/${cpn.course_id}/learn`)}
+                                className="rounded-lg border-slate-200 font-black text-xs h-9 px-3.5 whitespace-nowrap self-start sm:self-auto"
+                              >
+                                강의실 바로가기
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* 1. Mileage Points Balance Card */}
                 <div className="bg-gradient-to-br from-purple-600 via-purple-700 to-indigo-800 rounded-xl sm:rounded-2xl p-6 sm:p-10 text-white shadow-2xl relative overflow-hidden">
                   <div className="absolute right-0 bottom-0 opacity-10 translate-x-12 translate-y-12">
@@ -1178,14 +1518,14 @@ export default function MyPage() {
                   
                   <div className="relative z-10 space-y-5 sm:space-y-6">
                     <div className="flex items-center gap-3">
-                      <Badge className="bg-white/20 hover:bg-white/20 text-white border-none font-black px-3.5 py-1 sm:px-4 rounded-full text-[11px] sm:text-xs uppercase tracking-wider backdrop-blur-sm">
+                      <Badge className="bg-white/20 hover:bg-white/20 text-white border-none font-black px-3.5 py-1 sm:px-4 rounded-md text-[11px] sm:text-xs uppercase tracking-wider backdrop-blur-sm">
                         My Mileage Points
                       </Badge>
                     </div>
                     
                     <div className="space-y-1">
                       <p className="text-white/70 text-xs sm:text-sm font-bold">사용 가능한 마일리지</p>
-                      <h2 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight flex items-baseline gap-2">
+                      <h2 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight flex items-baseline gap-2 tabular-nums">
                         {myMileage.toLocaleString()} <span className="text-xl sm:text-2xl font-bold opacity-80">P</span>
                       </h2>
                     </div>
@@ -1203,7 +1543,42 @@ export default function MyPage() {
                   </div>
                 </div>
 
-                {/* 2. Mileage Policy Guidelines Card */}
+                {/* 2. 마일리지 적립/차감 내역 */}
+                {myMileageLogs.length > 0 && (
+                  <div className="bg-white rounded-xl sm:rounded-2xl p-6 sm:p-8 border border-gray-100 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Coins className="w-5 h-5 text-amber-500" />
+                        <h3 className="text-lg sm:text-xl font-black text-gray-900">마일리지 지급 · 변동 내역</h3>
+                      </div>
+                      <Badge variant="outline" className="text-xs font-bold border-gray-200 tabular-nums">
+                        최근 {myMileageLogs.length}건
+                      </Badge>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {myMileageLogs.slice(0, 15).map((log) => (
+                        <div key={log.id} className="py-3.5 flex items-center justify-between gap-4 text-xs sm:text-sm">
+                          <div className="min-w-0">
+                            <p className="font-extrabold text-gray-900 break-keep">{log.reason || '마일리지 변동'}</p>
+                            <p className="text-[11px] font-medium text-gray-400 tabular-nums mt-0.5">
+                              {new Date(log.created_at).toLocaleString('ko-KR')}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0 tabular-nums">
+                            <p className={`font-black ${log.amount >= 0 ? 'text-purple-600' : 'text-rose-600'}`}>
+                              {log.amount >= 0 ? `+${log.amount.toLocaleString()}P` : `${log.amount.toLocaleString()}P`}
+                            </p>
+                            <p className="text-[11px] font-bold text-gray-400">
+                              잔액 {log.after_mileage.toLocaleString()}P
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2-2. Mileage Policy Guidelines Card */}
                 <div className="bg-white rounded-xl sm:rounded-2xl p-6 sm:p-8 border border-gray-100 shadow-sm space-y-4 sm:space-y-6">
                   <h3 className="text-lg sm:text-xl font-black text-gray-900">마일리지 사용 안내</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
@@ -1222,7 +1597,7 @@ export default function MyPage() {
                         포인트 적립 정책
                       </h4>
                       <p className="text-xs sm:text-sm font-bold text-gray-500 leading-relaxed md:pl-8 break-keep">
-                        마일리지는 사이트 관리자가 회원의 활동 내역이나 구매 보상에 따라 CMS를 통해 직접 일대일 맞춤 지급해 드립니다.
+                        마일리지는 사이트 관리자가 회원의 활동 내역이나 구매 보상에 따라 CMS를 통해 직접 맞춤 지급해 드립니다.
                       </p>
                     </div>
                   </div>
@@ -1299,6 +1674,211 @@ export default function MyPage() {
           </main>
         </div>
       </div>
+
+      {/* 쿠폰 사용 확인 다이얼로그 */}
+      <Dialog open={Boolean(redeemTargetCoupon)} onOpenChange={(open) => !open && setRedeemTargetCoupon(null)}>
+        <DialogContent className="rounded-xl sm:rounded-2xl max-w-[calc(100vw-2rem)] sm:max-w-[460px]">
+          {redeemTargetCoupon && isCourseBeforeStartDate(redeemTargetCoupon.course_start_date) ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-xl font-black text-amber-700 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                  강의 개시 전 안내
+                </DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm font-bold text-slate-600 break-keep">
+                  적용하시려는 강의가 아직 개시 전 상태입니다.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-2.5 text-xs sm:text-sm">
+                <p className="font-black text-amber-900 text-sm sm:text-base break-keep">
+                  강의 개시일 이후에 사용할 수 있습니다.
+                </p>
+                <p className="text-amber-800 font-bold leading-relaxed break-keep">
+                  {formatCourseStartDateLabel(redeemTargetCoupon.course_start_date)
+                    ? `'${redeemTargetCoupon.course_title}' 강의는 ${formatCourseStartDateLabel(
+                        redeemTargetCoupon.course_start_date
+                      )}에 개시됩니다. 개시일 이후 쿠폰을 적용하시면 사용 시작일로부터 ${
+                        redeemTargetCoupon.duration_days
+                      }일간 무료로 수강하실 수 있습니다.`
+                    : `'${redeemTargetCoupon.course_title}' 강의가 개시된 이후 쿠폰을 적용하시면 사용 시작일로부터 ${redeemTargetCoupon.duration_days}일간 무료로 수강하실 수 있습니다.`}
+                </p>
+                <p className="text-[11px] font-bold text-amber-700 pt-1 border-t border-amber-200/80">
+                  * 보유하신 쿠폰은 차감되지 않고 그대로 안전하게 유지됩니다.
+                </p>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  onClick={() => setRedeemTargetCoupon(null)}
+                  className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white font-black rounded-lg"
+                >
+                  확인했습니다
+                </Button>
+              </DialogFooter>
+            </>
+          ) : redeemTargetCoupon &&
+            isCourseAfterEndDate(
+              redeemTargetCoupon.course_end_date,
+              redeemTargetCoupon.course_is_duration_based
+            ) ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-xl font-black text-rose-700 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+                  종료된 강의 안내
+                </DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm font-bold text-slate-600 break-keep">
+                  적용하시려는 강의의 운영 기간(종료일)이 경과했습니다.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 space-y-2.5 text-xs sm:text-sm">
+                <p className="font-black text-rose-900 text-sm sm:text-base break-keep">
+                  이미 종료된 강의입니다.
+                </p>
+                <p className="text-rose-800 font-bold leading-relaxed break-keep">
+                  {formatCourseStartDateLabel(redeemTargetCoupon.course_end_date)
+                    ? `'${redeemTargetCoupon.course_title}' 강의는 ${formatCourseStartDateLabel(
+                        redeemTargetCoupon.course_end_date
+                      )}에 종료되어 쿠폰을 적용하실 수 없습니다.`
+                    : `'${redeemTargetCoupon.course_title}' 강의는 이미 종료되어 쿠폰을 적용하실 수 없습니다.`}
+                </p>
+                <p className="text-[11px] font-bold text-rose-700 pt-1 border-t border-rose-200/80">
+                  * 보유하신 쿠폰은 소진(차감)되지 않고 그대로 유지됩니다.
+                </p>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  onClick={() => setRedeemTargetCoupon(null)}
+                  className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white font-black rounded-lg"
+                >
+                  확인했습니다
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-xl font-black text-slate-900">
+                  무료 수강 쿠폰을 사용하시겠습니까?
+                </DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm font-bold text-slate-500 break-keep">
+                  쿠폰 사용 즉시 오늘부터 설정된 수강 기간이 시작됩니다.
+                </DialogDescription>
+              </DialogHeader>
+
+              {redeemTargetCoupon && (
+                <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200 space-y-2 text-xs sm:text-sm">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-500 font-bold shrink-0">쿠폰명</span>
+                    <span className="font-black text-slate-900 text-right">{redeemTargetCoupon.coupon_name}</span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-500 font-bold shrink-0">적용 강의</span>
+                    <span className="font-extrabold text-purple-700 text-right">{redeemTargetCoupon.course_title}</span>
+                  </div>
+                  <div className="flex justify-between gap-2 pt-2 border-t border-purple-200/70">
+                    <span className="text-slate-600 font-extrabold shrink-0">무료 수강 기간</span>
+                    <span className="font-black text-purple-700 tabular-nums">
+                      사용 시작일로부터 {redeemTargetCoupon.duration_days}일
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setRedeemTargetCoupon(null)}
+                  className="rounded-lg font-bold"
+                >
+                  취소
+                </Button>
+                <Button
+                  disabled={redeemingCoupon}
+                  onClick={() => handleConfirmRedeemCoupon(redeemTargetCoupon)}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-black rounded-lg"
+                >
+                  {redeemingCoupon ? '수강 등록 중...' : '지금 쿠폰 사용하고 수강 시작'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 쿠폰 코드 직접 입력 시 개시 전 / 종료된 강의 경고 다이얼로그 */}
+      <Dialog open={Boolean(couponDateWarningInfo)} onOpenChange={(open) => !open && setCouponDateWarningInfo(null)}>
+        <DialogContent className="rounded-xl sm:rounded-2xl max-w-[calc(100vw-2rem)] sm:max-w-[440px]">
+          {couponDateWarningInfo?.mode === 'already_ended' ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-xl font-black text-rose-700 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+                  종료된 강의 안내
+                </DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm font-bold text-slate-600 break-keep">
+                  적용하시려는 강의의 운영 기간(종료일)이 경과했습니다.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 space-y-2 text-xs sm:text-sm">
+                <p className="font-black text-rose-900 text-sm sm:text-base break-keep">
+                  이미 종료된 강의입니다.
+                </p>
+                {couponDateWarningInfo.targetDate && (
+                  <p className="text-rose-800 font-bold break-keep">
+                    강의 종료일: {formatCourseStartDateLabel(couponDateWarningInfo.targetDate)}
+                  </p>
+                )}
+                <p className="text-[11px] font-bold text-rose-700 pt-1 border-t border-rose-200/80">
+                  * 입력하신 쿠폰은 차감되지 않고 그대로 보관됩니다.
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-xl font-black text-amber-700 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                  강의 개시 전 안내
+                </DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm font-bold text-slate-600 break-keep">
+                  적용하시려는 강의가 아직 개시 전 상태입니다.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-2 text-xs sm:text-sm">
+                <p className="font-black text-amber-900 text-sm sm:text-base break-keep">
+                  강의 개시일 이후에 사용할 수 있습니다.
+                </p>
+                {couponDateWarningInfo?.targetDate && (
+                  <p className="text-amber-800 font-bold break-keep">
+                    개시 예정일: {formatCourseStartDateLabel(couponDateWarningInfo.targetDate)}
+                  </p>
+                )}
+                <p className="text-[11px] font-bold text-amber-700 pt-1 border-t border-amber-200/80">
+                  * 입력하신 쿠폰은 차감되지 않고 그대로 보관됩니다.
+                </p>
+              </div>
+            </>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              onClick={() => setCouponDateWarningInfo(null)}
+              className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white font-black rounded-lg"
+            >
+              확인했습니다
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={reviewModalOpen} onOpenChange={setReviewModalOpen}>
         <DialogContent className="rounded-xl sm:rounded-2xl border-none shadow-2xl p-0 overflow-hidden max-w-[calc(100vw-2rem)] sm:max-w-[500px]">

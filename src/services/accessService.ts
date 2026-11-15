@@ -33,35 +33,34 @@ export const accessService = {
     }
 
     // 2. 수강 신청 여부 확인
-    const { data: enrollment, error } = await supabase
+    const { data: enrollmentRows, error } = await supabase
       .from('enrollments')
       .select(`
-        id,
-        expires_at,
-        course:courses (
-          is_duration_based,
-          end_date
-        )
+        *,
+        course:courses (*)
       `)
       .eq('user_id', resolvedUserId)
       .eq('course_id', courseId)
       .eq('is_deleted', false)
-      .maybeSingle();
+      .order('created_at', { ascending: false })
+      .limit(1);
 
+    const enrollment = enrollmentRows?.[0];
     if (error || !enrollment) return false;
+    if ((enrollment as any).status === 'expired') return false;
 
     const now = new Date();
-    // 만료일 검사
+    // 만료일 검사 (쿠폰 또는 수강기간제로 명시적 만료일이 부여된 경우 이를 최우선 기준으로 적용)
     if (enrollment.expires_at) {
       if (new Date(enrollment.expires_at) <= now) {
         return false;
       }
-    }
-
-    const course = (enrollment as any).course;
-    if (course && !course.is_duration_based && course.end_date) {
-      if (new Date(course.end_date) <= now) {
-        return false;
+    } else {
+      const course = (enrollment as any).course;
+      if (course && !course.is_duration_based && course.end_date) {
+        if (new Date(course.end_date) <= now) {
+          return false;
+        }
       }
     }
 

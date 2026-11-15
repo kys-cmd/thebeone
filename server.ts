@@ -1,5 +1,5 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
+import http from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import Parser from "rss-parser";
@@ -10,6 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 import cors from "cors";
 import nodemailer from "nodemailer";
 import iconv from "iconv-lite";
+import { COUPON_MILEAGE_ACTIONS, handleCouponMileageAction } from "./src/server/couponMileageHandler";
 
 // Load .env variables
 config();
@@ -1989,15 +1990,17 @@ async function startServer() {
           }
         }
 
-        const { data: enrollment } = await supabaseAdmin
+        const { data: enrollmentRows } = await supabaseAdmin
           .from("enrollments")
-          .select("id, expires_at, status")
+          .select("*")
           .eq("user_id", targetUserId)
           .eq("course_id", courseId)
           .eq("is_deleted", false)
-          .maybeSingle();
+          .order("created_at", { ascending: false })
+          .limit(1);
 
-        if (enrollment && enrollment.status === "active") {
+        const enrollment = enrollmentRows?.[0];
+        if (enrollment && enrollment.status !== "expired") {
           if (!enrollment.expires_at || new Date(enrollment.expires_at) > new Date()) {
             return res.json({ allowed: true, reason: "active-enrollment" });
           }
@@ -2227,14 +2230,28 @@ async function startServer() {
         }
       }
 
-      // Rest of the admin actions require user to be an admin
-      if (!requestingUser) {
-        return res.status(401).json({ status: "error", message: "Admin authorization token is required." });
+      // COUPON & MILEAGE MANAGEMENT AND MEMBER REDEMPTION ACTIONS (Role-segregated inside handler)
+      if (COUPON_MILEAGE_ACTIONS.has(action)) {
+        const result = await handleCouponMileageAction({
+          action,
+          body: req.body || {},
+          supabaseAdmin,
+          requestingUser,
+          isAdminCheck,
+        });
+        return res.status(result.httpStatus).json(result.payload);
       }
 
-      const currentCallerIsAdmin = await isAdminCheck(requestingUser.id);
-      if (!currentCallerIsAdmin) {
-        return res.status(403).json({ status: "error", message: "Forbidden - Administrator access credentials required." });
+      // Rest of the admin actions require user to be an admin (except member self-withdrawal)
+      if (action !== "withdraw-account") {
+        if (!requestingUser) {
+          return res.status(401).json({ status: "error", message: "Admin authorization token is required." });
+        }
+
+        const currentCallerIsAdmin = await isAdminCheck(requestingUser.id);
+        if (!currentCallerIsAdmin) {
+          return res.status(403).json({ status: "error", message: "Forbidden - Administrator access credentials required." });
+        }
       }
 
       // 8.47 ADMIN: 결제/환불 API 통신 로그 조회
@@ -3654,6 +3671,16 @@ async function startServer() {
         await purgeTable("chat_messages", "user_id");
         await purgeTable("chat_room_members", "user_id");
         await purgeTable("chat_last_read", "user_id");
+
+        try {
+          await supabaseAdmin
+            .from("support_contents")
+            .delete()
+            .in("type", ["user_coupon", "mileage_log"])
+            .eq("title", userId);
+        } catch (cpnPurgeErr: any) {
+          console.warn("[core-api Purge Ignored] support_contents coupons/mileage:", cpnPurgeErr?.message);
+        }
 
         await purgeTable("profiles", "id");
 
@@ -5418,18 +5445,43 @@ async function startServer() {
     res.send(`window.ENV_CONFIG = ${JSON.stringify(configData)};`);
   });
 
+  const httpServer = http.createServer(app);
+
   // Serve static assets OR Vite middleware
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
+    let viteInstance: any = null;
+    const vitePromise = import("vite")
+      .then(({ createServer: createViteServer }) =>
+        createViteServer({
+          server: {
+            middlewareMode: true,
+            allowedHosts: true,
+            hmr: process.env.DISABLE_HMR === "true" ? false : { server: httpServer },
+          },
+          appType: "spa",
+        })
+      )
+      .then((vite) => {
+        viteInstance = vite;
+        console.log("Vite dev middleware initialized");
+        return vite;
+      })
+      .catch((err) => {
+        console.error("Failed to initialize Vite dev middleware:", err);
+        throw err;
+      });
+
     // Ensure that API requests and config are not intercepted by Vite middleware
-    app.use((req, res, next) => {
-      if (req.url.startsWith('/api/') || req.url === '/api' || req.url.startsWith('/config.js')) {
+    app.use(async (req, res, next) => {
+      if (req.url.startsWith("/api/") || req.url === "/api" || req.url.startsWith("/config.js")) {
         return next();
       }
-      vite.middlewares(req, res, next);
+      try {
+        const vite = viteInstance || (await vitePromise);
+        vite.middlewares(req, res, next);
+      } catch (err) {
+        next(err);
+      }
     });
   } else {
     const distPath = path.join(process.cwd(), "dist");
@@ -5461,14 +5513,22 @@ async function startServer() {
     next(err);
   });
 
-  try {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
-  } catch (error) {
+  httpServer.on("error", (error) => {
     console.error("CRITICAL: Server failed to start:", error);
     process.exit(1);
-  }
+  });
+
+  httpServer.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+
+  const shutdown = () => {
+    httpServer.close(() => {
+      process.exit(0);
+    });
+  };
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
 }
 
 startServer();

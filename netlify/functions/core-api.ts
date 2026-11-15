@@ -1,6 +1,7 @@
 import { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
+import { COUPON_MILEAGE_ACTIONS, handleCouponMileageAction } from "../../src/server/couponMileageHandler";
 
 // Initialize Supabase Admin using premium Service Role capabilities
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
@@ -222,15 +223,17 @@ export const handler: Handler = async (event, context) => {
       }
 
       // Query active, unexpired enrollment record
-      const { data: enrollment } = await supabaseAdmin
+      const { data: enrollmentRows } = await supabaseAdmin
         .from("enrollments")
-        .select("id, expires_at, status")
+        .select("*")
         .eq("user_id", targetUserId)
         .eq("course_id", courseId)
         .eq("is_deleted", false)
-        .maybeSingle();
+        .order("created_at", { ascending: false })
+        .limit(1);
 
-      if (enrollment && enrollment.status === "active") {
+      const enrollment = enrollmentRows?.[0];
+      if (enrollment && enrollment.status !== "expired") {
         if (!enrollment.expires_at || new Date(enrollment.expires_at) > new Date()) {
           return {
             statusCode: 200,
@@ -464,23 +467,44 @@ export const handler: Handler = async (event, context) => {
     }
 
     // =========================================================================
-    // RESTRICTION: The following methods are purely administrative actions
+    // COUPON & MILEAGE MANAGEMENT AND MEMBER REDEMPTION API (Role-segregated)
     // =========================================================================
-    if (!requestingUser) {
+    if (COUPON_MILEAGE_ACTIONS.has(action)) {
+      const result = await handleCouponMileageAction({
+        action,
+        body,
+        supabaseAdmin,
+        requestingUser,
+        isAdminCheck: isAdminUser,
+      });
       return {
-        statusCode: 401,
+        statusCode: result.httpStatus,
         headers: responseHeaders,
-        body: JSON.stringify({ status: "error", message: "Admin authorization token is required." })
+        body: JSON.stringify(result.payload),
       };
     }
 
-    const currentCallerIsAdmin = await isAdminUser(requestingUser.id);
-    if (!currentCallerIsAdmin) {
-      return {
-        statusCode: 403,
-        headers: responseHeaders,
-        body: JSON.stringify({ status: "error", message: "Forbidden - Administrator access credentials required." })
-      };
+    // =========================================================================
+    // RESTRICTION: The following methods are purely administrative actions
+    // (except member self-withdrawal which verifies own session + password)
+    // =========================================================================
+    if (action !== "withdraw-account") {
+      if (!requestingUser) {
+        return {
+          statusCode: 401,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: "Admin authorization token is required." })
+        };
+      }
+
+      const currentCallerIsAdmin = await isAdminUser(requestingUser.id);
+      if (!currentCallerIsAdmin) {
+        return {
+          statusCode: 403,
+          headers: responseHeaders,
+          body: JSON.stringify({ status: "error", message: "Forbidden - Administrator access credentials required." })
+        };
+      }
     }
 
     // 8.47 ADMIN: 결제/환불 API 통신 로그 조회
@@ -1124,6 +1148,16 @@ export const handler: Handler = async (event, context) => {
       await purgeTable("chat_messages", "user_id");
       await purgeTable("chat_room_members", "user_id");
       await purgeTable("chat_last_read", "user_id");
+
+      try {
+        await supabaseAdmin
+          .from("support_contents")
+          .delete()
+          .in("type", ["user_coupon", "mileage_log"])
+          .eq("title", userId);
+      } catch (cpnPurgeErr: any) {
+        console.warn("[Netlify Purge Ignored] support_contents coupons/mileage:", cpnPurgeErr?.message);
+      }
 
       await purgeTable("profiles", "id");
 

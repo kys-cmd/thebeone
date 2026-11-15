@@ -17,7 +17,8 @@ import {
   AlertTriangle,
   Type,
   GraduationCap,
-  Radio
+  Radio,
+  Ticket
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -30,6 +31,7 @@ const ADMIN_MENUS = [
   { icon: <Users className="w-5 h-5" />, label: '강사 관리', path: '/admin/instructors' },
   { icon: <Users className="w-5 h-5" />, label: '회원 관리', path: '/admin/users' },
   { icon: <GraduationCap className="w-5 h-5" />, label: '수강생 관리', path: '/admin/students' },
+  { icon: <Ticket className="w-5 h-5" />, label: '쿠폰/마일리지', path: '/admin/coupons' },
   { icon: <Star className="w-5 h-5" />, label: '수강 후기 관리', path: '/admin/reviews' },
   { icon: <CreditCard className="w-5 h-5" />, label: '매출 관리', path: '/admin/sales' },
   { icon: <BarChart className="w-5 h-5" />, label: '매출 분석', path: '/admin/stats' },

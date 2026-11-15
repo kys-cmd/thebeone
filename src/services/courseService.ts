@@ -113,36 +113,34 @@ export const courseService = {
   },
 
   async checkEnrollment(userId: string, courseId: string) {
-    const { data, error } = await supabase
+    const { data: rows, error } = await supabase
       .from('enrollments')
       .select(`
-        id,
-        expires_at,
-        course:courses (
-          is_duration_based,
-          start_date,
-          end_date
-        )
+        *,
+        course:courses (*)
       `)
       .eq('user_id', userId)
       .eq('course_id', courseId)
       .eq('is_deleted', false)
-      .maybeSingle();
+      .order('created_at', { ascending: false })
+      .limit(1);
     
     if (error) throw error;
+    const data = rows?.[0];
     if (!data) return false;
+    if ((data as any).status === 'expired') return false;
 
     const now = new Date();
     if (data.expires_at) {
       if (new Date(data.expires_at) <= now) {
         return false;
       }
-    }
-
-    const course = (data as any).course;
-    if (course && !course.is_duration_based && course.end_date) {
-      if (new Date(course.end_date) <= now) {
-        return false;
+    } else {
+      const course = (data as any).course;
+      if (course && !course.is_duration_based && course.end_date) {
+        if (new Date(course.end_date) <= now) {
+          return false;
+        }
       }
     }
 

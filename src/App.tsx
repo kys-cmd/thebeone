@@ -58,6 +58,7 @@ const AdminSupportInquiries = lazy(() => import('./pages/admin/SupportInquiries'
 const AdminSystemDiagnostics = lazy(() => import('./pages/admin/SystemDiagnostics'));
 const AdminFontDemo = lazy(() => import('./pages/admin/FontDemo'));
 const AdminLiveManagement = lazy(() => import('./pages/admin/LiveManagement'));
+const AdminCouponMileageManagement = lazy(() => import('./pages/admin/CouponMileageManagement'));
 
 /**
  * 기본정보 입력을 마치지 않은 회원도 접근할 수 있어야 하는 경로.
@@ -269,6 +270,7 @@ function AppContent() {
           <Route path="users" element={<AdminUserManagement />} />
           <Route path="users/:id" element={<AdminUserManagement />} />
           <Route path="students" element={<AdminStudentManagement />} />
+          <Route path="coupons" element={<AdminCouponMileageManagement />} />
           <Route path="community" element={<AdminCommunityManagement />} />
           <Route path="community/create" element={<AdminCommunityEditor />} />
           <Route path="community/edit/:id" element={<AdminCommunityEditor />} />

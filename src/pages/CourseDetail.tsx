@@ -10,10 +10,20 @@ import {
   Trophy,
   Video,
   Trash2,
-  Edit2
+  Edit2,
+  Ticket,
+  AlertTriangle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { Course } from '@/types';
 import { cn } from '@/lib/utils';
 import DynamicCourseRenderer from '@/components/course/DynamicCourseRenderer';
@@ -21,6 +31,13 @@ import { PaymentButton } from '@/components/PaymentButton';
 import { courseService } from '@/services/courseService';
 import { instructorService } from '@/services/instructorService';
 import { reviewService, Review } from '@/services/reviewService';
+import {
+  couponMileageService,
+  formatCourseStartDateLabel,
+  isCourseAfterEndDate,
+  isCourseBeforeStartDate,
+  MemberCouponItem,
+} from '@/services/couponMileageService';
 import { useAuthStore } from '@/store/useAuthStore';
 import { toast } from 'sonner';
 
@@ -231,6 +248,9 @@ export default function CourseDetail() {
   const [loading, setLoading] = useState(true);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [enrolledCount, setEnrolledCount] = useState(0);
+  const [availableCourseCoupon, setAvailableCourseCoupon] = useState<MemberCouponItem | null>(null);
+  const [redeemingCourseCoupon, setRedeemingCourseCoupon] = useState(false);
+  const [couponConfirmOpen, setCouponConfirmOpen] = useState(false);
   const tabsRef = useRef<HTMLDivElement>(null);
 
   const scrollToSection = (sectionId: string) => {
@@ -276,6 +296,20 @@ export default function CourseDetail() {
           const isAdmin = user.role === 'super_admin' || user.role === 'admin';
           const enrolled = isAdmin ? true : await courseService.checkEnrollment(user.id, id);
           setIsEnrolled(enrolled);
+
+          if (!enrolled) {
+            try {
+              const wallet = await couponMileageService.getMyCouponsAndMileage();
+              const matched = wallet.coupons.find(
+                (c) => c.status === 'available' && c.course_id === id
+              );
+              setAvailableCourseCoupon(matched || null);
+            } catch {
+              setAvailableCourseCoupon(null);
+            }
+          } else {
+            setAvailableCourseCoupon(null);
+          }
         }
       } catch (error) {
         toast.error('강의 정보를 불러오는 데 실패했습니다.');
@@ -334,6 +368,74 @@ export default function CourseDetail() {
     } catch (err: any) {
       console.error('Enrollment Error:', err);
       toast.error(`수강 신청 실패: ${err.message || '알 수 없는 오류'}`);
+    }
+  };
+
+  const isBeforeCourseStart = isCourseBeforeStartDate(
+    course?.start_date || availableCourseCoupon?.course_start_date
+  );
+  const courseStartDateLabel = formatCourseStartDateLabel(
+    course?.start_date || availableCourseCoupon?.course_start_date
+  );
+  const isAfterCourseEnd =
+    !isBeforeCourseStart &&
+    isCourseAfterEndDate(
+      course?.end_date || availableCourseCoupon?.course_end_date,
+      course?.is_duration_based ?? availableCourseCoupon?.course_is_duration_based
+    );
+  const courseEndDateLabel = formatCourseStartDateLabel(
+    course?.end_date || availableCourseCoupon?.course_end_date
+  );
+
+  const handleRedeemCourseCoupon = async () => {
+    if (!availableCourseCoupon) return;
+
+    if (isCourseBeforeStartDate(course?.start_date || availableCourseCoupon.course_start_date)) {
+      toast.warning(
+        courseStartDateLabel
+          ? `강의 개시일 이후에 사용할 수 있습니다. (개시 예정일: ${courseStartDateLabel})`
+          : '강의 개시일 이후에 사용할 수 있습니다.'
+      );
+      return;
+    }
+
+    if (
+      isCourseAfterEndDate(
+        course?.end_date || availableCourseCoupon.course_end_date,
+        course?.is_duration_based ?? availableCourseCoupon.course_is_duration_based
+      )
+    ) {
+      toast.warning(
+        courseEndDateLabel
+          ? `이미 종료된 강의입니다. (강의 종료일: ${courseEndDateLabel})`
+          : '이미 종료된 강의입니다.'
+      );
+      return;
+    }
+
+    try {
+      setRedeemingCourseCoupon(true);
+      const res = await couponMileageService.redeemCoupon({
+        userCouponId: availableCourseCoupon.id,
+      });
+      toast.success(res.message);
+      setIsEnrolled(true);
+      setAvailableCourseCoupon(null);
+      setCouponConfirmOpen(false);
+    } catch (err: any) {
+      const errMsg = String(err?.message || '');
+      if (
+        err?.code === 'COURSE_NOT_STARTED' ||
+        err?.code === 'COURSE_ALREADY_ENDED' ||
+        errMsg.includes('강의 개시일 이후에 사용할 수 있습니다') ||
+        errMsg.includes('이미 종료된 강의입니다')
+      ) {
+        toast.warning(err.message);
+      } else {
+        toast.error(err.message || '쿠폰 적용에 실패했습니다.');
+      }
+    } finally {
+      setRedeemingCourseCoupon(false);
     }
   };
 
@@ -620,6 +722,85 @@ export default function CourseDetail() {
                   )}
                 </div>
 
+                {!isEnrolled && availableCourseCoupon && (
+                  <div
+                    className={cn(
+                      'p-4 rounded-xl border space-y-2.5',
+                      isAfterCourseEnd
+                        ? 'bg-rose-50/80 border-rose-200'
+                        : isBeforeCourseStart
+                          ? 'bg-amber-50/80 border-amber-200'
+                          : 'bg-purple-50 border-purple-200'
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-1.5 text-xs font-black',
+                          isAfterCourseEnd
+                            ? 'text-rose-800'
+                            : isBeforeCourseStart
+                              ? 'text-amber-800'
+                              : 'text-purple-700'
+                        )}
+                      >
+                        <Ticket className="w-4 h-4" />
+                        보유 무료 수강 쿠폰 {isAfterCourseEnd ? '(종료됨)' : isBeforeCourseStart ? '(개시 전)' : '사용 가능'}
+                      </span>
+                      <Badge
+                        className={cn(
+                          'text-white border-none text-[11px] font-black rounded-md tabular-nums',
+                          isAfterCourseEnd
+                            ? 'bg-rose-600'
+                            : isBeforeCourseStart
+                              ? 'bg-amber-600'
+                              : 'bg-purple-600'
+                        )}
+                      >
+                        {availableCourseCoupon.duration_days}일 무료
+                      </Badge>
+                    </div>
+                    <p className="text-xs font-bold text-slate-600 break-keep">
+                      {availableCourseCoupon.coupon_name} · 사용 시작일로부터 {availableCourseCoupon.duration_days}일간 무료 수강
+                    </p>
+                    {isBeforeCourseStart && (
+                      <p className="text-[11px] font-extrabold text-amber-800 flex items-start gap-1 break-keep">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                        <span>
+                          강의 개시일{courseStartDateLabel ? `(${courseStartDateLabel})` : ''} 이후에 사용할 수 있습니다.
+                        </span>
+                      </p>
+                    )}
+                    {isAfterCourseEnd && (
+                      <p className="text-[11px] font-extrabold text-rose-800 flex items-start gap-1 break-keep">
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                        <span>
+                          이미 종료된 강의입니다.{courseEndDateLabel ? ` (종료일: ${courseEndDateLabel})` : ''}
+                        </span>
+                      </p>
+                    )}
+                    <Button
+                      type="button"
+                      disabled={redeemingCourseCoupon}
+                      onClick={() => setCouponConfirmOpen(true)}
+                      className={cn(
+                        'w-full h-11 text-white font-black rounded-lg text-xs whitespace-nowrap',
+                        isAfterCourseEnd
+                          ? 'bg-rose-600 hover:bg-rose-700'
+                          : isBeforeCourseStart
+                            ? 'bg-amber-600 hover:bg-amber-700'
+                            : 'bg-purple-600 hover:bg-purple-700'
+                      )}
+                    >
+                      {redeemingCourseCoupon
+                        ? '쿠폰 적용 중...'
+                        : isAfterCourseEnd || isBeforeCourseStart
+                          ? '무료 수강 쿠폰 적용 안내 확인'
+                          : `무료 수강 쿠폰으로 바로 시작 (${availableCourseCoupon.duration_days}일)`}
+                    </Button>
+                  </div>
+                )}
+
                 <div className="flex gap-3">
                   {renderPrimaryAction(false)}
                 </div>
@@ -858,6 +1039,50 @@ export default function CourseDetail() {
 
       {/* Sticky Mobile Bottom Purchase Bar */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] z-40 shadow-[0_-8px_24px_rgba(15,23,42,0.06)]">
+        {!isEnrolled && availableCourseCoupon && (
+          <div
+            className={cn(
+              'max-w-2xl mx-auto mb-2.5 flex items-center justify-between gap-2 border rounded-lg px-3 py-2',
+              isAfterCourseEnd
+                ? 'bg-rose-50 border-rose-200'
+                : isBeforeCourseStart
+                  ? 'bg-amber-50 border-amber-200'
+                  : 'bg-purple-50 border-purple-200'
+            )}
+          >
+            <span
+              className={cn(
+                'text-xs font-black truncate',
+                isAfterCourseEnd
+                  ? 'text-rose-800'
+                  : isBeforeCourseStart
+                    ? 'text-amber-800'
+                    : 'text-purple-800'
+              )}
+            >
+              {isAfterCourseEnd
+                ? '무료 쿠폰 보유 · 이미 종료된 강의입니다'
+                : isBeforeCourseStart
+                  ? '무료 쿠폰 보유 · 개시일 이후 사용 가능'
+                  : `무료 쿠폰 보유 (${availableCourseCoupon.duration_days}일 수강권)`}
+            </span>
+            <Button
+              size="sm"
+              disabled={redeemingCourseCoupon}
+              onClick={() => setCouponConfirmOpen(true)}
+              className={cn(
+                'h-8 px-3 text-white font-black rounded-md text-xs whitespace-nowrap shrink-0',
+                isAfterCourseEnd
+                  ? 'bg-rose-600 hover:bg-rose-700'
+                  : isBeforeCourseStart
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : 'bg-purple-600 hover:bg-purple-700'
+              )}
+            >
+              {redeemingCourseCoupon ? '적용 중...' : '쿠폰 사용'}
+            </Button>
+          </div>
+        )}
         <div className="flex items-center justify-between gap-4 max-w-2xl mx-auto">
           <div className="shrink-0 tabular-nums">
             {!(course.category === 'beone_exclusive_online' || course.category === 'beone_exclusive_offline') ? (
@@ -885,6 +1110,131 @@ export default function CourseDetail() {
           </div>
         </div>
       </div>
+
+      <Dialog open={couponConfirmOpen} onOpenChange={setCouponConfirmOpen}>
+        <DialogContent className="rounded-xl max-w-[calc(100vw-2rem)] sm:max-w-[440px]">
+          {isBeforeCourseStart ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-lg font-black text-amber-700 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                  강의 개시 전 안내
+                </DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm font-bold text-slate-600 break-keep">
+                  적용하시려는 강의가 아직 개시 전 상태입니다.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-2.5 text-xs sm:text-sm">
+                <p className="font-black text-amber-900 text-sm sm:text-base break-keep">
+                  강의 개시일 이후에 사용할 수 있습니다.
+                </p>
+                <p className="text-amber-800 font-bold leading-relaxed break-keep">
+                  {courseStartDateLabel
+                    ? `본 강의는 ${courseStartDateLabel}에 개시됩니다. 개시일 이후에 쿠폰을 적용하시면 사용 시점부터 ${
+                        availableCourseCoupon?.duration_days || 7
+                      }일간 무료로 수강하실 수 있습니다.`
+                    : `본 강의가 개시된 이후에 쿠폰을 적용하시면 사용 시점부터 ${
+                        availableCourseCoupon?.duration_days || 7
+                      }일간 무료로 수강하실 수 있습니다.`}
+                </p>
+                <p className="text-[11px] font-bold text-amber-700 pt-1 border-t border-amber-200/80">
+                  * 보유하신 쿠폰은 차감되지 않고 그대로 안전하게 유지됩니다.
+                </p>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  onClick={() => setCouponConfirmOpen(false)}
+                  className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white font-black rounded-lg"
+                >
+                  확인했습니다
+                </Button>
+              </DialogFooter>
+            </>
+          ) : isAfterCourseEnd ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-lg font-black text-rose-700 flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+                  종료된 강의 안내
+                </DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm font-bold text-slate-600 break-keep">
+                  적용하시려는 강의의 운영 기간(종료일)이 경과했습니다.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 space-y-2.5 text-xs sm:text-sm">
+                <p className="font-black text-rose-900 text-sm sm:text-base break-keep">
+                  이미 종료된 강의입니다.
+                </p>
+                <p className="text-rose-800 font-bold leading-relaxed break-keep">
+                  {courseEndDateLabel
+                    ? `본 강의는 ${courseEndDateLabel}에 종료되어 쿠폰을 적용하실 수 없습니다.`
+                    : '본 강의는 이미 종료되어 쿠폰을 적용하실 수 없습니다.'}
+                </p>
+                <p className="text-[11px] font-bold text-rose-700 pt-1 border-t border-rose-200/80">
+                  * 보유하신 쿠폰은 소진(차감)되지 않고 그대로 유지됩니다.
+                </p>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  onClick={() => setCouponConfirmOpen(false)}
+                  className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white font-black rounded-lg"
+                >
+                  확인했습니다
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-lg font-black text-slate-900">
+                  무료 수강 쿠폰을 사용하시겠습니까?
+                </DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm font-bold text-slate-500 break-keep">
+                  사용 즉시 오늘부터 설정된 일수만큼 본 강의를 무료로 수강하실 수 있습니다.
+                </DialogDescription>
+              </DialogHeader>
+
+              {availableCourseCoupon && (
+                <div className="p-4 rounded-xl bg-purple-50 border border-purple-200 space-y-2 text-xs sm:text-sm">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-500 font-bold shrink-0">쿠폰명</span>
+                    <span className="font-black text-slate-900 text-right">{availableCourseCoupon.coupon_name}</span>
+                  </div>
+                  <div className="flex justify-between gap-2 pt-2 border-t border-purple-200/70">
+                    <span className="text-slate-600 font-extrabold shrink-0">적용 기간</span>
+                    <span className="font-black text-purple-700 tabular-nums">
+                      사용 시작일로부터 {availableCourseCoupon.duration_days}일 무료
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setCouponConfirmOpen(false)}
+                  className="rounded-lg font-bold"
+                >
+                  취소
+                </Button>
+                <Button
+                  disabled={redeemingCourseCoupon}
+                  onClick={handleRedeemCourseCoupon}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-black rounded-lg"
+                >
+                  {redeemingCourseCoupon ? '수강 등록 중...' : '지금 쿠폰 사용하기'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
