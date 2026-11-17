@@ -16,7 +16,9 @@ import {
   UserCheck,
   CheckCircle,
   AlertCircle,
-  Calendar
+  Calendar,
+  Bell,
+  Send
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,8 +26,9 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { cmsService } from '@/services/cmsService';
+import { notificationService } from '@/services/notificationService';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { PostEditor } from '@/components/community/PostEditor';
@@ -47,8 +50,12 @@ export default function SupportInquiries() {
   const [formTitle, setFormTitle] = useState('');
   const [formContent, setFormContent] = useState('');
   const [formActive, setFormActive] = useState(true);
+  const [pushNoticeOnSave, setPushNoticeOnSave] = useState(true);
   // Delete confirm modal state
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  // Existing notice push confirm modal state
+  const [pushConfirmNotice, setPushConfirmNotice] = useState<any | null>(null);
+  const [pushingNotice, setPushingNotice] = useState(false);
   // FAQ specific category
   const [faqCategory, setFaqCategory] = useState('강의');
 
@@ -142,6 +149,7 @@ export default function SupportInquiries() {
 
   const startCreate = () => {
     clearForm();
+    setPushNoticeOnSave(true);
     setIsEditing(true);
   };
 
@@ -149,6 +157,7 @@ export default function SupportInquiries() {
     setEditId(item.id);
     setFormTitle(item.title);
     setFormActive(item.active);
+    setPushNoticeOnSave(false);
 
     if (activeTab === 'faqs') {
       try {
@@ -329,17 +338,32 @@ export default function SupportInquiries() {
                         커뮤니티와 동일한 에디터로 이미지, 비디오, 하이퍼링크가 포함된 정교한 형식의 공지사항을 작성하세요.
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <input
-                        type="checkbox"
-                        id="form_active"
-                        checked={formActive}
-                        onChange={(e) => setFormActive(e.target.checked)}
-                        className="w-5 h-5 accent-purple-600 rounded cursor-pointer"
-                      />
-                      <label htmlFor="form_active" className="text-sm font-extrabold text-slate-700 cursor-pointer select-none">
-                        사용자 화면 노출 활성화 (Active)
+                    <div className="flex flex-wrap items-center gap-4 shrink-0">
+                      <label className="flex items-center gap-2 cursor-pointer select-none px-3 py-2 rounded-lg bg-purple-50 border border-purple-200">
+                        <input
+                          type="checkbox"
+                          checked={pushNoticeOnSave}
+                          onChange={(e) => setPushNoticeOnSave(e.target.checked)}
+                          className="w-4 h-4 accent-purple-600 rounded cursor-pointer"
+                        />
+                        <Bell className="w-3.5 h-3.5 text-purple-600" />
+                        <span className="text-xs font-extrabold text-purple-900 whitespace-nowrap">
+                          저장 시 전체 회원 공지 알림 푸시
+                        </span>
                       </label>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="form_active"
+                          checked={formActive}
+                          onChange={(e) => setFormActive(e.target.checked)}
+                          className="w-5 h-5 accent-purple-600 rounded cursor-pointer"
+                        />
+                        <label htmlFor="form_active" className="text-sm font-extrabold text-slate-700 cursor-pointer select-none whitespace-nowrap">
+                          사용자 화면 노출 활성화 (Active)
+                        </label>
+                      </div>
                     </div>
                   </div>
 
@@ -347,7 +371,7 @@ export default function SupportInquiries() {
                     communityId="notices"
                     initialPost={editId ? { title: formTitle, content: formContent } : undefined}
                     onCancel={() => setIsEditing(false)}
-                    submitButtonText="공지사항 저장 완료"
+                    submitButtonText={pushNoticeOnSave ? '공지사항 저장 및 전체 알림 푸시' : '공지사항 저장 완료'}
                     onSubmit={async (data) => {
                       if (!data.title.trim()) {
                         toast.error('공지사항 제목을 입력해주세요.');
@@ -368,14 +392,41 @@ export default function SupportInquiries() {
                           payload.id = editId;
                         }
 
-                        await cmsService.saveSupportContent([payload]);
-                        
-                        toast.success(editId ? '공지사항이 수정되었습니다.' : '공지사항이 등록되었습니다.');
+                        const savedRows = await cmsService.saveSupportContent([payload]);
+                        const savedNoticeId = savedRows?.[0]?.id || editId || undefined;
+
+                        if (pushNoticeOnSave) {
+                          const plainText = (data.html || '')
+                            .replace(/<[^>]+>/g, ' ')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                          const notifTitle = data.title.startsWith('[공지')
+                            ? data.title
+                            : `[공지사항] ${data.title}`;
+                          await notificationService.sendAdminNotification({
+                            category: 'notice',
+                            targetMode: 'all_members',
+                            title: notifTitle,
+                            message: plainText || data.title,
+                            htmlContent: data.html,
+                            link: '/support/notice',
+                            linkLabel: '공지사항 게시판 바로가기',
+                            noticeId: savedNoticeId,
+                          });
+                          toast.success(
+                            editId
+                              ? '공지사항이 수정되었으며 전체 회원에게 알림이 푸시되었습니다.'
+                              : '공지사항 등록 및 전체 회원 공지 알림 푸시가 완료되었습니다.'
+                          );
+                        } else {
+                          toast.success(editId ? '공지사항이 수정되었습니다.' : '공지사항이 등록되었습니다.');
+                        }
+
                         setIsEditing(false);
                         clearForm();
                         loadTabContents(activeTab);
                       } catch (err: any) {
-                        toast.error('공지사항 저장 중 오류가 발생했습니다.');
+                        toast.error(err?.message || '공지사항 저장 중 오류가 발생했습니다.');
                       } finally {
                         setLoading(false);
                       }
@@ -743,27 +794,40 @@ export default function SupportInquiries() {
 
                       if (activeTab === 'notices') {
                         const isImportant = item.title.includes('[필독]') || item.title.includes('[중요]');
+                        const plainNoticePreview = (item.content || '')
+                          .replace(/<[^>]+>/g, ' ')
+                          .replace(/&nbsp;/gi, ' ')
+                          .replace(/\s+/g, ' ')
+                          .trim();
                         return (
-                          <div key={item.id} className="p-6 border rounded-2xl hover:border-purple-200 transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-left">
-                            <div className="space-y-1 flex-1">
+                          <div key={item.id} className="p-6 border rounded-xl hover:border-purple-200 transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-left">
+                            <div className="space-y-1 flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 {isImportant && <Badge className="bg-red-500 text-white text-[10px]">중요</Badge>}
                                 <Badge className={item.active ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" : "bg-gray-100 text-gray-500"}>
                                   {item.active ? '노출중' : '비활성'}
                                 </Badge>
-                                <span className="text-xs text-gray-400 font-bold font-mono">
+                                <span className="text-xs text-gray-400 font-bold font-mono tabular-nums">
                                   {new Date(item.created_at).toLocaleDateString()}
                                 </span>
                               </div>
-                              <h4 className="font-extrabold text-slate-900 text-lg">{item.title}</h4>
-                              <p className="text-sm text-gray-500 line-clamp-2 leading-normal whitespace-pre-wrap">{item.content}</p>
+                              <h4 className="font-extrabold text-slate-900 text-lg truncate">{item.title}</h4>
+                              <p className="text-sm text-gray-500 line-clamp-2 leading-normal">{plainNoticePreview}</p>
                             </div>
 
                             <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
-                              <Button variant="outline" size="sm" className="h-9 px-3 rounded-xl border-slate-200 font-bold gap-1" onClick={() => startEdit(item)}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-9 px-3 rounded-lg border-purple-200 text-purple-700 hover:bg-purple-50 font-bold gap-1.5 whitespace-nowrap"
+                                onClick={() => setPushConfirmNotice(item)}
+                              >
+                                <Send className="w-3.5 h-3.5" /> 전체 알림 푸시
+                              </Button>
+                              <Button variant="outline" size="sm" className="h-9 px-3 rounded-lg border-slate-200 font-bold gap-1 whitespace-nowrap" onClick={() => startEdit(item)}>
                                 <Edit className="w-3.5 h-3.5" /> 수정
                               </Button>
-                              <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 h-9 rounded-xl font-bold" onClick={() => handleDelete(item.id)}>
+                              <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 h-9 rounded-lg font-bold" onClick={() => handleDelete(item.id)}>
                                 <Trash2 className="w-4 h-4" /> 
                               </Button>
                             </div>
@@ -955,7 +1019,7 @@ export default function SupportInquiries() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deleteConfirmId} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}>
-        <DialogContent className="sm:max-w-xs rounded-2xl p-6 bg-white" showCloseButton={false}>
+        <DialogContent className="sm:max-w-xs rounded-xl p-6 bg-white" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle className="text-lg font-black text-slate-900 text-center">
               삭제하시겠습니까?
@@ -964,20 +1028,82 @@ export default function SupportInquiries() {
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
-              className="flex-1 h-11 rounded-xl font-bold border-slate-200 hover:bg-slate-50"
+              className="flex-1 h-11 rounded-lg font-bold border-slate-200 hover:bg-slate-50"
               onClick={() => setDeleteConfirmId(null)}
               disabled={loading}
             >
               취소
             </Button>
             <Button
-              className="flex-1 h-11 rounded-xl font-black bg-red-600 hover:bg-red-700 text-white"
+              className="flex-1 h-11 rounded-lg font-black bg-red-600 hover:bg-red-700 text-white"
               onClick={executeDelete}
               disabled={loading}
             >
               {loading ? '삭제 중...' : '삭제'}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Existing Notice Global Push Confirmation Dialog */}
+      <Dialog
+        open={!!pushConfirmNotice}
+        onOpenChange={(open) => {
+          if (!open && !pushingNotice) setPushConfirmNotice(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md rounded-xl bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black text-slate-900">
+              전체 회원 공지사항 알림 푸시
+            </DialogTitle>
+            <DialogDescription className="text-xs font-bold text-slate-500">
+              선택한 공지사항 전문을 전체 회원의 알림센터로 즉시 푸시합니다.
+            </DialogDescription>
+          </DialogHeader>
+          {pushConfirmNotice && (
+            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5 text-left">
+              <span className="text-[11px] font-extrabold text-purple-700">발송 공지 제목</span>
+              <p className="text-sm font-black text-slate-900">{pushConfirmNotice.title}</p>
+              <p className="text-xs text-slate-500 font-medium line-clamp-3">
+                {(pushConfirmNotice.content || '')
+                  .replace(/<[^>]+>/g, ' ')
+                  .replace(/&nbsp;/gi, ' ')
+                  .replace(/\s+/g, ' ')
+                  .trim()}
+              </p>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              disabled={pushingNotice}
+              onClick={() => setPushConfirmNotice(null)}
+              className="rounded-lg font-bold"
+            >
+              취소
+            </Button>
+            <Button
+              disabled={pushingNotice}
+              onClick={async () => {
+                if (!pushConfirmNotice) return;
+                try {
+                  setPushingNotice(true);
+                  const res = await notificationService.pushExistingNotice(pushConfirmNotice.id);
+                  toast.success(res.message);
+                  setPushConfirmNotice(null);
+                } catch (err: any) {
+                  toast.error(err?.message || '공지사항 알림 푸시에 실패했습니다.');
+                } finally {
+                  setPushingNotice(false);
+                }
+              }}
+              className="bg-purple-600 hover:bg-purple-700 text-white font-black rounded-lg gap-1.5"
+            >
+              <Send className="w-3.5 h-3.5" />
+              {pushingNotice ? '푸시 발송 중...' : '전체 회원에게 푸시 발송'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

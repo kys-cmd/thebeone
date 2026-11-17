@@ -13,12 +13,19 @@ import {
   Star,
   Send,
   Trash2,
-  Edit2
+  Edit2,
+  Ticket,
+  Lock,
+  Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { courseService } from '@/services/courseService';
 import { reviewService, Review } from '@/services/reviewService';
 import { accessService } from '@/services/accessService';
+import {
+  couponMileageService,
+  CourseCouponWatchStatus,
+} from '@/services/couponMileageService';
 import { Course, CurriculumItem } from '@/types';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Button } from '@/components/ui/button';
@@ -61,21 +68,99 @@ export default function LearningPlayer() {
   const [editReviewRating, setEditReviewRating] = useState(5);
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
+  // Coupon watch limit states & session tracking refs
+  const [couponWatchStatus, setCouponWatchStatus] = useState<CourseCouponWatchStatus | null>(null);
+  const [isCouponLimitBlocked, setIsCouponLimitBlocked] = useState(false);
+  const couponWatchStatusRef = useRef<CourseCouponWatchStatus | null>(null);
+  const sessionKeyRef = useRef<string>(
+    `cpn_watch_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+  );
+  const recordedSessionKeysRef = useRef<Set<string>>(new Set());
+  const endedLessonsInSessionRef = useRef<Set<string>>(new Set());
+
   // Vimeo tracking player refs
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const vimeoPlayerRef = useRef<any>(null);
   const lastSavedTimeRef = useRef<number>(0);
   const activeItemRef = useRef<CurriculumItem | null>(null);
 
-  const vimeoSrc = activeItem?.vimeo_id ? getVimeoEmbedUrl(activeItem.vimeo_id, { autoplay: 1 }) : null;
+  const vimeoSrc =
+    !isCouponLimitBlocked && activeItem?.vimeo_id
+      ? getVimeoEmbedUrl(activeItem.vimeo_id, { autoplay: 1 })
+      : null;
 
   useEffect(() => {
     activeItemRef.current = activeItem;
   }, [activeItem]);
 
+  useEffect(() => {
+    couponWatchStatusRef.current = couponWatchStatus;
+  }, [couponWatchStatus]);
+
+  const rotateCouponSessionKey = () => {
+    sessionKeyRef.current = `cpn_watch_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  };
+
+  const recordCouponWatchSession = async (lessonId?: string) => {
+    const statusSnap = couponWatchStatusRef.current;
+    if (!id || !user || !statusSnap?.isCouponEnrollment) return;
+
+    const currentSessionKey = sessionKeyRef.current;
+    if (recordedSessionKeysRef.current.has(currentSessionKey)) return;
+    recordedSessionKeysRef.current.add(currentSessionKey);
+
+    try {
+      const res = await couponMileageService.recordCouponCourseView({
+        courseId: id,
+        sessionKey: currentSessionKey,
+        lessonId,
+      });
+      setCouponWatchStatus(res);
+      couponWatchStatusRef.current = res;
+
+      if (res.incremented && res.maxViews && res.maxViews > 0) {
+        toast.info(
+          `쿠폰 시청 횟수가 기록되었습니다. (현재 ${res.viewCount} / ${res.maxViews}회 시청)`,
+          { id: `coupon-view-${currentSessionKey}` }
+        );
+      }
+    } catch (err: any) {
+      if (err?.code === 'COUPON_VIEW_LIMIT_EXCEEDED' || err?.code === 'COUPON_EXPIRED') {
+        setIsCouponLimitBlocked(true);
+        setCouponWatchStatus((prev) =>
+          prev
+            ? {
+                ...prev,
+                viewCount: typeof err?.viewCount === 'number' ? err.viewCount : prev.viewCount,
+                maxViews: typeof err?.maxViews === 'number' ? err.maxViews : prev.maxViews,
+                remainingViews: 0,
+                isLimitReached: true,
+              }
+            : prev
+        );
+        toast.error(err?.message || '쿠폰 시청 가능 횟수를 모두 소진하였습니다.');
+      } else {
+        recordedSessionKeysRef.current.delete(currentSessionKey);
+      }
+    }
+  };
+
+  // Record coupon watch count reliably when classroom video starts (idempotent per sessionKey)
+  useEffect(() => {
+    if (
+      loading ||
+      isCouponLimitBlocked ||
+      !activeItem?.vimeo_id ||
+      !couponWatchStatus?.isCouponEnrollment
+    ) {
+      return;
+    }
+    recordCouponWatchSession(activeItem.id);
+  }, [loading, isCouponLimitBlocked, activeItem?.id, activeItem?.vimeo_id, couponWatchStatus?.isCouponEnrollment]);
+
   // Vimeo controller tracking hook
   useEffect(() => {
-    if (!activeItem || loading || !course) return;
+    if (!activeItem || loading || !course || isCouponLimitBlocked) return;
 
     let isMounted = true;
     let timerId: any = null;
@@ -236,6 +321,10 @@ export default function LearningPlayer() {
           loadLastPosition();
 
           player.on('play', function() {
+            const currentItem = activeItemRef.current;
+            if (isMounted && currentItem) {
+              recordCouponWatchSession(currentItem.id);
+            }
             player.getCurrentTime()
               .then((t: number) => {
                 if (isMounted) reportProgress('start', t);
@@ -255,6 +344,28 @@ export default function LearningPlayer() {
           });
 
           player.on('ended', function() {
+            const currentItem = activeItemRef.current;
+            if (currentItem) {
+              endedLessonsInSessionRef.current.add(currentItem.id);
+            }
+            const latestWatch = couponWatchStatusRef.current;
+            if (latestWatch?.isCouponEnrollment) {
+              if (
+                latestWatch.isCouponRestricted &&
+                latestWatch.maxViews !== null &&
+                latestWatch.viewCount >= latestWatch.maxViews
+              ) {
+                if (isMounted) {
+                  setIsCouponLimitBlocked(true);
+                  toast.info(
+                    `쿠폰 최대 시청 가능 횟수(${latestWatch.maxViews}회)를 모두 시청 완료하셨습니다.`
+                  );
+                }
+              } else {
+                // 영상이 끝난 뒤 다시 재생(Replay)하면 다음 시청 횟수로 집계되도록 세션 키 갱신
+                rotateCouponSessionKey();
+              }
+            }
             player.getCurrentTime()
               .then((t: number) => {
                 if (isMounted) reportProgress('complete', t);
@@ -298,7 +409,7 @@ export default function LearningPlayer() {
         vimeoPlayerRef.current = null;
       }
     };
-  }, [activeItem, loading, course, vimeoSrc]);
+  }, [activeItem, loading, course, vimeoSrc, isCouponLimitBlocked]);
 
   const toggleLessonCompletion = async (lessonId: string) => {
     if (!id || !user || isSavingProgress) return;
@@ -432,6 +543,11 @@ export default function LearningPlayer() {
   const fetchCourseData = async () => {
     try {
       setLoading(true);
+      rotateCouponSessionKey();
+      recordedSessionKeysRef.current.clear();
+      endedLessonsInSessionRef.current.clear();
+      setIsCouponLimitBlocked(false);
+
       if (user) {
         const data = await courseService.getCourseById(id!);
         setCourse(data);
@@ -500,6 +616,23 @@ export default function LearningPlayer() {
             }
           }
         }
+
+        // 쿠폰 수강 여부 및 최대 시청 가능 횟수 조회
+        if (!isAdmin) {
+          try {
+            const watchStatus = await couponMileageService.getCourseCouponWatchStatus(id!);
+            setCouponWatchStatus(watchStatus);
+            couponWatchStatusRef.current = watchStatus;
+            if (watchStatus.isCouponRestricted && watchStatus.isLimitReached) {
+              setIsCouponLimitBlocked(true);
+            }
+          } catch (watchErr) {
+            console.warn('[LearningPlayer] Coupon watch status check skipped:', watchErr);
+          }
+        } else {
+          setCouponWatchStatus(null);
+          couponWatchStatusRef.current = null;
+        }
         
         // Load lesson progress
         const progressList = await accessService.getCourseProgress(id!, user.id);
@@ -548,6 +681,31 @@ export default function LearningPlayer() {
         </div>
         
         <div className="flex items-center gap-2 shrink-0">
+          {couponWatchStatus?.isCouponEnrollment && (
+            <div
+              className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-black tabular-nums border ${
+                isCouponLimitBlocked
+                  ? 'bg-rose-950/80 text-rose-300 border-rose-800/80'
+                  : couponWatchStatus.maxViews && couponWatchStatus.viewCount >= couponWatchStatus.maxViews
+                    ? 'bg-amber-950/80 text-amber-300 border-amber-800/80'
+                    : 'bg-purple-950/80 text-purple-200 border-purple-800/80'
+              }`}
+              title={
+                couponWatchStatus.maxViews
+                  ? `쿠폰 수강 중 · 최대 ${couponWatchStatus.maxViews}회 중 ${couponWatchStatus.viewCount}회 시청`
+                  : `쿠폰 수강 중 · 누적 ${couponWatchStatus.viewCount}회 시청 (무제한)`
+              }
+            >
+              <Eye className="w-3.5 h-3.5 shrink-0" />
+              {couponWatchStatus.maxViews ? (
+                <span>
+                  쿠폰 시청 {couponWatchStatus.viewCount} / {couponWatchStatus.maxViews}회
+                </span>
+              ) : (
+                <span>쿠폰 시청 {couponWatchStatus.viewCount}회 (무제한)</span>
+              )}
+            </div>
+          )}
           <Button 
             variant="ghost" 
             className="text-gray-200 hover:text-white hover:bg-gray-800 h-10 px-3 rounded-xl font-bold text-xs gap-1.5"
@@ -563,7 +721,45 @@ export default function LearningPlayer() {
         {/* Main Player Area */}
         <main className="flex-1 overflow-y-auto bg-black flex flex-col scrollbar-hide">
           <div className="aspect-video w-full bg-black relative sticky top-0 z-20">
-            {vimeoSrc ? (
+            {isCouponLimitBlocked ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-950 p-4 sm:p-8">
+                <div className="max-w-lg w-full bg-gray-900/95 border border-rose-900/60 rounded-2xl p-6 sm:p-8 text-center space-y-4 shadow-2xl">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center mx-auto">
+                    <Lock className="w-6 h-6 sm:w-7 sm:h-7 text-rose-400" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-rose-950 text-rose-300 border border-rose-800/70 text-xs font-black tabular-nums">
+                      <Ticket className="w-3.5 h-3.5" />
+                      시청 횟수 {couponWatchStatus?.viewCount ?? couponWatchStatus?.maxViews} /{' '}
+                      {couponWatchStatus?.maxViews}회 소진 완료
+                    </div>
+                    <h3 className="text-base sm:text-xl font-black text-white break-keep pt-1">
+                      쿠폰 최대 시청 가능 횟수({couponWatchStatus?.maxViews}회)를 모두 사용하셨습니다.
+                    </h3>
+                    <p className="text-xs sm:text-sm font-medium text-gray-400 leading-relaxed break-keep">
+                      보유하신 무료 수강 쿠폰({couponWatchStatus?.couponName || '무료 수강 쿠폰'})의 수강 가능 기간 내 허용된 시청 횟수가 모두 소진되어 추가 재생이 제한됩니다.
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
+                    <Button
+                      type="button"
+                      onClick={() => navigate('/mypage?tab=classroom')}
+                      className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl h-11 px-5 text-xs sm:text-sm"
+                    >
+                      내 강의실에서 시청 내역 확인
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => navigate(`/course/${course.id}`)}
+                      className="w-full sm:w-auto border-gray-700 bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold rounded-xl h-11 px-5 text-xs sm:text-sm"
+                    >
+                      강의 상세 페이지 보기
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : vimeoSrc ? (
               <iframe
                 key={activeItem?.id}
                 ref={iframeRef}
@@ -866,6 +1062,25 @@ export default function LearningPlayer() {
                              <button
                                key={item.id}
                                onClick={() => {
+                                 if (isCouponLimitBlocked) {
+                                   toast.error('쿠폰 최대 시청 가능 횟수를 모두 소진하였습니다.');
+                                   return;
+                                 }
+                                 if (endedLessonsInSessionRef.current.has(item.id)) {
+                                   const latestWatch = couponWatchStatusRef.current;
+                                   if (
+                                     latestWatch?.isCouponRestricted &&
+                                     latestWatch.maxViews !== null &&
+                                     latestWatch.viewCount >= latestWatch.maxViews
+                                   ) {
+                                     setIsCouponLimitBlocked(true);
+                                     toast.error(
+                                       `쿠폰 최대 시청 가능 횟수(${latestWatch.maxViews}회)를 모두 소진하였습니다.`
+                                     );
+                                     return;
+                                   }
+                                   rotateCouponSessionKey();
+                                 }
                                  setActiveItem(item);
                                  if (window.innerWidth < 768) setIsSidebarOpen(false);
                                }}

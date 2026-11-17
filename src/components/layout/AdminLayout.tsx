@@ -32,6 +32,7 @@ const ADMIN_MENUS = [
   { icon: <Users className="w-5 h-5" />, label: '회원 관리', path: '/admin/users' },
   { icon: <GraduationCap className="w-5 h-5" />, label: '수강생 관리', path: '/admin/students' },
   { icon: <Ticket className="w-5 h-5" />, label: '쿠폰/마일리지', path: '/admin/coupons' },
+  { icon: <Bell className="w-5 h-5" />, label: '알림/푸시 관리', path: '/admin/notifications' },
   { icon: <Star className="w-5 h-5" />, label: '수강 후기 관리', path: '/admin/reviews' },
   { icon: <CreditCard className="w-5 h-5" />, label: '매출 관리', path: '/admin/sales' },
   { icon: <BarChart className="w-5 h-5" />, label: '매출 분석', path: '/admin/stats' },
@@ -135,10 +136,12 @@ export default function AdminLayout() {
               </div>
             </div>
 
-            <Button variant="ghost" size="icon" className="relative text-gray-400 hover:text-purple-600 bg-gray-50 hover:bg-purple-50 rounded-xl transition-all">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
-            </Button>
+            <Link to="/admin/notifications" title="알림/푸시 관리">
+              <Button variant="ghost" size="icon" className="relative text-gray-400 hover:text-purple-600 bg-gray-50 hover:bg-purple-50 rounded-xl transition-all cursor-pointer">
+                <Bell className="w-5 h-5" />
+                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
+              </Button>
+            </Link>
             
             <div className="flex items-center gap-3 pl-6 border-l border-gray-100">
                <div className="text-right">

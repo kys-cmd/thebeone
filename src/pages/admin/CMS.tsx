@@ -833,10 +833,6 @@ export default function AdminCMS() {
                             <Switch checked={cat.features.board} onCheckedChange={val => setCommunityCategories(communityCategories.map(c => c.id === cat.id ? {...c, features: {...c.features, board: val}} : c))} />
                           </div>
                           <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50">
-                            <span className="text-sm font-medium">실시간 채팅</span>
-                            <Switch checked={cat.features.chat} onCheckedChange={val => setCommunityCategories(communityCategories.map(c => c.id === cat.id ? {...c, features: {...c.features, chat: val}} : c))} />
-                          </div>
-                          <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50">
                             <span className="text-sm font-medium">갤러리</span>
                             <Switch checked={cat.features.gallery} onCheckedChange={val => setCommunityCategories(communityCategories.map(c => c.id === cat.id ? {...c, features: {...c.features, gallery: val}} : c))} />
                           </div>

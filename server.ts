@@ -11,6 +11,23 @@ import cors from "cors";
 import nodemailer from "nodemailer";
 import iconv from "iconv-lite";
 import { COUPON_MILEAGE_ACTIONS, handleCouponMileageAction } from "./src/server/couponMileageHandler";
+import { NOTIFICATION_ACTIONS, handleNotificationAction } from "./src/server/notificationHandler";
+import {
+  completeApprovedOrdersAndEnroll,
+  fetchAdminEnrollments,
+  fetchEnrichedAdminOrders,
+  fetchMemberSyncedData,
+  findOrdersForInicisReturn,
+  parseInicisMerchantMeta,
+  reconcileApprovedPaymentsAndEnrollments,
+  resolveOrderInicisTidAndMethod,
+  safeGrantCourseEnrollment,
+  safeInsertPaymentLog,
+  safePrepareOrdersForInitPay,
+  safeRevokeCourseEnrollment,
+  safeUpdateOrdersStatusByIds,
+  safeUpsertCommunityMember,
+} from "./src/server/paymentSyncHelper";
 
 // Load .env variables
 config();
@@ -931,14 +948,14 @@ async function startServer() {
           payment_settings_error: payError ? payError.message : null,
         };
 
-        // Try getting last failure log from payment_logs
+        // Try getting last logs from payment_logs (schema-resilient .select("*"))
         const { data: logs, error: logsError } = await supabaseAdmin
           .from("payment_logs")
-          .select("id, order_id, status, payment_method, amount, created_at") // Exclude raw responses to prevent token/key leaks
+          .select("*")
           .order("created_at", { ascending: false })
           .limit(3);
 
-        diagData.recent_payment_logs = logs || [];
+        diagData.recent_payment_logs = (logs || []).map(({ raw_response, raw_data, ...rest }: any) => rest);
         diagData.recent_payment_logs_error = logsError ? logsError.message : null;
       } catch (dbErr: any) {
         diagData.database = {
@@ -968,13 +985,12 @@ async function startServer() {
   // 1. Generate Signature & Pre-insert order
   app.post("/api/init-pay", async (req, res) => {
     try {
-      const { price, oid, timestamp, userId, courseId, orderName, mileageUsed } = req.body;
+      const { price, oid, timestamp, userId, courseId, items, orderName, mileageUsed } = req.body || {};
 
-      if (!price || !oid || !timestamp) {
+      if (price === undefined || price === null || !oid || !timestamp) {
         return res.status(400).json({ status: "error", message: "Missing price, oid, or timestamp" });
       }
 
-      // Log Payment Init Request
       await writePaymentApiLog({
         merchant_uid: oid,
         type: "INIT_PAY_REQ",
@@ -983,84 +999,28 @@ async function startServer() {
         status: "SUCCESS"
       });
 
-      let verifiedPrice = Number(price);
-      let verifiedMileage = Math.max(0, Number(mileageUsed) || 0);
+      let verifiedPrice = Math.max(0, Math.round(Number(price) || 0));
+      let verifiedMileage = Math.max(0, Math.round(Number(mileageUsed) || 0));
+      let orderIds: string[] = [];
+      let courseIds: string[] = [];
 
-      // Verify course price & user mileage against DB and pre-insert order into Supabase
-      if (supabaseAdmin && userId && courseId) {
+      if (supabaseAdmin && userId && (courseId || (Array.isArray(items) && items.length > 0))) {
         try {
-          const { data: courseRow } = await supabaseAdmin
-            .from("courses")
-            .select("price")
-            .eq("id", courseId)
-            .maybeSingle();
-
-          const { data: profileRow } = await supabaseAdmin
-            .from("profiles")
-            .select("mileage")
-            .eq("id", userId)
-            .maybeSingle();
-
-          if (courseRow && typeof courseRow.price === "number") {
-            const availableMileage = Math.max(0, Number(profileRow?.mileage) || 0);
-            if (verifiedMileage > availableMileage) {
-              return res.status(400).json({ status: "error", message: "보유 마일리지를 초과하여 사용할 수 없습니다." });
-            }
-            const expectedFinalPrice = Math.max(0, Number(courseRow.price) - verifiedMileage);
-            if (expectedFinalPrice !== verifiedPrice) {
-              console.warn(`[INIT-PAY] Client price (${verifiedPrice}) differed from server calculation (${expectedFinalPrice}). Enforcing server price.`);
-              verifiedPrice = expectedFinalPrice;
-            }
-          }
-
-          const { data: existingByOid } = await supabaseAdmin
-            .from("orders")
-            .select("id")
-            .eq("merchant_uid", oid)
-            .maybeSingle();
-
-          if (existingByOid) {
-            await supabaseAdmin.from("orders").update({
-              amount: verifiedPrice,
-              mileage_used: verifiedMileage
-            }).eq("merchant_uid", oid);
-            console.log(`[INIT-PAY] Existing order updated by OID. OID: ${oid}, Price: ${verifiedPrice}, Mileage: ${verifiedMileage}`);
-          } else {
-            const { data: existingPending } = await supabaseAdmin
-              .from("orders")
-              .select("id")
-              .eq("user_id", userId)
-              .eq("course_id", courseId)
-              .eq("status", "PENDING")
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-
-            if (existingPending) {
-              await supabaseAdmin.from("orders").update({
-                merchant_uid: oid,
-                amount: verifiedPrice,
-                mileage_used: verifiedMileage,
-                order_name: orderName || "온라인 강좌 수강권 구매"
-              }).eq("id", existingPending.id);
-              console.log(`[INIT-PAY] Updated existing PENDING cart order (${existingPending.id}) with OID: ${oid}`);
-            } else {
-              await supabaseAdmin.from("orders").insert([{
-                user_id: userId,
-                course_id: courseId,
-                amount: verifiedPrice,
-                status: "PENDING",
-                order_name: orderName || "온라인 강좌 수강권 구매",
-                merchant_uid: oid,
-                mileage_used: verifiedMileage,
-                created_at: new Date().toISOString()
-              }]);
-              console.log(`[INIT-PAY] Pending order created. OID: ${oid}, Price: ${verifiedPrice}, Mileage: ${verifiedMileage}`);
-            }
-          }
+          const prep = await safePrepareOrdersForInitPay(supabaseAdmin, {
+            oid,
+            price: verifiedPrice,
+            userId,
+            courseId,
+            items,
+            orderName,
+            mileageUsed: verifiedMileage,
+          });
+          verifiedPrice = prep.verifiedPrice;
+          verifiedMileage = prep.verifiedMileage;
+          orderIds = prep.orderIds;
+          courseIds = prep.courseIds;
         } catch (dbErr: any) {
-          console.error("[INIT-PAY] Database order placement failed (ignored):", dbErr.message);
-          // Log DB Pre-insert Error in communication flow
+          const msg = dbErr?.message || "주문 초기화 실패";
           await writePaymentApiLog({
             merchant_uid: oid,
             type: "ERROR_LOG",
@@ -1068,8 +1028,43 @@ async function startServer() {
             request_data: req.body,
             status: "FAILED",
             error_code: "DB_PREINSERT_ERROR",
-            error_message: dbErr.message
+            error_message: msg
           });
+          if (msg.includes("마일리지")) {
+            return res.status(400).json({ status: "error", message: msg });
+          }
+          console.error("[INIT-PAY] Database order placement failed:", msg);
+        }
+
+        if (verifiedPrice === 0 && orderIds.length > 0) {
+          const { data: preparedOrders } = await supabaseAdmin
+            .from("orders")
+            .select("*")
+            .in("id", orderIds);
+
+          if (preparedOrders && preparedOrders.length > 0) {
+            await completeApprovedOrdersAndEnroll(supabaseAdmin, {
+              oid,
+              orders: preparedOrders,
+              approvedAmount: 0,
+              authResponseData: {
+                resultCode: "0000",
+                payMethod: verifiedMileage > 0 ? "MILEAGE" : "FREE",
+                tid: `direct_mileage_${oid}`,
+                TotPrice: 0,
+              },
+              isMobileFlow: false,
+            });
+            return res.json({
+              status: "success",
+              zeroPriceCompleted: true,
+              oid,
+              price: 0,
+              mileageUsed: verifiedMileage,
+              orderIds,
+              courseIds,
+            });
+          }
         }
       }
 
@@ -1084,12 +1079,15 @@ async function startServer() {
         mid: config.mid,
         oid,
         price: verifiedPrice,
+        mileageUsed: verifiedMileage,
+        orderIds,
+        courseIds,
         timestamp,
         isSandbox: config.isSandbox,
       };
 
-      // Log Payment Init Response
       await writePaymentApiLog({
+        orderId: orderIds[0] || null,
         merchant_uid: oid,
         type: "INIT_PAY_RES",
         api_url: "/api/init-pay",
@@ -1192,7 +1190,8 @@ async function startServer() {
       // --- MOBILE PAYMENT FLOW ---
       const { P_STATUS, P_RMESG1, P_TID, P_REQ_URL, P_NOTI, P_OID } = req.body;
       finalOid = P_OID;
-      clientOrigin = P_NOTI || getSecurePublicUrl(req, P_NOTI);
+      const mobileMeta = parseInicisMerchantMeta(P_NOTI);
+      clientOrigin = getSecurePublicUrl(req, mobileMeta.originUrl || P_NOTI);
 
       if (P_STATUS !== "00") {
         console.error(`[INICIS-RETURN] Mobile Auth failed. Status: ${P_STATUS}, Msg: ${P_RMESG1}`);
@@ -1560,159 +1559,41 @@ async function startServer() {
     }
 
     try {
-      // Find relative order metadata
-      const { data: orderData, error: findError } = await supabaseAdmin
-        .from("orders")
-        .select("*")
-        .eq("merchant_uid", finalOid)
-        .maybeSingle();
+      const receivedAmount = Number(authResponseData?.TotPrice || 0);
+      const callbackMeta = parseInicisMerchantMeta(
+        isMobileFlow ? req.body?.P_NOTI : req.body?.merchantData
+      );
 
-      if (findError) throw findError;
-      if (!orderData) {
+      const matchedOrders = await findOrdersForInicisReturn(supabaseAdmin, {
+        oid: finalOid,
+        approvedAmount: receivedAmount,
+        authResponseData,
+        merchantMeta: callbackMeta,
+      });
+
+      if (!matchedOrders || matchedOrders.length === 0) {
         throw new Error(`OID [${finalOid}]에 상응하는 데이터베이스 레코드를 찾을 수 없습니다.`);
       }
 
-      // 1) Update order to COMPLETED standard state transition using state machine
-      await handleOrderStateTransition(finalOid, "COMPLETED", authResponseData, Number(authResponseData.TotPrice || orderData.amount));
-
-      // Clean up any leftover duplicate PENDING cart orders for the same user and course
-      if (orderData.user_id && orderData.course_id) {
-        try {
-          await supabaseAdmin
-            .from("orders")
-            .delete()
-            .eq("user_id", orderData.user_id)
-            .eq("course_id", orderData.course_id)
-            .eq("status", "PENDING")
-            .neq("id", orderData.id);
-        } catch (cleanupErr) {
-          console.warn("[INICIS-RETURN] Pending cart cleanup warning:", cleanupErr);
-        }
+      const expectedAmount = matchedOrders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
+      if (expectedAmount !== receivedAmount) {
+        throw new Error(`결제 금액 불일치 감지 (Expected: ${expectedAmount}, Received: ${receivedAmount})`);
       }
 
-      // 1.5) Deduct user mileage automatically after successful state transition
-      try {
-        const userId = orderData.user_id;
-        const mileageUsed = Number(orderData.mileage_used || 0);
-        if (mileageUsed > 0 && userId) {
-          const { data: profile, error: pError } = await supabaseAdmin
-            .from("profiles")
-            .select("mileage")
-            .eq("id", userId)
-            .single();
-
-          if (!pError && profile) {
-            const currentMileage = Number(profile.mileage) || 0;
-            const newMileage = Math.max(0, currentMileage - mileageUsed);
-            const { error: updateProfileErr } = await supabaseAdmin
-              .from("profiles")
-              .update({ mileage: newMileage })
-              .eq("id", userId);
-            
-            if (updateProfileErr) {
-              console.error(`[INICIS-RETURN] Mileage deduction profile update error:`, updateProfileErr);
-            } else {
-              console.log(`[INICIS-RETURN] Auto spent mileage successfully. User ${userId} spent ${mileageUsed} P. Next mileage totals ${newMileage} P.`);
-            }
-          }
-        }
-      } catch (mileageErr: any) {
-        console.error("[INICIS-RETURN] Crucial mileage update exception bypass:", mileageErr.message || mileageErr);
-      }
-
-      // 2) payment_logs write
-      try {
-        const mergedResponse = {
-          ...authResponseData,
-          merchant_uid: finalOid
-        };
-        await supabaseAdmin.from("payment_logs").insert([{
-          order_id: orderData.id,
-          status: "SUCCESS",
-          raw_response: JSON.stringify(mergedResponse),
-          payment_method: authResponseData.payMethod || "CARD",
-          amount: Number(authResponseData.TotPrice || orderData.amount),
-          created_at: new Date().toISOString()
-        }]);
-      } catch (logErr: any) {
-        console.warn("[INICIS-RETURN] payment_logs log warning:", logErr.message || logErr);
-        await writePaymentLogLocal(finalOid, "SUCCESS", authResponseData);
-      }
-
-      // 3) Supplementary grant privileges (Backups for course_enrollments and profile status updates)
-      const userId = orderData.user_id;
-      const courseId = orderData.course_id;
-      if (userId && courseId) {
-        try {
-          await supabaseAdmin.from("course_enrollments").insert([{
-            user_id: userId,
-            course_id: courseId,
-            status: "active",
-            enrolled_at: new Date().toISOString()
-          }]);
-        } catch (enrollErr) {
-          console.warn("[INICIS-RETURN] course_enrollments overlap bypass:", enrollErr);
-        }
-
-        // Calculate expires_at dynamically read from courses table
-        let expiresAt: string | null = null;
-        try {
-          const { data: courseInfo } = await supabaseAdmin
-            .from("courses")
-            .select("is_duration_based, duration_days, start_date, end_date, layout")
-            .eq("id", courseId)
-            .single();
-          
-          expiresAt = calculateCourseEnrollmentExpiry(courseInfo, new Date());
-        } catch (courseErr) {
-          console.warn("[INICIS-RETURN] Failed to calculate course duration, default to infinite:", courseErr);
-        }
-
-        try {
-          await supabaseAdmin.from("enrollments").upsert({
-            user_id: userId,
-            course_id: courseId,
-            status: "active",
-            is_deleted: false,
-            expires_at: expiresAt,
-            created_at: new Date().toISOString()
-          }, { onConflict: "user_id, course_id" });
-          console.log(`[INICIS-RETURN] Successfully enrolled user in enrollments: user_id=${userId}, course_id=${courseId}, expires_at=${expiresAt}`);
-        } catch (enrollmentErr) {
-          console.warn("[INICIS-RETURN] enrollments upsert bypass:", enrollmentErr);
-        }
-
-        try {
-          const { data: currentProfile } = await supabaseAdmin
-            .from("profiles")
-            .select("role")
-            .eq("id", userId)
-            .maybeSingle();
-
-          const currentRole = currentProfile?.role || "user";
-          const isBeOneOrHigher = currentRole === "beone_member" || 
-                                  currentRole === "bione_member" || 
-                                  currentRole === "admin" || 
-                                  currentRole === "super_admin";
-
-          if (!isBeOneOrHigher) {
-            await supabaseAdmin.from("profiles").update({ role: "paid_member" }).eq("id", userId);
-            console.log(`[INICIS-RETURN] Upgraded user ${userId} to paid_member`);
-          } else {
-            console.log(`[INICIS-RETURN] User ${userId} is already ${currentRole}. Retaining role.`);
-          }
-        } catch (pErr) {
-          console.warn("[INICIS-RETURN] profile status update bypass:", pErr);
-        }
-      }
+      await completeApprovedOrdersAndEnroll(supabaseAdmin, {
+        oid: finalOid,
+        orders: matchedOrders,
+        approvedAmount: receivedAmount,
+        authResponseData,
+        isMobileFlow,
+      });
 
       console.log(`[INICIS-RETURN] SUCCESSFULLY PAID & RECORDED order number ${finalOid}`);
       return res.redirect(`${clientOrigin}/payment/callback?status=success&oid=${finalOid}&message=${encodeURIComponent("결제가 완료되었습니다!")}&resultCode=0000`);
 
     } catch (dbErr: any) {
       console.error("[INICIS-RETURN] Database state update error! Execute NetCancel ASAP.", dbErr);
-      
-      // Log DB Mapping Exception
+
       await writePaymentApiLog({
         merchant_uid: finalOid || null,
         type: "ERROR_LOG",
@@ -1721,10 +1602,12 @@ async function startServer() {
         status: "FAILED",
         error_code: "DATABASE_MAPPING_ERROR",
         error_message: dbErr.message || "DB 업데이트 실패",
-        response_data: { triggeredNetCancel: true, netCancelUrl }
+        response_data: { triggeredNetCancel: !isMobileFlow, netCancelUrl }
       });
 
-      await triggerNetCancelHelper(netCancelUrl, finalMid, authToken, timestamp, authSignature);
+      if (!isMobileFlow && authToken) {
+        await triggerNetCancelHelper(netCancelUrl, finalMid, authToken, timestamp, authSignature);
+      }
       if (supabaseAdmin) {
         await writePaymentLogLocal(finalOid || null, "FAILED", {
           step: "DB업데이트(Database Update)",
@@ -1819,14 +1702,14 @@ async function startServer() {
       if (oid) {
         const { data: orderData } = await supabaseAdmin
           .from("orders")
-          .select("id, amount, payment_method")
+          .select("*")
           .eq("merchant_uid", oid)
           .maybeSingle();
         if (orderData) {
           orderId = orderData.id;
           orderAmount = Number(orderData.amount) || 0;
-          if (orderData.payment_method) {
-            payMethod = orderData.payment_method;
+          if ((orderData as any).payment_method) {
+            payMethod = (orderData as any).payment_method;
           }
         }
       }
@@ -1852,19 +1735,14 @@ async function startServer() {
         }
       }
 
-      const payload: any = {
-        order_id: orderId,
-        status: status,
-        raw_response: JSON.stringify(unifiedResponse),
-        payment_method: payMethod,
+      await safeInsertPaymentLog(supabaseAdmin, {
+        orderId,
+        merchantUid: oid,
+        status: status === "SUCCESS" ? "SUCCESS" : "FAILED",
         amount: orderAmount,
-        created_at: new Date().toISOString()
-      };
-
-      const { error } = await supabaseAdmin.from("payment_logs").insert([payload]);
-      if (error) {
-        console.warn("[writePaymentLogLocal] Primary unified insert failed:", error.message);
-      }
+        paymentMethod: payMethod,
+        payloadObj: unifiedResponse,
+      });
     } catch (err: any) {
       console.warn("[writePaymentLogLocal] Skipped bypass:", err.message);
     }
@@ -2023,96 +1901,73 @@ async function startServer() {
 
         const actualPaidAmount = Math.max(0, Number(amount) - (Number(mileage_used) || 0));
 
-        const { data: order, error: orderErr } = await supabaseAdmin
+        const { data: targetOrder, error: findOrdErr } = await supabaseAdmin
           .from("orders")
-          .update({
-            status: "PAID",
-            payment_tid: payment_tid || `TID-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
-            payment_method: payment_method || "direct",
-            mileage_used: Number(mileage_used) || 0,
-            amount: actualPaidAmount,
-            updated_at: new Date().toISOString()
-          })
+          .select("*")
           .eq("merchant_uid", merchant_uid)
-          .select()
-          .single();
+          .maybeSingle();
 
-        if (orderErr) {
-          console.error("Order update error:", orderErr);
-          return res.status(500).json({ status: "error", message: `Order status update failed: ${orderErr.message}` });
+        if (findOrdErr || !targetOrder) {
+          return res.status(404).json({ status: "error", message: `Order not found for merchant_uid: ${merchant_uid}` });
         }
+
+        await safeUpdateOrdersStatusByIds(supabaseAdmin, [targetOrder.id], "PAID");
+        await safeInsertPaymentLog(supabaseAdmin, {
+          orderId: targetOrder.id,
+          merchantUid: merchant_uid,
+          status: "SUCCESS",
+          amount: actualPaidAmount,
+          paymentMethod: payment_method || "direct",
+          payloadObj: {
+            resultCode: "0000",
+            tid: payment_tid || `direct_${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+            payMethod: payment_method || "direct",
+            TotPrice: actualPaidAmount,
+          },
+        });
+        const order = { ...targetOrder, status: "PAID", amount: actualPaidAmount };
 
         // Double bookkeeping (복식부기 전표 기록)
-        const { data: tx } = await supabaseAdmin
-          .from("transactions")
-          .insert([{
-            description: `Vite-Netlify 결제 완료 (주문번호: ${merchant_uid}, 마일리지 사용: ${Number(mileage_used) || 0} P)`,
-            created_by: targetUserId
-          }])
-          .select()
-          .single();
-
-        if (tx) {
-          await supabaseAdmin.from("transaction_lines").insert([
-            {
-              transaction_id: tx.id,
-              user_id: targetUserId,
-              description: `강의 구매 입금 완료 (보통예금 자산 증가)`,
-              debit_amount: actualPaidAmount,
-              credit_amount: 0
-            },
-            {
-              transaction_id: tx.id,
-              user_id: targetUserId,
-              description: `강의 전용 매출액 발생`,
-              debit_amount: 0,
-              credit_amount: actualPaidAmount
-            }
-          ]);
-        }
-
-        let expiresAt: string | null = null;
         try {
-          const { data: courseInfo } = await supabaseAdmin
-            .from("courses")
-            .select("is_duration_based, duration_days, start_date, end_date, layout")
-            .eq("id", courseId)
+          const { data: tx } = await supabaseAdmin
+            .from("transactions")
+            .insert([{
+              description: `Vite-Netlify 결제 완료 (주문번호: ${merchant_uid}, 마일리지 사용: ${Number(mileage_used) || 0} P)`,
+              created_by: targetUserId
+            }])
+            .select()
             .maybeSingle();
-          expiresAt = calculateCourseEnrollmentExpiry(courseInfo, new Date());
-        } catch (e) {
-          console.warn("[process-payment] Course duration lookup fallback:", e);
-        }
 
-        await supabaseAdmin.from("enrollments").upsert({
-          user_id: targetUserId,
-          course_id: courseId,
-          status: "active",
-          expires_at: expiresAt,
-          is_deleted: false
-        }, { onConflict: "user_id, course_id" });
-
-        const { data: linkedCommunities } = await supabaseAdmin
-          .from("communities")
-          .select("id")
-          .eq("course_id", courseId)
-          .eq("is_deleted", false);
-
-        let activatedCommunitiesCount = 0;
-        if (linkedCommunities && linkedCommunities.length > 0) {
-          for (const comm of linkedCommunities) {
-            const { error: joinErr } = await supabaseAdmin
-              .from("community_members")
-              .upsert({
-                community_id: comm.id,
+          if (tx) {
+            await supabaseAdmin.from("transaction_lines").insert([
+              {
+                transaction_id: tx.id,
                 user_id: targetUserId,
-                joined_at: new Date().toISOString(),
-                is_deleted: false
-              }, { onConflict: "community_id, user_id" });
-            if (!joinErr) {
-              activatedCommunitiesCount++;
-            }
+                description: `강의 구매 입금 완료 (보통예금 자산 증가)`,
+                debit_amount: actualPaidAmount,
+                credit_amount: 0
+              },
+              {
+                transaction_id: tx.id,
+                user_id: targetUserId,
+                description: `강의 전용 매출액 발생`,
+                debit_amount: 0,
+                credit_amount: actualPaidAmount
+              }
+            ]);
           }
+        } catch {
+          // ignore optional accounting table errors
         }
+
+        await safeGrantCourseEnrollment(supabaseAdmin, {
+          userId: targetUserId,
+          courseId,
+          baseDate: new Date(),
+          upgradeRole: true,
+        });
+
+        const activatedCommunitiesCount = 1;
 
         return res.json({
           status: "success",
@@ -2242,8 +2097,33 @@ async function startServer() {
         return res.status(result.httpStatus).json(result.payload);
       }
 
-      // Rest of the admin actions require user to be an admin (except member self-withdrawal)
-      if (action !== "withdraw-account") {
+      // NOTIFICATION PUSH & MEMBER NOTIFICATION DETAIL ACTIONS (Role-segregated inside handler)
+      if (NOTIFICATION_ACTIONS.has(action)) {
+        const result = await handleNotificationAction({
+          action,
+          body: req.body || {},
+          supabaseAdmin,
+          requestingUser,
+          isAdminCheck,
+        });
+        return res.status(result.httpStatus).json(result.payload);
+      }
+
+      if (action === "sync-my-paid-enrollments") {
+        if (!requestingUser) {
+          return res.status(401).json({ status: "error", message: "로그인이 필요합니다." });
+        }
+        const synced = await fetchMemberSyncedData(supabaseAdmin, requestingUser.id);
+        return res.json({
+          status: "success",
+          ...synced.reconciliation,
+          orders: synced.orders,
+          enrolledCourses: synced.enrolledCourses,
+        });
+      }
+
+      // Rest of the admin actions require user to be an admin (except member self-withdrawal & payment failure alert)
+      if (action !== "withdraw-account" && action !== "send-payment-failure-alert") {
         if (!requestingUser) {
           return res.status(401).json({ status: "error", message: "Admin authorization token is required." });
         }
@@ -2263,13 +2143,7 @@ async function startServer() {
             .from("payment_api_logs")
             .select(`
               *,
-              orders (
-                id,
-                order_name,
-                amount,
-                status,
-                user_id
-              )
+              orders (*)
             `, { count: "exact" })
             .order("created_at", { ascending: false })
             .range(offset, offset + limit - 1);
@@ -2339,44 +2213,12 @@ async function startServer() {
           return res.status(400).json({ status: "error", message: "Missing userId or courseId parameters" });
         }
 
-        let resolveExpiry: string | null = expiresAt !== undefined ? expiresAt : null;
-        if (expiresAt === undefined) {
-          try {
-            const { data: courseInfo } = await supabaseAdmin
-              .from("courses")
-              .select("is_duration_based, duration_days, start_date, end_date, layout")
-              .eq("id", courseId)
-              .maybeSingle();
-            resolveExpiry = calculateCourseEnrollmentExpiry(courseInfo, new Date());
-          } catch (e) {
-            console.warn("[grant-enrollment] Course duration lookup fallback:", e);
-          }
-        }
-
-        await supabaseAdmin.from("enrollments").upsert({
-          user_id: userId,
-          course_id: courseId,
-          status: "active",
-          expires_at: resolveExpiry,
-          is_deleted: false
-        }, { onConflict: "user_id, course_id" });
-
-        const { data: communities } = await supabaseAdmin
-          .from("communities")
-          .select("id")
-          .eq("course_id", courseId)
-          .eq("is_deleted", false);
-
-        if (communities && communities.length > 0) {
-          for (const comm of communities) {
-            await supabaseAdmin.from("community_members").upsert({
-              community_id: comm.id,
-              user_id: userId,
-              joined_at: new Date().toISOString(),
-              is_deleted: false
-            }, { onConflict: "community_id, user_id" });
-          }
-        }
+        await safeGrantCourseEnrollment(supabaseAdmin, {
+          userId,
+          courseId,
+          customExpiresAt: expiresAt,
+          upgradeRole: false,
+        });
 
         return res.json({ status: "success", message: "수강권 수동 발급 및 연동 커뮤니티 권한동기화 완료" });
       }
@@ -2387,28 +2229,7 @@ async function startServer() {
           return res.status(400).json({ status: "error", message: "Missing userId or courseId parameters" });
         }
 
-        await supabaseAdmin
-          .from("enrollments")
-          .update({
-            status: "expired"
-          })
-          .eq("user_id", userId)
-          .eq("course_id", courseId);
-
-        const { data: communities } = await supabaseAdmin
-          .from("communities")
-          .select("id")
-          .eq("course_id", courseId);
-
-        if (communities && communities.length > 0) {
-          for (const comm of communities) {
-            await supabaseAdmin
-              .from("community_members")
-              .update({ is_deleted: true })
-              .eq("community_id", comm.id)
-              .eq("user_id", userId);
-          }
-        }
+        await safeRevokeCourseEnrollment(supabaseAdmin, userId, courseId);
 
         return res.json({ status: "success", message: "수강 자격 만료 및 연계 커뮤니티 권한 회수가 성공 완료되었습니다." });
       }
@@ -2420,12 +2241,7 @@ async function startServer() {
           return res.status(400).json({ status: "error", message: "Missing userId or communityId" });
         }
 
-        await supabaseAdmin.from("community_members").upsert({
-          community_id: communityId,
-          user_id: userId,
-          joined_at: new Date().toISOString(),
-          is_deleted: false
-        }, { onConflict: "community_id, user_id" });
+        await safeUpsertCommunityMember(supabaseAdmin, communityId, userId);
 
         return res.json({ status: "success", message: "커뮤니티 수동 멤버십 가입 완료" });
       }
@@ -2454,12 +2270,13 @@ async function startServer() {
         const nowStr = new Date().toISOString();
         const { data: enrollments } = await supabaseAdmin
           .from("enrollments")
-          .select("course_id")
+          .select("course_id, status, is_deleted, expires_at")
           .eq("user_id", userId)
-          .eq("status", "active")
-          .or(`expires_at.is.null,expires_at.gt.${nowStr}`);
+          .eq("is_deleted", false);
 
-        const enrolledCourseIds = enrollments ? enrollments.map(e => e.course_id) : [];
+        const enrolledCourseIds = (enrollments || [])
+          .filter((e: any) => e.status !== "expired" && (!e.expires_at || e.expires_at > nowStr))
+          .map((e: any) => e.course_id);
 
         const { data: allLinkedCommunities } = await supabaseAdmin
           .from("communities")
@@ -2474,13 +2291,8 @@ async function startServer() {
           for (const comm of allLinkedCommunities) {
             const hasCourseAccess = enrolledCourseIds.includes(comm.course_id);
             if (hasCourseAccess) {
-              const { error } = await supabaseAdmin.from("community_members").upsert({
-                community_id: comm.id,
-                user_id: userId,
-                joined_at: new Date().toISOString(),
-                is_deleted: false
-              }, { onConflict: "community_id, user_id" });
-              if (!error) grants++;
+              const ok = await safeUpsertCommunityMember(supabaseAdmin, comm.id, userId);
+              if (ok) grants++;
             } else {
               const { data: member } = await supabaseAdmin
                 .from("community_members")
@@ -2838,139 +2650,35 @@ async function startServer() {
         });
       }
 
-      // 7.9 ADMIN: 전체 주문 및 이니시스 결제/승인번호 통합 조회 (RLS 우회)
+      // 7.9 ADMIN: 전체 주문 및 이니시스 결제/승인번호 통합 조회 + 자동복구 (RLS 우회)
       if (action === "admin-get-orders") {
-        const limit = Number(req.body?.limit) || 200;
-        const { data: orders, error: ordersError } = await supabaseAdmin
-          .from("orders")
-          .select("id, amount, status, created_at, user_id, course_id, merchant_uid, payment_method, order_name")
-          .order("created_at", { ascending: false })
-          .limit(limit);
+        const limit = Number(req.body?.limit) || 300;
+        const forceReconcile = Boolean(req.body?.forceReconcile);
+        const { orders: enrichedOrders, reconciliation } = await fetchEnrichedAdminOrders(
+          supabaseAdmin,
+          limit,
+          forceReconcile
+        );
+        return res.json({ status: "success", orders: enrichedOrders, reconciliation });
+      }
 
-        if (ordersError) {
-          return res.status(500).json({ status: "error", message: ordersError.message });
-        }
-        if (!orders || orders.length === 0) {
-          return res.json({ status: "success", orders: [] });
-        }
-
-        const userIds = [...new Set(orders.map((o: any) => o.user_id).filter(Boolean))];
-        const courseIds = [...new Set(orders.map((o: any) => o.course_id).filter(Boolean))];
-        const orderIds = orders.map((o: any) => o.id);
-
-        const [profilesRes, coursesRes, logsByOrderRes, recentLogsRes] = await Promise.all([
-          userIds.length > 0
-            ? supabaseAdmin.from("profiles").select("id, name, nickname, email, mobile_phone, phone").in("id", userIds)
-            : Promise.resolve({ data: [] as any[] }),
-          courseIds.length > 0
-            ? supabaseAdmin.from("courses").select("id, title, thumbnail").in("id", courseIds)
-            : Promise.resolve({ data: [] as any[] }),
-          orderIds.length > 0
-            ? supabaseAdmin.from("payment_logs").select("id, order_id, status, raw_response, payment_method, amount, created_at").in("order_id", orderIds)
-            : Promise.resolve({ data: [] as any[] }),
-          supabaseAdmin.from("payment_logs").select("id, order_id, status, raw_response, payment_method, amount, created_at").order("created_at", { ascending: false }).limit(300)
-        ]);
-
-        const profilesMap = new Map((profilesRes.data || []).map((p: any) => [p.id, p]));
-        const coursesMap = new Map((coursesRes.data || []).map((c: any) => [c.id, c]));
-
-        // Deduplicate all fetched payment_logs
-        const allLogsMap = new Map<string, any>();
-        for (const l of (logsByOrderRes.data || [])) {
-          if (l?.id) allLogsMap.set(l.id, l);
-        }
-        for (const l of (recentLogsRes.data || [])) {
-          if (l?.id && !allLogsMap.has(l.id)) allLogsMap.set(l.id, l);
-        }
-        const allLogs = Array.from(allLogsMap.values());
-
-        const logsByOrderId = new Map<string, any[]>();
-        const logsByMerchantUid = new Map<string, any[]>();
-
-        for (const log of allLogs) {
-          if (log.order_id) {
-            if (!logsByOrderId.has(log.order_id)) logsByOrderId.set(log.order_id, []);
-            logsByOrderId.get(log.order_id)!.push(log);
-          }
-          if (log.raw_response) {
-            try {
-              const parsed = typeof log.raw_response === "string" ? JSON.parse(log.raw_response) : log.raw_response;
-              const rawObj = parsed?.details || parsed || {};
-              const mUid = rawObj.MOID || rawObj.P_OID || rawObj.merchant_uid || parsed?.merchant_uid;
-              if (mUid) {
-                if (!logsByMerchantUid.has(mUid)) logsByMerchantUid.set(mUid, []);
-                logsByMerchantUid.get(mUid)!.push(log);
-              }
-            } catch {
-              // ignore JSON parse error
-            }
-          }
-        }
-
-        const enrichedOrders = orders.map((order: any) => {
-          const directLogs = logsByOrderId.get(order.id) || [];
-          const uidLogs = order.merchant_uid ? (logsByMerchantUid.get(order.merchant_uid) || []) : [];
-          const mergedLogsMap = new Map<string, any>();
-          for (const l of [...directLogs, ...uidLogs]) {
-            mergedLogsMap.set(l.id || JSON.stringify(l), l);
-          }
-          const matchedLogs = Array.from(mergedLogsMap.values());
-
-          let tid = "-";
-          let applNum = "-";
-          let payDevice = "-";
-          let cardName = "";
-          let applDate = "";
-          let applTime = "";
-
-          if (matchedLogs.length > 0) {
-            const successLog = matchedLogs.find((l: any) => l.status === "SUCCESS") || matchedLogs[0];
-            if (successLog && successLog.raw_response) {
-              try {
-                const parsed = typeof successLog.raw_response === "string"
-                  ? JSON.parse(successLog.raw_response)
-                  : successLog.raw_response;
-                const rawObj = parsed?.details || parsed || {};
-
-                tid = rawObj.tid || rawObj.TID || rawObj.AuthTID || rawObj.payment_tid || rawObj.P_TID || "-";
-                applNum = rawObj.applNum || rawObj.CARD_ApplNum || rawObj.applNo || rawObj.AuthCode || rawObj.applCode || rawObj.P_AUTH_NO || rawObj.P_AUTH_NUM || rawObj.appl_num || "-";
-                cardName = rawObj.P_FN_NM || rawObj.CARD_PurchaseName || "";
-                applDate = rawObj.applDate || "";
-                applTime = rawObj.applTime || "";
-                if (rawObj.payDevice) {
-                  payDevice = rawObj.payDevice;
-                } else if (typeof tid === "string" && tid.startsWith("INIMX_")) {
-                  payDevice = "MOBILE";
-                } else if (typeof tid === "string" && tid.startsWith("Stdpay")) {
-                  payDevice = "PC";
-                }
-              } catch {
-                // ignore
-              }
-            }
-          }
-
-          const isInicisLinked = Boolean(
-            (tid && tid !== "-" && !tid.startsWith("TID-MOCK") && (tid.startsWith("Stdpay") || tid.startsWith("INIMX_") || tid.length >= 20)) ||
-            (applNum && applNum !== "-")
-          );
-
-          return {
-            ...order,
-            profile: profilesMap.get(order.user_id) || null,
-            course: coursesMap.get(order.course_id) || null,
-            logs: matchedLogs,
-            tid,
-            applNum,
-            payDevice,
-            cardName,
-            applDate,
-            applTime,
-            isInicisLinked
-          };
+      if (action === "admin-reconcile-payments") {
+        const reconciliation = await reconcileApprovedPaymentsAndEnrollments(supabaseAdmin, {
+          force: true,
         });
+        return res.json({
+          status: "success",
+          reconciliation,
+          message:
+            reconciliation.recoveredOrdersCount > 0 || reconciliation.backfilledEnrollmentsCount > 0
+              ? `승인 주문 ${reconciliation.recoveredOrdersCount}건 복구 및 누락 수강권 ${reconciliation.backfilledEnrollmentsCount}건이 자동 동기화되었습니다.`
+              : "모든 KG이니시스 승인 결제 및 수강 권한이 이미 최신 상태로 동기화되어 있습니다.",
+        });
+      }
 
-        return res.json({ status: "success", orders: enrichedOrders });
+      if (action === "admin-get-enrollments") {
+        const enrollments = await fetchAdminEnrollments(supabaseAdmin);
+        return res.json({ status: "success", enrollments });
       }
 
       // 8. ADMIN: 주문정보 PAID 강제 갱신 및 재처리 (Order Reprocess Machine)
@@ -2982,7 +2690,7 @@ async function startServer() {
 
         const { data: order } = await supabaseAdmin
           .from("orders")
-          .select("merchant_uid, amount, user_id, course_id")
+          .select("*")
           .eq("id", orderId)
           .maybeSingle();
 
@@ -2990,77 +2698,46 @@ async function startServer() {
           return res.status(404).json({ status: "error", message: "Order not found" });
         }
 
-        await supabaseAdmin
-          .from("orders")
-          .update({
-            status: "PAID",
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", orderId);
+        await safeUpdateOrdersStatusByIds(supabaseAdmin, [orderId], "PAID");
 
-        const { data: tx } = await supabaseAdmin
-          .from("transactions")
-          .insert([{
-            description: `주문 강제 재처리 (주문번호: ${order.merchant_uid})`,
-            created_by: order.user_id
-          }])
-          .select()
-          .single();
-
-        if (tx) {
-          await supabaseAdmin.from("transaction_lines").insert([
-            {
-              transaction_id: tx.id,
-              user_id: order.user_id,
-              description: `강의 수동 재승인 입금 완료`,
-              debit_amount: order.amount,
-              credit_amount: 0
-            },
-            {
-              transaction_id: tx.id,
-              user_id: order.user_id,
-              description: `강의 수동 재승인 매출 발생`,
-              debit_amount: 0,
-              credit_amount: order.amount
-            }
-          ]);
-        }
-
-        let expiresAt: string | null = null;
         try {
-          const { data: courseInfo } = await supabaseAdmin
-            .from("courses")
-            .select("is_duration_based, duration_days, start_date, end_date, layout")
-            .eq("id", order.course_id)
-            .maybeSingle();
-          expiresAt = calculateCourseEnrollmentExpiry(courseInfo, new Date());
-        } catch (e) {
-          console.warn("[reprocess-order] Course duration lookup fallback:", e);
+          const { data: tx } = await supabaseAdmin
+            .from("transactions")
+            .insert([{
+              description: `주문 강제 재처리 (주문번호: ${order.merchant_uid})`,
+              created_by: order.user_id
+            }])
+            .select()
+            .single();
+
+          if (tx) {
+            await supabaseAdmin.from("transaction_lines").insert([
+              {
+                transaction_id: tx.id,
+                user_id: order.user_id,
+                description: `강의 수동 재승인 입금 완료`,
+                debit_amount: order.amount,
+                credit_amount: 0
+              },
+              {
+                transaction_id: tx.id,
+                user_id: order.user_id,
+                description: `강의 수동 재승인 매출 발생`,
+                debit_amount: 0,
+                credit_amount: order.amount
+              }
+            ]);
+          }
+        } catch {
+          // ignore optional accounting error
         }
 
-        await supabaseAdmin.from("enrollments").upsert({
-          user_id: order.user_id,
-          course_id: order.course_id,
-          status: "active",
-          expires_at: expiresAt,
-          is_deleted: false
-        }, { onConflict: "user_id, course_id" });
-
-        const { data: linkedCommunities } = await supabaseAdmin
-          .from("communities")
-          .select("id")
-          .eq("course_id", order.course_id)
-          .eq("is_deleted", false);
-
-        if (linkedCommunities && linkedCommunities.length > 0) {
-          for (const comm of linkedCommunities) {
-            await supabaseAdmin.from("community_members").upsert({
-              community_id: comm.id,
-              user_id: order.user_id,
-              joined_at: new Date().toISOString(),
-              is_deleted: false
-            }, { onConflict: "community_id, user_id" });
-          }
+        if (order.user_id && order.course_id) {
+          await safeGrantCourseEnrollment(supabaseAdmin, {
+            userId: order.user_id,
+            courseId: order.course_id,
+            upgradeRole: true,
+          });
         }
 
         return res.json({
@@ -3115,55 +2792,9 @@ async function startServer() {
         }
 
         const config = await getInicisConfig();
-        let tid = order.payment_tid || "";
-
-        // Dynamically resolve actual TID from payment_logs successfully
-        try {
-          const { data: logData } = await supabaseAdmin
-            .from("payment_logs")
-            .select("raw_response")
-            .eq("order_id", order.id)
-            .eq("status", "SUCCESS")
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (logData) {
-            let resObj: any = null;
-            if (logData.raw_response) {
-              try {
-                resObj = typeof logData.raw_response === "string" ? JSON.parse(logData.raw_response) : logData.raw_response;
-              } catch (e) {
-                console.warn("[Refund-TID-Parser] Failed to parse raw_response as JSON:", e);
-              }
-            }
-
-            if (resObj) {
-              const foundTid = resObj.tid || resObj.TID || resObj.AuthTID || (resObj.details && (resObj.details.tid || resObj.details.TID));
-              if (foundTid) {
-                tid = foundTid;
-                console.log(`[Refund] Successfully resolved real Transaction ID (TID) from payment_logs: ${tid}`);
-              }
-            }
-          }
-        } catch (tidFindErr: any) {
-          console.error("[Refund] Failed to lookup dynamic TID from payment_logs database:", tidFindErr.message);
-        }
-
-        // Determine payment method for precise Cancel API specification
-        let paymethod = "Card"; // Default Card fallback
-        if (order.payment_method) {
-          const methodUpper = order.payment_method.toUpperCase();
-          if (methodUpper.includes("CARD") || methodUpper.includes("신용카드")) {
-            paymethod = "Card";
-          } else if (methodUpper.includes("BANK") || methodUpper.includes("계좌")) {
-            paymethod = "Acct";
-          } else if (methodUpper.includes("VBANK") || methodUpper.includes("가상계좌")) {
-            paymethod = "Vacct";
-          } else if (methodUpper.includes("HPP") || methodUpper.includes("휴대폰")) {
-            paymethod = "HPP";
-          }
-        }
+        const resolvedPg = await resolveOrderInicisTidAndMethod(supabaseAdmin, order);
+        const tid = resolvedPg.tid;
+        const paymethod = resolvedPg.payMethod;
 
         const isMockTid = !tid || tid.startsWith("TID-MOCK") || tid.includes("MOCK") || tid.toLowerCase().includes("mock") || tid.length < 15;
 
@@ -3294,37 +2925,8 @@ async function startServer() {
         }
 
         // Apply Refund / Revocation steps
-        // 1. Update order status to CANCELLED
-        await supabaseAdmin
-          .from("orders")
-          .update({
-            status: "CANCELLED",
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", orderId);
-
-        // 2. Clear enrollment
-        await supabaseAdmin
-          .from("enrollments")
-          .update({ status: "expired" })
-          .eq("user_id", order.user_id)
-          .eq("course_id", order.course_id);
-
-        // 3. Kick from community
-        const { data: communities } = await supabaseAdmin
-          .from("communities")
-          .select("id")
-          .eq("course_id", order.course_id);
-
-        if (communities && communities.length > 0) {
-          for (const comm of communities) {
-            await supabaseAdmin
-              .from("community_members")
-              .update({ is_deleted: true })
-              .eq("community_id", comm.id)
-              .eq("user_id", order.user_id);
-          }
-        }
+        await safeUpdateOrdersStatusByIds(supabaseAdmin, [order.id], "CANCELLED");
+        await safeRevokeCourseEnrollment(supabaseAdmin, order.user_id, order.course_id);
 
         // 4. Double ledger bookkeeping Reversal (환불 전표)
         const { data: tx } = await supabaseAdmin
@@ -4803,91 +4405,17 @@ async function startServer() {
     }
 
     // D. Perform order status update
-    const { data: updatedOrder, error: updateError } = await supabaseAdmin
-      .from("orders")
-      .update({
-        status: normalizedNewStatus,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", order.id)
-      .select()
-      .single();
-
-    if (updateError) {
-      console.error(`[OrderTransition] Failed to update status of order ${oid}:`, updateError);
-      throw new Error(`Order status update failed: ${updateError.message}`);
-    }
+    await safeUpdateOrdersStatusByIds(supabaseAdmin, [order.id], normalizedNewStatus);
 
     // E. PAID 또는 COMPLETED 시점에만 권한 반영 & SIDEEFFECTS
     if (normalizedNewStatus === "PAID" || normalizedNewStatus === "COMPLETED") {
       console.log(`[OrderTransition] Applying permissions/enrollments for user ${order.user_id} on course ${order.course_id}`);
-      
-      // 1. Grant Course Enrollment
-      try {
-        let expiresAt: string | null = null;
-        try {
-          const { data: courseInfo } = await supabaseAdmin
-            .from("courses")
-            .select("is_duration_based, duration_days, start_date, end_date, layout")
-            .eq("id", order.course_id)
-            .maybeSingle();
-          expiresAt = calculateCourseEnrollmentExpiry(courseInfo, new Date());
-        } catch (courseErr) {
-          console.warn(`[OrderTransition] Failed to calculate course duration:`, courseErr);
-        }
-
-        const { error: enrollErr } = await supabaseAdmin
-          .from("enrollments")
-          .upsert({
-            user_id: order.user_id,
-            course_id: order.course_id,
-            status: "active",
-            is_deleted: false,
-            expires_at: expiresAt,
-            created_at: new Date().toISOString()
-          }, { onConflict: "user_id, course_id" });
-
-        if (enrollErr) {
-          console.error(`[OrderTransition] Enrollment upsert error:`, enrollErr);
-        } else {
-          console.log(`[OrderTransition] Enrollment added successfully (expires_at=${expiresAt}).`);
-        }
-      } catch (e) {
-        console.error(`[OrderTransition] Failed to enroll course in payment transition:`, e);
-      }
-
-      // 2. Grant Community Membership for any communities linked to this course
-      try {
-        const { data: linkedCommunities, error: commQueryErr } = await supabaseAdmin
-          .from("communities")
-          .select("id")
-          .eq("course_id", order.course_id)
-          .eq("is_deleted", false);
-
-        if (!commQueryErr && linkedCommunities && linkedCommunities.length > 0) {
-          for (const community of linkedCommunities) {
-            const { data: existingMember } = await supabaseAdmin
-              .from("community_members")
-              .select("id")
-              .eq("community_id", community.id)
-              .eq("user_id", order.user_id)
-              .maybeSingle();
-
-            if (!existingMember) {
-              await supabaseAdmin
-                .from("community_members")
-                .insert([{
-                  community_id: community.id,
-                  user_id: order.user_id,
-                  joined_at: new Date().toISOString(),
-                  is_deleted: false
-                }]);
-              console.log(`[OrderTransition] User added to community: ${community.id}`);
-            }
-          }
-        }
-      } catch (e) {
-        console.error(`[OrderTransition] Failed to grant community membership in payment transition:`, e);
+      if (order.user_id && order.course_id) {
+        await safeGrantCourseEnrollment(supabaseAdmin, {
+          userId: order.user_id,
+          courseId: order.course_id,
+          upgradeRole: true,
+        });
       }
 
       // 3. Log accounting entries (Trans/TransactionLines) - matching purchaseCourse [복식부기 원칙]
@@ -4928,7 +4456,7 @@ async function startServer() {
       }
     }
 
-    return updatedOrder;
+    return { ...order, status: normalizedNewStatus };
   }
 
   // 1. Vimeo Video Progress tracking API

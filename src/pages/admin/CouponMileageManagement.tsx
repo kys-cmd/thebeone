@@ -18,6 +18,8 @@ import {
   AlertCircle,
   RotateCcw,
   GraduationCap,
+  Bell,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +48,7 @@ type TargetSelectionMode = 'selected' | 'course_students' | 'bulk_paste' | 'all_
 type CourseStudentStatusFilter = 'all' | 'active' | 'expired';
 
 const DURATION_PRESETS = [3, 7, 14, 30, 60, 90];
+const MAX_VIEWS_PRESETS = [1, 2, 3, 5, 10];
 const MILEAGE_PRESETS = [1000, 3000, 5000, 10000, 30000, 50000];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -94,6 +97,8 @@ export default function CouponMileageManagement() {
   const [tplCourseSearch, setTplCourseSearch] = useState<string>('');
   const [tplName, setTplName] = useState<string>('');
   const [tplDurationDays, setTplDurationDays] = useState<string>('7');
+  const [tplHasViewLimit, setTplHasViewLimit] = useState<boolean>(false);
+  const [tplMaxViews, setTplMaxViews] = useState<string>('2');
   const [tplDescription, setTplDescription] = useState<string>('');
 
   // 2. 쿠폰 개별/대량 발행 상태
@@ -112,6 +117,7 @@ export default function CouponMileageManagement() {
   const [couponBulkPasteText, setCouponBulkPasteText] = useState<string>('');
   const [couponIssueMemo, setCouponIssueMemo] = useState<string>('');
   const [preventDuplicateUnused, setPreventDuplicateUnused] = useState<boolean>(true);
+  const [sendCouponNotification, setSendCouponNotification] = useState<boolean>(true);
   const [confirmCouponModalOpen, setConfirmCouponModalOpen] = useState<boolean>(false);
 
   // 3. 쿠폰 발행/사용 내역 상태
@@ -135,6 +141,7 @@ export default function CouponMileageManagement() {
   const [mileageBulkPasteText, setMileageBulkPasteText] = useState<string>('');
   const [mileageAmount, setMileageAmount] = useState<string>('5000');
   const [mileageReason, setMileageReason] = useState<string>('');
+  const [sendMileageNotification, setSendMileageNotification] = useState<boolean>(true);
   const [mileageLogSearch, setMileageLogSearch] = useState<string>('');
   const [confirmMileageModalOpen, setConfirmMileageModalOpen] = useState<boolean>(false);
   const [pendingDeleteTemplate, setPendingDeleteTemplate] = useState<CouponTemplate | null>(null);
@@ -505,8 +512,19 @@ export default function CouponMileageManagement() {
       return;
     }
 
+    let resolvedMaxViews: number | null = null;
+    if (tplHasViewLimit) {
+      const parsedViews = Math.floor(Number(tplMaxViews));
+      if (!Number.isFinite(parsedViews) || parsedViews < 1 || parsedViews > 1000) {
+        toast.error('최대 시청 가능 횟수는 1회 이상 1,000회 이하로 입력해 주세요.');
+        return;
+      }
+      resolvedMaxViews = parsedViews;
+    }
+
     const finalName =
-      tplName.trim() || `${targetCourse.title} ${days}일 무료 수강 쿠폰`;
+      tplName.trim() ||
+      `${targetCourse.title} ${days}일 무료 수강 쿠폰${resolvedMaxViews ? ` (${resolvedMaxViews}회권)` : ''}`;
 
     try {
       setSubmitting(true);
@@ -516,6 +534,7 @@ export default function CouponMileageManagement() {
           name: finalName,
           courseId: tplCourseId,
           durationDays: days,
+          maxViews: resolvedMaxViews,
           description: tplDescription,
         });
         toast.success(res.message || '쿠폰 종류가 수정되었습니다.');
@@ -524,6 +543,7 @@ export default function CouponMileageManagement() {
           name: finalName,
           courseId: tplCourseId,
           durationDays: days,
+          maxViews: resolvedMaxViews,
           description: tplDescription,
         });
         toast.success(res.message || '새 무료 수강 쿠폰 종류가 생성되었습니다.');
@@ -533,6 +553,8 @@ export default function CouponMileageManagement() {
       setEditingTemplateId(null);
       setTplName('');
       setTplDurationDays('7');
+      setTplHasViewLimit(false);
+      setTplMaxViews('2');
       setTplDescription('');
       await loadDashboard(true);
     } catch (err: any) {
@@ -547,6 +569,13 @@ export default function CouponMileageManagement() {
     setTplCourseId(tpl.course_id);
     setTplName(tpl.name);
     setTplDurationDays(String(tpl.duration_days));
+    if (tpl.max_views && tpl.max_views > 0) {
+      setTplHasViewLimit(true);
+      setTplMaxViews(String(tpl.max_views));
+    } else {
+      setTplHasViewLimit(false);
+      setTplMaxViews('2');
+    }
     setTplDescription(tpl.description || '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -620,6 +649,7 @@ export default function CouponMileageManagement() {
         userIds: couponTargetMode === 'all_members' ? undefined : userIds,
         issueMemo: couponIssueMemo,
         preventDuplicateUnused,
+        sendNotification: sendCouponNotification,
       });
       toast.success(res.message);
       setConfirmCouponModalOpen(false);
@@ -696,6 +726,7 @@ export default function CouponMileageManagement() {
         reason:
           mileageReason.trim() ||
           (mileageAdjustType === 'add' ? '관리자 마일리지 지급' : '관리자 마일리지 차감'),
+        sendNotification: sendMileageNotification,
       });
       toast.success(res.message);
       setConfirmMileageModalOpen(false);
@@ -925,6 +956,78 @@ export default function CouponMileageManagement() {
               </div>
             </div>
 
+            {/* 최대 시청 가능 횟수 제한 설정 */}
+            <div className="space-y-2.5">
+              <label className="text-xs font-black text-slate-700 block">
+                수강 기간 내 최대 시청 가능 횟수 제한
+              </label>
+              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setTplHasViewLimit(false)}
+                  className={`py-2 rounded-md text-xs font-black transition-all cursor-pointer ${
+                    !tplHasViewLimit
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  제한 없음 (무제한 시청)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTplHasViewLimit(true)}
+                  className={`py-2 rounded-md text-xs font-black transition-all cursor-pointer ${
+                    tplHasViewLimit
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  시청 횟수 제한 설정
+                </button>
+              </div>
+
+              {tplHasViewLimit && (
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex flex-wrap gap-1.5">
+                    {MAX_VIEWS_PRESETS.map((cnt) => (
+                      <button
+                        key={cnt}
+                        type="button"
+                        onClick={() => setTplMaxViews(String(cnt))}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-black border transition-all tabular-nums cursor-pointer ${
+                          Number(tplMaxViews) === cnt
+                            ? 'bg-amber-600 text-white border-amber-600'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-amber-300'
+                        }`}
+                      >
+                        {cnt}회
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={1000}
+                      required={tplHasViewLimit}
+                      value={tplMaxViews}
+                      onChange={(e) => setTplMaxViews(e.target.value)}
+                      className="h-11 rounded-lg border-slate-200 font-black text-base tabular-nums"
+                    />
+                    <span className="text-sm font-black text-slate-700 shrink-0">회까지만 시청 가능</span>
+                  </div>
+                  <div className="p-3.5 rounded-lg bg-amber-50/80 border border-amber-200 text-xs font-bold text-amber-900 leading-relaxed">
+                    <div className="flex items-start gap-2">
+                      <Eye className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <span>
+                        쿠폰 사용 시점 기준 <strong>{Math.max(1, Number(tplDurationDays) || 1)}일 수강 가능 기간 내에서 최대 {Math.max(1, Number(tplMaxViews) || 1)}회</strong>까지만 강의를 시청할 수 있으며, 회원의 내 강의실에서 시청 횟수가 실시간으로 표시됩니다.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* 쿠폰 이름 */}
             <div className="space-y-2">
               <label className="text-xs font-black text-slate-700 block">
@@ -944,7 +1047,7 @@ export default function CouponMileageManagement() {
               <Input
                 value={tplDescription}
                 onChange={(e) => setTplDescription(e.target.value)}
-                placeholder="예: 신규 회원 특별 혜택 · 사용 시작일로부터 7일간 무제한 시청"
+                placeholder="예: 신규 회원 특별 혜택 · 사용 시작일로부터 7일간 수강"
                 className="h-11 rounded-lg border-slate-200 font-medium text-sm"
               />
             </div>
@@ -958,6 +1061,8 @@ export default function CouponMileageManagement() {
                     setEditingTemplateId(null);
                     setTplName('');
                     setTplDurationDays('7');
+                    setTplHasViewLimit(false);
+                    setTplMaxViews('2');
                     setTplDescription('');
                   }}
                   className="h-11 rounded-lg font-bold border-slate-200 whitespace-nowrap"
@@ -1023,6 +1128,15 @@ export default function CouponMileageManagement() {
                         <Badge className="bg-purple-100 text-purple-700 border-none text-[11px] font-black rounded-md px-2 py-0.5 tabular-nums">
                           사용 시작부터 {tpl.duration_days}일 무료 수강
                         </Badge>
+                        {tpl.max_views && tpl.max_views > 0 ? (
+                          <Badge className="bg-amber-100 text-amber-800 border-none text-[11px] font-black rounded-md px-2 py-0.5 tabular-nums">
+                            최대 {tpl.max_views}회 시청 제한
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-slate-100 text-slate-600 border-none text-[11px] font-bold rounded-md px-2 py-0.5">
+                            무제한 시청
+                          </Badge>
+                        )}
                         <span className="text-[11px] font-bold text-slate-400 tabular-nums">
                           생성일 {formatDateTime(tpl.created_at)}
                         </span>
@@ -1115,7 +1229,8 @@ export default function CouponMileageManagement() {
                   .filter((t) => t.active)
                   .map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.name} ({t.course_title} · {t.duration_days}일 무료)
+                      {t.name} ({t.course_title} · {t.duration_days}일 무료 ·{' '}
+                      {t.max_views && t.max_views > 0 ? `최대 ${t.max_views}회 시청` : '무제한 시청'})
                     </option>
                   ))}
               </select>
@@ -1123,10 +1238,17 @@ export default function CouponMileageManagement() {
 
             {selectedTemplate ? (
               <div className="p-4 rounded-xl bg-slate-900 text-white space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <Badge className="bg-purple-500 text-white border-none text-[11px] font-black rounded-md">
-                    무료 수강 쿠폰
-                  </Badge>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <Badge className="bg-purple-500 text-white border-none text-[11px] font-black rounded-md">
+                      무료 수강 쿠폰
+                    </Badge>
+                    <Badge className="bg-white/15 text-amber-300 border-none text-[11px] font-black rounded-md tabular-nums">
+                      {selectedTemplate.max_views && selectedTemplate.max_views > 0
+                        ? `최대 ${selectedTemplate.max_views}회 시청`
+                        : '무제한 시청'}
+                    </Badge>
+                  </div>
                   <span className="text-xs font-black text-purple-300 tabular-nums">
                     사용일로부터 {selectedTemplate.duration_days}일간 수강
                   </span>
@@ -1164,6 +1286,24 @@ export default function CouponMileageManagement() {
                 <p className="font-black text-slate-800">동일 쿠폰 미사용 보유 회원 중복 발행 방지</p>
                 <p className="font-semibold text-slate-500 mt-0.5">
                   체크 시 이미 같은 종류의 미사용 쿠폰을 가진 회원은 자동으로 건너뜁니다. (동일 회원에게 여러 장 지급하려면 체크 해제)
+                </p>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-2.5 p-3.5 rounded-lg bg-purple-50/50 border border-purple-200/80 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sendCouponNotification}
+                onChange={(e) => setSendCouponNotification(e.target.checked)}
+                className="mt-0.5 w-4 h-4 accent-purple-600 rounded"
+              />
+              <div className="text-xs">
+                <p className="font-black text-slate-900 flex items-center gap-1.5">
+                  <Bell className="w-3.5 h-3.5 text-purple-600" />
+                  발급 대상 회원에게 실시간 쿠폰 도착 알림 푸시 발송
+                </p>
+                <p className="font-semibold text-slate-600 mt-0.5">
+                  쿠폰명, 적용 강의명, 무료 수강 일수, 전용 쿠폰 코드가 포함된 상세 알림을 회원 알림센터로 즉시 전송합니다.
                 </p>
               </div>
             </label>
@@ -1688,20 +1828,47 @@ export default function CouponMileageManagement() {
                       </td>
                       <td className="py-3.5 px-4">
                         <p className="font-bold text-slate-800">{item.course_title}</p>
-                        <span className="inline-block mt-0.5 text-[11px] font-black text-purple-600 tabular-nums">
-                          사용 시작부터 {item.duration_days}일 무료
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                          <span className="text-[11px] font-black text-purple-600 tabular-nums">
+                            사용 시작부터 {item.duration_days}일 무료
+                          </span>
+                          <span className="text-slate-300">·</span>
+                          <span className="text-[11px] font-black text-amber-700 tabular-nums">
+                            {item.max_views && item.max_views > 0
+                              ? `최대 ${item.max_views}회 제한`
+                              : '무제한 시청'}
+                          </span>
+                        </div>
                       </td>
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 space-y-1">
                         {item.status === 'available' && (
                           <Badge className="bg-blue-50 text-blue-700 border border-blue-200 font-black text-[11px] rounded-md whitespace-nowrap">
                             미사용
                           </Badge>
                         )}
                         {item.status === 'used' && (
-                          <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-black text-[11px] rounded-md whitespace-nowrap">
-                            사용완료
-                          </Badge>
+                          <div className="flex flex-col items-start gap-1">
+                            <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-black text-[11px] rounded-md whitespace-nowrap">
+                              사용완료
+                            </Badge>
+                            {item.max_views && item.max_views > 0 ? (
+                              <span
+                                className={`inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded tabular-nums whitespace-nowrap ${
+                                  item.view_count >= item.max_views
+                                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                    : 'bg-amber-50 text-amber-800 border border-amber-200'
+                                }`}
+                              >
+                                <Eye className="w-3 h-3" />
+                                시청 {item.view_count} / {item.max_views}회
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded tabular-nums whitespace-nowrap">
+                                <Eye className="w-3 h-3" />
+                                시청 {item.view_count || 0}회 (무제한)
+                              </span>
+                            )}
+                          </div>
                         )}
                         {item.status === 'revoked' && (
                           <Badge className="bg-slate-100 text-slate-500 border border-slate-200 font-black text-[11px] rounded-md whitespace-nowrap">
@@ -1830,6 +1997,24 @@ export default function CouponMileageManagement() {
                   className="h-11 rounded-lg border-slate-200 text-sm font-bold"
                 />
               </div>
+
+              <label className="flex items-start gap-2.5 p-3.5 rounded-lg bg-purple-50/50 border border-purple-200/80 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sendMileageNotification}
+                  onChange={(e) => setSendMileageNotification(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-purple-600 rounded"
+                />
+                <div className="text-xs">
+                  <p className="font-black text-slate-900 flex items-center gap-1.5">
+                    <Bell className="w-3.5 h-3.5 text-purple-600" />
+                    대상 회원에게 마일리지 변동 상세 알림 푸시 발송
+                  </p>
+                  <p className="font-semibold text-slate-600 mt-0.5">
+                    지급·차감 포인트, 변경 후 보유 마일리지, 사유가 담긴 알림을 회원 알림센터로 즉시 전송합니다.
+                  </p>
+                </div>
+              </label>
 
               <div className="pt-2 border-t border-slate-100 space-y-3">
                 <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1 text-xs font-bold">
@@ -2328,6 +2513,14 @@ export default function CouponMileageManagement() {
                   </span>
                 </div>
                 <div className="flex justify-between gap-2">
+                  <span className="text-slate-500 font-bold text-xs">최대 시청 횟수</span>
+                  <span className="font-black text-amber-700 text-xs tabular-nums">
+                    {selectedTemplate.max_views && selectedTemplate.max_views > 0
+                      ? `기간 내 최대 ${selectedTemplate.max_views}회 시청`
+                      : '제한 없음 (무제한 시청)'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
                   <span className="text-slate-500 font-bold text-xs">발급 방식</span>
                   <span className="font-bold text-slate-800 text-xs text-right">
                     {couponTargetMode === 'course_students'
@@ -2343,6 +2536,12 @@ export default function CouponMileageManagement() {
                   <span className="text-slate-600 font-extrabold text-xs">발급 대상 인원</span>
                   <span className="font-black text-purple-600 text-sm tabular-nums">
                     총 {resolvedCouponRecipientCount.toLocaleString()}명
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-500 font-bold text-xs">실시간 알림 푸시</span>
+                  <span className="font-bold text-slate-800 text-xs">
+                    {sendCouponNotification ? '발송함 (상세 쿠폰 내역 포함)' : '발송 안 함'}
                   </span>
                 </div>
               </div>
@@ -2409,6 +2608,12 @@ export default function CouponMileageManagement() {
               <span className="font-bold text-slate-800">
                 {mileageReason.trim() ||
                   (mileageAdjustType === 'add' ? '관리자 마일리지 지급' : '관리자 마일리지 차감')}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-bold text-slate-500">실시간 알림 푸시</span>
+              <span className="font-bold text-slate-800">
+                {sendMileageNotification ? '발송함 (포인트 내역 포함)' : '발송 안 함'}
               </span>
             </div>
           </div>

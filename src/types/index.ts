@@ -67,6 +67,12 @@ export interface Course {
   duration_days?: number | null;
   enrollment_created_at?: string | null;
   enrollment_expires_at?: string | null;
+  is_coupon_enrollment?: boolean;
+  coupon_id?: string | null;
+  coupon_name?: string | null;
+  coupon_max_views?: number | null;
+  coupon_view_count?: number;
+  coupon_view_limit_reached?: boolean;
 }
 
 export type CourseBlockType = 'video' | 'image' | 'text' | 'heading';

@@ -3,14 +3,12 @@ import { motion } from 'motion/react';
 import { 
   ArrowLeft, 
   Search, 
-  MessageSquare, 
   Settings, 
   Plus, 
   Flame, 
   Bell, 
   Calendar,
   Sparkles,
-  Users,
   X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,13 +29,12 @@ interface ThreadsHeaderProps {
   onSearchChange: (q: string) => void;
   showSearch: boolean;
   onToggleSearch: () => void;
-  onOpenChat: () => void;
+  onOpenChat?: () => void;
   onOpenSettings?: () => void;
   onOpenInvite?: () => void;
 }
 
 export function ThreadsHeader({
-  user,
   activeMenu,
   onMenuClick,
   selectedCommunity,
@@ -48,7 +45,6 @@ export function ThreadsHeader({
   onSearchChange,
   showSearch,
   onToggleSearch,
-  onOpenChat,
   onOpenSettings,
   onOpenInvite,
 }: ThreadsHeaderProps) {
@@ -140,16 +136,6 @@ export function ThreadsHeader({
                   title="검색"
                 >
                   <Search className="w-4 h-4" />
-                </Button>
-
-                <Button
-                  variant="outline"
-                  onClick={onOpenChat}
-                  className="h-8 px-3 rounded-full text-xs font-black border-slate-200 text-slate-700 hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200 transition-all flex items-center gap-1.5 shadow-none"
-                  title="1:1 실시간 채팅 창 열기"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>채팅</span>
                 </Button>
               </div>
             </div>

@@ -130,7 +130,7 @@ export default function AdminCommunityManagement() {
       setIsDetailLoading(true);
       console.log('Loading community details for:', comm.id, 'linked course:', comm.course_id);
       
-      const [commMembers, commPosts, commRooms] = await Promise.all([
+      const [commMembers, commPosts] = await Promise.all([
         communityService.getAdminCommunityMembers(comm.id, comm.course_id).catch(err => {
           console.warn('[Community Details] Failed to load members, returning fallback empty array:', err);
           return [];
@@ -138,17 +138,13 @@ export default function AdminCommunityManagement() {
         communityService.getPosts(comm.id).catch(err => {
           console.warn('[Community Details] Failed to load posts, returning fallback empty array:', err);
           return [];
-        }),
-        chatService.getRooms(comm.id).catch(err => {
-          console.warn('[Community Details] Failed to load chat rooms, returning fallback empty array:', err);
-          return [];
         })
       ]);
       
       console.log('Loaded members count:', commMembers.length);
       setMembers(commMembers);
       setPosts(commPosts);
-      setChatRooms(commRooms);
+      setChatRooms([]);
     } catch (error) {
       console.error('Failed to load community details', error);
       toast.error('상세 정보를 불러오는 중 오류가 발생했습니다.');
@@ -597,8 +593,8 @@ export default function AdminCommunityManagement() {
               </Card>
 
               {/* Post List */}
-              <Card className="border-none shadow-sm flex flex-col h-[500px]">
-                <CardHeader className="pb-3 border-b shrink-0">
+              <Card className="border-none shadow-sm flex flex-col h-[600px]">
+                <CardHeader className="pb-3 border-b shrink-0 bg-gray-50/50">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <FileText className="w-5 h-5 text-blue-600" /> 최근 게시글 목록 ({posts.length})
                   </CardTitle>
@@ -619,80 +615,6 @@ export default function AdminCommunityManagement() {
                       ))
                     )}
                    </div>
-                </CardContent>
-              </Card>
-
-              {/* Chat Rooms Management */}
-              <Card className="border-none shadow-sm flex flex-col h-[500px] md:col-span-2">
-                <CardHeader className="pb-3 border-b shrink-0 bg-gray-50/50">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                       <div className="p-1.5 bg-purple-100 rounded-lg">
-                        <MessageSquare className="w-4 h-4 text-purple-600" />
-                       </div>
-                       연동된 채팅방 목록
-                       <Badge variant="secondary" className="ml-1 bg-purple-50 text-purple-700 border-none font-bold">
-                         {chatRooms.length}개
-                       </Badge>
-                    </CardTitle>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="h-8 gap-1 font-bold border-purple-200 text-purple-700"
-                      onClick={() => navigate(`/chat?communityId=${selectedComm.id}`)}
-                    >
-                      <Plus className="w-3 h-3" /> 새 채팅방 만들기
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-gray-200">
-                  {chatRooms.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full py-20 text-center space-y-4">
-                      <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center">
-                        <MessageSquare className="w-8 h-8 text-gray-300" />
-                      </div>
-                      <p className="text-sm font-bold text-gray-900">개설된 채팅방이 없습니다.</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-gray-100">
-                      {chatRooms.map((room) => (
-                        <div key={room.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50/80 transition-colors group">
-                          <div className="flex items-center gap-4">
-                            <div className={cn(
-                              "w-10 h-10 rounded-xl flex items-center justify-center shadow-sm",
-                              room.type === 'private' ? "bg-orange-100 text-orange-600" : "bg-purple-100 text-purple-600"
-                            )}>
-                              {room.type === 'private' ? <Lock className="w-5 h-5" /> : <HashIcon className="w-5 h-5" />}
-                            </div>
-                            <div>
-                              <p className="font-bold text-gray-900">{room.name}</p>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{room.type === 'public' ? '공개방' : '비밀방'}</span>
-                                <span className="text-[10px] text-gray-400 font-bold">•</span>
-                                <span className="text-[10px] text-gray-400 font-bold">멤버 {room.member_count}명</span>
-                              </div>
-                            </div>
-                          </div>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              console.log('Room delete request:', room.id, room.name);
-                              setRoomToDelete(room);
-                              setShowDeleteConfirm(true);
-                            }}
-                            disabled={deletingRoomId === room.id}
-                            className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                          >
-                            <Trash2 className="w-4 h-4 mr-1" /> 삭제
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             </div>

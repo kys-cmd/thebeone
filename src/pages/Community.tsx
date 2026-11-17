@@ -555,39 +555,8 @@ export default function CommunityPage() {
     member.email?.toLowerCase().includes(memberSearchQuery.toLowerCase())
   );
 
-  const handleStartOneToOneChat = async (targetMember: any) => {
-    if (!user) {
-      toast.error('로그인이 필요합니다.');
-      return;
-    }
-    if (targetMember.id === user.id) {
-      toast.error('자기 자신과는 1:1 대화를 나눌 수 없습니다.');
-      return;
-    }
-
-    setIsCreatingChatForMember(targetMember.id);
-    const loadingToast = toast.loading(`${targetMember.name}님과의 1:1 채팅방을 개설하는 중...`);
-    
-    try {
-      const roomId = await chatService.getOrCreateOneToOneRoom(
-        selectedCommunity.id,
-        user.id,
-        targetMember.id,
-        targetMember.name
-      );
-      
-      toast.dismiss(loadingToast);
-      toast.success('채팅방으로 이동합니다.');
-      
-      // Navigate to chat route with room parameter
-      navigate(`/chat?room=${roomId}`);
-    } catch (error) {
-      toast.dismiss(loadingToast);
-      console.error('Failed to start 1:1 chat:', error);
-      toast.error('1:1 채팅방 개설 중 오류가 발생했습니다.');
-    } finally {
-      setIsCreatingChatForMember(null);
-    }
+  const handleStartOneToOneChat = async (_targetMember: any) => {
+    toast.info('현재 실시간 채팅 기능이 비활성화되어 있습니다.');
   };
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -811,14 +780,7 @@ export default function CommunityPage() {
         try {
           const allPosts = await communityService.getAllPosts();
           setPosts(allPosts);
-          
-          // Also fetch all active public rooms
-          const { data: publicRooms } = await supabase
-            .from('chat_rooms')
-            .select('*')
-            .eq('room_type', 'public')
-            .order('created_at', { ascending: false });
-          setCommunityRooms(publicRooms || []);
+          setCommunityRooms([]);
         } catch (err) {
           console.error('Failed to load home aggregate feed posts:', err);
         } finally {
@@ -913,13 +875,12 @@ export default function CommunityPage() {
     // A. 로컬 데이터 세팅 및 비동기 조회
     const loadCommunityData = async () => {
       try {
-        const [fetchedPosts, fetchedMessages, members] = await Promise.all([
+        const [fetchedPosts, members] = await Promise.all([
           communityService.getPosts(currentCommId),
-          communityService.getMessages(currentCommId),
           communityService.getAdminCommunityMembers(currentCommId, currentCourseId)
         ]);
         setPosts(fetchedPosts);
-        setMessages(fetchedMessages);
+        setMessages([]);
         setCommunityMembers(members);
         setRooms([]);
       } catch (error) {
@@ -946,25 +907,6 @@ export default function CommunityPage() {
         }
       } else if (payload.eventType === 'DELETE') {
         setPosts(prev => prev.filter(p => p.id !== payload.old.id));
-      }
-    });
-
-    const messageSub = communityService.subscribeToMessages(currentCommId, (payload) => {
-      if (payload.eventType === 'INSERT') {
-        const newMsg = payload.new;
-        setMessages(prev => {
-          if (prev.some(m => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
-        });
-      } else if (payload.eventType === 'UPDATE') {
-        const updatedMsg = payload.new;
-        if (updatedMsg.is_deleted) {
-          setMessages(prev => prev.filter(m => m.id !== updatedMsg.id));
-        } else {
-          setMessages(prev => prev.map(m => m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m));
-        }
-      } else if (payload.eventType === 'DELETE') {
-        setMessages(prev => prev.filter(m => m.id !== payload.old.id));
       }
     });
 
@@ -1050,70 +992,16 @@ export default function CommunityPage() {
     // C. 클린업 단계: 동기 참조를 통해 지연 없는 완벽 해제 처리
     return () => {
       if (postSub) postSub.unsubscribe();
-      if (messageSub) messageSub.unsubscribe();
       if (likeSub) likeSub.unsubscribe();
       if (commentSub) commentSub.unsubscribe();
       if (reactionSub) reactionSub.unsubscribe();
     };
   }, [selectedCommunity, user, hasActiveAccess]);
 
-  // Fetch and Sync Community-specific Chat Rooms
+  // 실시간 채팅 비활성화로 채팅방 목록 동기화 생략
   useEffect(() => {
-    if (!selectedCommunity || !hasActiveAccess) {
-      setCommunityRooms([]);
-      return;
-    }
-
-    const fetchRooms = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('chat_rooms')
-          .select('*')
-          .eq('community_id', selectedCommunity.id)
-          .order('created_at', { ascending: false });
-
-        if (!error && data) {
-          setCommunityRooms(data);
-        }
-      } catch (err) {
-        console.error('Failed to fetch community chat rooms', err);
-      }
-    };
-
-    fetchRooms();
-
-    const channel = supabase
-      .channel(`community_rooms_sync_${selectedCommunity.id}`)
-      .on(
-        'postgres_changes',
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'chat_rooms', 
-          filter: `community_id=eq.${selectedCommunity.id}` 
-        },
-        () => {
-          fetchRooms();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    setCommunityRooms([]);
   }, [selectedCommunity, hasActiveAccess]);
-
-  // Scroll to bottom on new message
-  useEffect(() => {
-    if (scrollChatRef.current) {
-      scrollChatRef.current.scrollTop = scrollChatRef.current.scrollHeight;
-    }
-
-    // Mark as read if user is looking at chat
-    if (selectedCommunity && activeTab === 'chat' && user) {
-      chatService.markAsRead(user.id, selectedCommunity.id);
-    }
-  }, [messages, selectedCommunity, activeTab, user]);
 
   const scrollChatRef = useRef<HTMLDivElement>(null);
   const isAdmin = !!user && (user.role === 'super_admin' || user.role === 'admin');
@@ -1188,14 +1076,14 @@ export default function CommunityPage() {
                 </h2>
                 <p className="text-gray-500 font-bold leading-relaxed break-keep text-sm">
                   비원아카데미 회원이 되시면 이 커뮤니티 공간에 즉시 자동 소속되어,<br />
-                  동료 수강생들과 자유로운 정보 교류 및 실시간 대화에 참여하실 수 있습니다.
+                  동료 수강생들과 자유로운 정보 교류 및 미션 활동에 참여하실 수 있습니다.
                 </p>
               </>
             ) : (
               <>
                 <h2 className="text-3xl font-black text-gray-900 tracking-tighter">로그인이 필요합니다</h2>
                 <p className="text-gray-500 font-bold leading-relaxed break-keep">
-                  커뮤니티와 채팅방은 비원아카데미 회원만 이용할 수 있습니다.<br/>
+                  커뮤니티 공간은 비원아카데미 회원만 이용할 수 있습니다.<br/>
                   지금 로그인하고 동료들과 함께 성장의 즐거움을 나눠보세요!
                 </p>
               </>
@@ -1393,129 +1281,8 @@ export default function CommunityPage() {
 
   const handleCreateCommunityRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCommunity || !user || isRoomCreatingInProgress) return;
-
-    if (!newRoomName.trim() && newRoomType !== 'dm') {
-      toast.error('소통방 이름을 입력하세요.');
-      return;
-    }
-
-    try {
-      setIsRoomCreatingInProgress(true);
-      let finalRoomName = newRoomName.trim();
-      if (newRoomType === 'dm') {
-        if (!newRoomTargetMemberId) {
-          toast.error('대화 대상을 한 명 선택해 주세요.');
-          return;
-        }
-        const memberObj = communityMembers.find(m => m.id === newRoomTargetMemberId);
-        finalRoomName = `${memberObj?.name || '익명'}와의 1:1 대화`;
-      }
-
-      let createdRoom;
-      const basePayload: any = {
-        community_id: selectedCommunity.id,
-        created_at: new Date().toISOString()
-      };
-
-      // Try 1: Try inserting with 'name' and 'type' (which are the standard columns in the database) plus 'created_by'
-      const { data: firstTry, error: firstErr } = await supabase
-        .from('chat_rooms')
-        .insert([{
-          ...basePayload,
-          name: finalRoomName,
-          type: newRoomType,
-          created_by: user.id
-        }])
-        .select()
-        .single();
-
-      if (!firstErr) {
-        createdRoom = firstTry;
-      } else {
-        console.warn('Insert try 1 (name/type + created_by) failed, trying fallback 2 (room_name/room_type + created_by):', firstErr);
-        
-        // Try 2: Try with 'room_name' and 'room_type' plus 'created_by'
-        const { data: secondTry, error: secondErr } = await supabase
-          .from('chat_rooms')
-          .insert([{
-            ...basePayload,
-            room_name: finalRoomName,
-            room_type: newRoomType,
-            created_by: user.id
-          }])
-          .select()
-          .single();
-
-        if (!secondErr) {
-          createdRoom = secondTry;
-        } else {
-          console.warn('Insert try 2 (room_name/room_type + created_by) failed, trying fallback 3 (name/type without created_by):', secondErr);
-
-          // Try 3: Try with 'name' and 'type' and WITHOUT 'created_by'
-          const { data: thirdTry, error: thirdErr } = await supabase
-            .from('chat_rooms')
-            .insert([{
-              ...basePayload,
-              name: finalRoomName,
-              type: newRoomType
-            }])
-            .select()
-            .single();
-
-          if (!thirdErr) {
-            createdRoom = thirdTry;
-          } else {
-            console.warn('Insert try 3 (name/type without created_by) failed, trying final fallback 4 (room_name/room_type without created_by):', thirdErr);
-
-            // Try 4: Try with 'room_name' and 'room_type' and WITHOUT 'created_by'
-            const { data: fourthTry, error: fourthErr } = await supabase
-              .from('chat_rooms')
-              .insert([{
-                ...basePayload,
-                room_name: finalRoomName,
-                room_type: newRoomType
-              }])
-              .select()
-              .single();
-
-            if (fourthErr) {
-              console.error('All insertion fallbacks failed.', fourthErr);
-              throw fourthErr;
-            }
-            createdRoom = fourthTry;
-          }
-        }
-      }
-
-      const membersToInsert = [{ room_id: createdRoom.id, user_id: user.id }];
-
-      if (newRoomType === 'dm' && newRoomTargetMemberId) {
-        membersToInsert.push({ room_id: createdRoom.id, user_id: newRoomTargetMemberId });
-      } else if (newRoomType === 'private' && newRoomTargetMemberId) {
-        membersToInsert.push({ room_id: createdRoom.id, user_id: newRoomTargetMemberId });
-      }
-
-      const { error: memberError } = await supabase
-        .from('chat_room_members')
-        .insert(membersToInsert);
-
-      if (memberError) throw memberError;
-
-      toast.success('소통방이 개설되었습니다.');
-      setIsCreatingCommunityRoom(false);
-      setNewRoomName('');
-      setNewRoomTargetMemberId('');
-
-      // 즉시 소통방 페이지로 이동!
-      navigate(`/chat?room=${createdRoom.id}`);
-    } catch (err: any) {
-      console.error('Room creation error:', err);
-      const errMsg = err?.message || err?.details || JSON.stringify(err);
-      toast.error(`소통방 개설 중 오류가 발생했습니다: ${errMsg}`);
-    } finally {
-      setIsRoomCreatingInProgress(false);
-    }
+    setIsCreatingCommunityRoom(false);
+    toast.info('현재 실시간 채팅 기능이 비활성화되어 있습니다.');
   };
 
   const handleEditCommentClick = (comment: any) => {
@@ -1568,29 +1335,13 @@ export default function CommunityPage() {
     }
   };
 
-  const handleChatRoomClick = async (room: any) => {
-    if (!user) {
-      toast.error('로그인이 필요합니다.');
-      return;
-    }
-
-    navigate(`/chat?room=${room.id}`);
+  const handleChatRoomClick = async (_room: any) => {
+    toast.info('현재 실시간 채팅 기능이 비활성화되어 있습니다.');
   };
 
   const handleCreateChatRoom = async () => {
-    if (!selectedCommunity || !newChatConfig.name.trim()) return;
-    try {
-      const room = await chatService.createRoom({
-        ...newChatConfig,
-        community_id: selectedCommunity.id,
-        members: selectedChatMembers
-      });
-      setShowNewChatModal(false);
-      setNewChatConfig({ name: '', type: 'public', password: '' });
-      toast.success('채팅방이 생성되었습니다.');
-    } catch (error) {
-      toast.error('채팅방 생성 실패');
-    }
+    setShowNewChatModal(false);
+    toast.info('현재 실시간 채팅 기능이 비활성화되어 있습니다.');
   };
 
   const handleResetAllChats = async () => {
@@ -1955,22 +1706,6 @@ export default function CommunityPage() {
         onSearchChange={setSearchQuery}
         showSearch={showSearch}
         onToggleSearch={() => setShowSearch(prev => !prev)}
-        onOpenChat={() => {
-          if (user) {
-            const width = 1000;
-            const height = 800;
-            const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2);
-            const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2);
-            window.open(
-              '/chat?popup=true',
-              'BOneChatWindow',
-              `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,status=no,location=no,scrollbars=yes,resizable=yes`
-            );
-          } else {
-            toast.error('로그인이 필요한 서비스입니다.');
-            navigate('/auth/login');
-          }
-        }}
         onOpenSettings={() => setShowSettingsModal(true)}
         onOpenInvite={() => setShowInviteModal(true)}
       />
@@ -2975,19 +2710,11 @@ export default function CommunityPage() {
                                       <p className="text-[10px] text-slate-400 font-semibold truncate pt-1">{member.email}</p>
                                     </div>
                                   </div>
-                                  <div className="shrink-0">
-                                    {isSelf ? (
+                                  {isSelf && (
+                                    <div className="shrink-0">
                                       <span className="text-[9px] text-purple-600 font-black border border-purple-100 bg-purple-50/60 px-1.5 py-0.5 rounded">나</span>
-                                    ) : (
-                                      <Button
-                                        disabled={isCreatingChatForMember === member.id}
-                                        onClick={() => handleStartOneToOneChat(member)}
-                                        className="h-7 px-2.5 rounded-lg bg-slate-50 border hover:bg-purple-50 hover:text-purple-600 text-slate-700 font-extrabold text-[10px] shadow-none border-slate-200"
-                                      >
-                                        {isCreatingChatForMember === member.id ? '개설중...' : '1:1 DM'}
-                                      </Button>
-                                    )}
-                                  </div>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })
@@ -3206,31 +2933,12 @@ export default function CommunityPage() {
                 커뮤니티 설정
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-8 py-4">
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
-                <div className="space-y-0.5">
-                  <div className="text-sm font-black text-gray-900">채팅 바로 받기</div>
-                  <div className="text-[10px] text-gray-400 font-bold">채팅 메시지를 바로 수신할 수 있도록 합니다.</div>
-                </div>
-                <div 
-                  className={cn(
-                    "w-12 h-6 rounded-full transition-colors relative cursor-pointer",
-                    receiveChatNotifs ? "bg-purple-600" : "bg-gray-200"
-                  )}
-                  onClick={() => setReceiveChatNotifs(!receiveChatNotifs)}
-                >
-                  <div className={cn(
-                    "w-4 h-4 rounded-full bg-white absolute top-1 transition-all",
-                    receiveChatNotifs ? "right-1" : "left-1"
-                  )} />
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-gray-100">
+            <div className="space-y-4 py-4">
+              <div>
                 <Button 
                   variant="ghost" 
                   onClick={handleLeaveCommunity}
-                  className="w-full h-14 rounded-2xl text-red-500 hover:bg-red-50 hover:text-red-600 font-black flex items-center justify-between px-6"
+                  className="w-full h-14 rounded-xl text-red-500 hover:bg-red-50 hover:text-red-600 font-black flex items-center justify-between px-6"
                 >
                   <span>커뮤니티 탈퇴하기</span>
                   <Trash2 className="w-5 h-5" />

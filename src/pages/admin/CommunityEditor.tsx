@@ -27,7 +27,7 @@ export default function AdminCommunityEditor() {
     startDate: '',
     endDate: '',
     status: 'active',
-    isChatEnabled: true,
+    isChatEnabled: false,
     postPermission: 'all',
     isPaid: false,
     price: ''
@@ -104,7 +104,7 @@ export default function AdminCommunityEditor() {
           startDate: extraInfo.startDate || '',
           endDate: extraInfo.endDate || '',
           status: extraInfo.status || 'active',
-          isChatEnabled: extraInfo.isChatEnabled ?? true,
+          isChatEnabled: false,
           postPermission: extraInfo.postPermission || comm.post_permission || 'all',
           isPaid: extraInfo.isPaid || false,
           price: extraInfo.price?.toString() || ''
@@ -136,7 +136,7 @@ export default function AdminCommunityEditor() {
         startDate: formData.startDate,
         endDate: formData.endDate,
         status: formData.status,
-        isChatEnabled: formData.isChatEnabled,
+        isChatEnabled: false,
         isPaid: formData.isPaid,
         postPermission: formData.postPermission,
         price: parseInt(formData.price || '0', 10)
@@ -290,7 +290,7 @@ export default function AdminCommunityEditor() {
             {isEditing ? '커뮤니티 수정' : '새 커뮤니티 생성'}
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            소통 채팅방에 필요한 모든 정보를 꼼꼼하게 설정할 수 있습니다.
+            커뮤니티 운영에 필요한 모든 정보를 꼼꼼하게 설정할 수 있습니다.
           </p>
         </div>
       </div>
@@ -420,8 +420,7 @@ export default function AdminCommunityEditor() {
                   <p className="text-[10px] text-gray-400 font-bold ml-1">커뮤니티 성격에 따라 게시글 작성 권한을 제한할 수 있습니다.</p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
                   <div className="space-y-0.5">
                     <Label className="font-bold text-gray-900">운영 상태</Label>
                     <p className="text-xs text-gray-500 font-bold">운영/정지 여부</p>
@@ -432,21 +431,6 @@ export default function AdminCommunityEditor() {
                     className="data-[state=checked]:bg-green-500"
                   />
                 </div>
-
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
-                  <div className="space-y-0.5 flex flex-col">
-                    <Label className="font-bold text-gray-900 flex items-center gap-1.5">
-                       <MessageSquare className="w-3.5 h-3.5" /> 실시간 채팅
-                    </Label>
-                    <p className="text-xs text-gray-500 font-bold">채팅방 사용 여부</p>
-                  </div>
-                  <Switch 
-                    checked={formData.isChatEnabled}
-                    onCheckedChange={(c) => setFormData({...formData, isChatEnabled: c})}
-                    className="data-[state=checked]:bg-blue-500"
-                  />
-                </div>
-              </div>
             </div>
           </CardContent>
         </Card>

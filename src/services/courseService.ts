@@ -325,24 +325,26 @@ export const courseService = {
     const { data, error } = await supabase
       .from('enrollments')
       .select(`
-        id,
-        created_at,
-        expires_at,
+        *,
         course:courses (*)
       `)
       .eq('user_id', userId)
-      .eq('is_deleted', false);
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false });
     
     if (error) throw error;
     if (!data) return [];
     
+    const seenCourseIds = new Set<string>();
     return (data as any[])
+      .filter(item => String(item.status || 'active').toLowerCase() !== 'expired')
       .map(item => {
-        if (item.course) {
+        if (item.course && !seenCourseIds.has(item.course.id)) {
+          seenCourseIds.add(item.course.id);
           return {
             ...item.course,
             enrollment_created_at: item.created_at,
-            enrollment_expires_at: item.expires_at
+            enrollment_expires_at: item.expires_at ?? null
           };
         }
         return null;

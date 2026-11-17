@@ -22,7 +22,8 @@ import {
   AlertTriangle,
   Lock,
   Ticket,
-  Coins
+  Coins,
+  Eye
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -51,6 +52,7 @@ import {
 import { useAuthStore } from '@/store/useAuthStore';
 import { supabase } from '@/lib/supabase';
 import { courseService } from '@/services/courseService';
+import { purchaseService } from '@/services/purchaseService';
 import { reviewService } from '@/services/reviewService';
 import { profileService } from '@/services/profileService';
 import { authService } from '@/services/authService';
@@ -84,6 +86,18 @@ const isExpiredCourse = (course: Course) => {
   }
   return false;
 };
+
+const isCouponViewExhausted = (course: Course) =>
+  Boolean(
+    course.is_coupon_enrollment &&
+      course.coupon_max_views !== null &&
+      course.coupon_max_views !== undefined &&
+      course.coupon_max_views > 0 &&
+      (course.coupon_view_count || 0) >= course.coupon_max_views
+  );
+
+const isCourseUnavailable = (course: Course) =>
+  isExpiredCourse(course) || isCouponViewExhausted(course);
 
 type CourseViewType = 'card' | 'list';
 type CourseStatusFilter = 'all' | 'active';
@@ -213,13 +227,18 @@ const renderStudyPeriod = (course: Course) => {
     }
   }
 
+  const isViewExhausted = !isExpiredCourse(course) && isCouponViewExhausted(course);
+  if (isViewExhausted) {
+    dDayStr = '시청 횟수 만료';
+  }
+
   return (
     <div className="flex flex-col gap-1 w-full text-xs font-bold font-sans text-slate-600">
-      <div className="flex items-center justify-between w-full">
-        <span>- 시작일: {startStr}</span>
+      <div className="flex items-center justify-between w-full gap-1.5">
+        <span className="truncate">- 시작일: {startStr}</span>
         {dDayStr && (
           <Badge className={cn(
-            "text-[10px] px-1.5 py-0.5 font-bold border-none",
+            "text-[10px] px-1.5 py-0.5 font-bold border-none shrink-0",
             dDayStr.includes('만료') ? 'bg-red-50 text-red-600 hover:bg-red-50' : 'bg-purple-50 text-purple-600 hover:bg-purple-50'
           )}>
             {dDayStr}
@@ -227,6 +246,119 @@ const renderStudyPeriod = (course: Course) => {
         )}
       </div>
       <div>- 종료일: {endStr}</div>
+    </div>
+  );
+};
+
+const renderCouponWatchStatus = (course: Course, compact = false) => {
+  if (!course.is_coupon_enrollment) return null;
+
+  const viewCount = Math.max(0, Number(course.coupon_view_count || 0));
+  const maxViews =
+    course.coupon_max_views !== null &&
+    course.coupon_max_views !== undefined &&
+    Number(course.coupon_max_views) > 0
+      ? Number(course.coupon_max_views)
+      : null;
+  const isExhausted = maxViews !== null && viewCount >= maxViews;
+  const remaining = maxViews !== null ? Math.max(0, maxViews - viewCount) : null;
+  const progressPct = maxViews ? Math.min(100, Math.round((viewCount / maxViews) * 100)) : 0;
+
+  if (compact) {
+    return (
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-2 text-xs font-bold font-sans max-w-md px-3 py-2 rounded-xl border",
+          isExhausted
+            ? "bg-rose-50/80 border-rose-200 text-rose-700"
+            : "bg-indigo-50/70 border-indigo-100 text-indigo-800"
+        )}
+      >
+        <div className="flex items-center gap-1.5">
+          <Eye className={cn("w-3.5 h-3.5 shrink-0", isExhausted ? "text-rose-600" : "text-indigo-600")} />
+          <span>쿠폰 시청 현황:</span>
+          <span className="font-black tabular-nums">
+            {maxViews !== null ? `${viewCount} / ${maxViews}회` : `${viewCount}회 시청`}
+          </span>
+        </div>
+        <Badge
+          className={cn(
+            "border-none text-[10px] px-2 py-0.5 font-black tabular-nums",
+            isExhausted
+              ? "bg-rose-600 text-white hover:bg-rose-600"
+              : maxViews !== null
+                ? "bg-indigo-600 text-white hover:bg-indigo-600"
+                : "bg-indigo-100 text-indigo-700 hover:bg-indigo-100"
+          )}
+        >
+          {maxViews !== null
+            ? isExhausted
+              ? "시청 횟수 소진"
+              : `잔여 ${remaining}회`
+            : "무제한 시청"}
+        </Badge>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "p-3.5 rounded-xl border space-y-2 font-sans",
+        isExhausted
+          ? "bg-rose-50/70 border-rose-200"
+          : "bg-indigo-50/60 border-indigo-100"
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 text-xs font-extrabold",
+            isExhausted ? "text-rose-700" : "text-indigo-800"
+          )}
+        >
+          <Eye className={cn("w-3.5 h-3.5 shrink-0", isExhausted ? "text-rose-600" : "text-indigo-600")} />
+          쿠폰 시청 횟수
+        </span>
+        <div className="flex items-center gap-1.5">
+          <span
+            className={cn(
+              "text-xs font-black tabular-nums",
+              isExhausted ? "text-rose-700" : "text-indigo-900"
+            )}
+          >
+            {maxViews !== null ? `${viewCount} / ${maxViews}회` : `${viewCount}회 시청`}
+          </span>
+          <Badge
+            className={cn(
+              "border-none text-[10px] px-1.5 py-0.5 font-black tabular-nums",
+              isExhausted
+                ? "bg-rose-600 text-white hover:bg-rose-600"
+                : maxViews !== null
+                  ? "bg-indigo-600 text-white hover:bg-indigo-600"
+                  : "bg-indigo-100 text-indigo-700 hover:bg-indigo-100"
+            )}
+          >
+            {maxViews !== null
+              ? isExhausted
+                ? "만료"
+                : `잔여 ${remaining}회`
+              : "무제한"}
+          </Badge>
+        </div>
+      </div>
+
+      {maxViews !== null && (
+        <div className="w-full h-1.5 rounded-full bg-white/80 overflow-hidden border border-indigo-100/80">
+          <div
+            className={cn(
+              "h-full rounded-full transition-all",
+              isExhausted ? "bg-rose-500" : "bg-indigo-600"
+            )}
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 };
@@ -269,14 +401,6 @@ export default function MyPage() {
     setStatusFilter(next);
     writeStoredValue(STATUS_FILTER_STORAGE_KEY, next);
   };
-
-  // '수강 중' = 수강 기간이 만료되지 않은 강의
-  const activeCourses = React.useMemo(() => myCourses.filter((c) => !isExpiredCourse(c)), [myCourses]);
-  const filteredCourses = statusFilter === 'active' ? activeCourses : myCourses;
-  const statusFilterOptions: { id: CourseStatusFilter; label: string; count: number }[] = [
-    { id: 'all', label: '전체', count: myCourses.length },
-    { id: 'active', label: '수강 중', count: activeCourses.length },
-  ];
 
   // Controlled fields for settings form
   const [name, setName] = useState('');
@@ -389,7 +513,95 @@ export default function MyPage() {
     [myCoupons]
   );
 
-  const fetchMileageAndPayments = async () => {
+  // 쿠폰 수강 강의의 시청 횟수 및 최대 시청 가능 횟수를 실시간 병합
+  const enrichedCourses = React.useMemo(() => {
+    const paidCourseIds = new Set(
+      myPayments
+        .filter((p) => {
+          const st = String(p?.status || '').toUpperCase();
+          return st === 'COMPLETED' || st === 'PAID';
+        })
+        .map((p) => String(p.course_id || ''))
+        .filter(Boolean)
+    );
+
+    const usedCouponsByCourse = new Map<string, MemberCouponItem>();
+    const nowMs = Date.now();
+    for (const cpn of myCoupons) {
+      if (cpn.status !== 'used' || !cpn.course_id) continue;
+      const existing = usedCouponsByCourse.get(cpn.course_id);
+      if (!existing) {
+        usedCouponsByCourse.set(cpn.course_id, cpn);
+        continue;
+      }
+      const cpnActive = !cpn.enrollment_expires_at || new Date(cpn.enrollment_expires_at).getTime() > nowMs;
+      const existingActive =
+        !existing.enrollment_expires_at || new Date(existing.enrollment_expires_at).getTime() > nowMs;
+      if (cpnActive && !existingActive) {
+        usedCouponsByCourse.set(cpn.course_id, cpn);
+      } else if (cpnActive === existingActive) {
+        const cpnUsed = cpn.used_at ? new Date(cpn.used_at).getTime() : 0;
+        const exUsed = existing.used_at ? new Date(existing.used_at).getTime() : 0;
+        if (cpnUsed >= exUsed) {
+          usedCouponsByCourse.set(cpn.course_id, cpn);
+        }
+      }
+    }
+
+    return myCourses.map((course) => {
+      if (
+        course.is_free ||
+        isBeOneCourse(course) ||
+        !course.enrollment_expires_at ||
+        paidCourseIds.has(course.id)
+      ) {
+        return {
+          ...course,
+          is_coupon_enrollment: false,
+          coupon_view_limit_reached: false,
+        };
+      }
+
+      const matchedCoupon = usedCouponsByCourse.get(course.id);
+      if (!matchedCoupon && !course.is_coupon_enrollment) {
+        return course;
+      }
+
+      const maxViews =
+        matchedCoupon?.max_views !== undefined
+          ? matchedCoupon.max_views
+          : course.coupon_max_views ?? null;
+      const viewCount =
+        matchedCoupon && (!course.coupon_id || matchedCoupon.id === course.coupon_id)
+          ? Math.max(Number(course.coupon_view_count || 0), Number(matchedCoupon.view_count || 0))
+          : matchedCoupon
+            ? Number(matchedCoupon.view_count || 0)
+            : Number(course.coupon_view_count || 0);
+
+      return {
+        ...course,
+        is_coupon_enrollment: true,
+        coupon_id: matchedCoupon?.id || course.coupon_id || null,
+        coupon_name: matchedCoupon?.coupon_name || course.coupon_name || null,
+        coupon_max_views: maxViews,
+        coupon_view_count: viewCount,
+        coupon_view_limit_reached: Boolean(maxViews && maxViews > 0 && viewCount >= maxViews),
+      };
+    });
+  }, [myCourses, myCoupons, myPayments]);
+
+  // '수강 중' = 수강 기간 및 쿠폰 시청 가능 횟수가 남아있는 강의
+  const activeCourses = React.useMemo(
+    () => enrichedCourses.filter((c) => !isCourseUnavailable(c)),
+    [enrichedCourses]
+  );
+  const filteredCourses = statusFilter === 'active' ? activeCourses : enrichedCourses;
+  const statusFilterOptions: { id: CourseStatusFilter; label: string; count: number }[] = [
+    { id: 'all', label: '전체', count: enrichedCourses.length },
+    { id: 'active', label: '수강 중', count: activeCourses.length },
+  ];
+
+  const fetchMileageAndPayments = async (preSyncedOrders?: any[]) => {
     if (!user) return;
     try {
       setPaymentLoading(true);
@@ -403,12 +615,14 @@ export default function MyPage() {
       }
 
       const [payRes, couponMileageRes] = await Promise.allSettled([
-        supabase
-          .from('orders')
-          .select('*, courses(*)')
-          .eq('user_id', user.id)
-          .neq('status', 'PENDING')
-          .order('created_at', { ascending: false }),
+        preSyncedOrders
+          ? Promise.resolve({ data: preSyncedOrders, error: null })
+          : supabase
+              .from('orders')
+              .select('*, courses(*)')
+              .eq('user_id', user.id)
+              .neq('status', 'PENDING')
+              .order('created_at', { ascending: false }),
         couponMileageService.getMyCouponsAndMileage(),
       ]);
 
@@ -474,7 +688,11 @@ export default function MyPage() {
       toast.success(res.message);
       setRedeemTargetCoupon(null);
       setCouponCodeInput('');
-      await Promise.all([fetchMyCourses(), fetchMileageAndPayments()]);
+      const synced = await purchaseService.syncMyPaidEnrollments();
+      await Promise.all([
+        fetchMyCourses(synced?.enrolledCourses),
+        fetchMileageAndPayments(synced?.orders),
+      ]);
     } catch (err: any) {
       const errMsg = String(err?.message || '');
       if (err?.code === 'COURSE_NOT_STARTED' || errMsg.includes('강의 개시일 이후에 사용할 수 있습니다')) {
@@ -553,15 +771,27 @@ export default function MyPage() {
 
   React.useEffect(() => {
     if (user) {
-      fetchMyCourses();
-      fetchMileageAndPayments();
+      let cancelled = false;
+      (async () => {
+        const synced = await purchaseService.syncMyPaidEnrollments();
+        if (cancelled) return;
+        await Promise.all([
+          fetchMyCourses(synced?.enrolledCourses),
+          fetchMileageAndPayments(synced?.orders),
+        ]);
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [user]);
+  }, [user?.id]);
 
-  const fetchMyCourses = async () => {
+  const fetchMyCourses = async (preSyncedCourses?: any[]) => {
     try {
       setLoading(true);
-      const data = await courseService.getMyCourses(user!.id);
+      const data = Array.isArray(preSyncedCourses)
+        ? (preSyncedCourses as Course[])
+        : await courseService.getMyCourses(user!.id);
       
       const rank = ROLE_RANK[user!.role || 'user'] || 0;
       const isBeOne = rank >= 3 || user!.role === 'admin' || user!.role === 'super_admin';
@@ -672,13 +902,13 @@ export default function MyPage() {
                 <div className="space-y-5 sm:space-y-6">
                    <div className="flex items-center justify-between">
                      <h3 className="text-xl sm:text-2xl font-black tracking-tighter text-gray-900">수강 중인 강의</h3>
-                     <Badge className="bg-purple-100 text-purple-600 border-none px-3.5 py-1 sm:px-4 sm:py-1.5 font-black text-xs font-sans">총 {myCourses.length}개</Badge>
+                     <Badge className="bg-purple-100 text-purple-600 border-none px-3.5 py-1 sm:px-4 sm:py-1.5 font-black text-xs font-sans">총 {enrichedCourses.length}개</Badge>
                    </div>
 
                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-8">
                      {loading ? (
                        <div className="col-span-full text-center py-16 sm:py-20 text-gray-400 font-bold font-sans">강의 정보를 불러오고 있습니다...</div>
-                     ) : myCourses.length === 0 ? (
+                     ) : enrichedCourses.length === 0 ? (
                        <div className="col-span-full bg-white p-10 sm:p-20 rounded-xl sm:rounded-2xl text-center border-2 border-dashed border-gray-100 space-y-5 sm:space-y-6">
                          <BookOpen className="w-12 h-12 sm:w-16 sm:h-16 text-gray-200 mx-auto" />
                          <div>
@@ -693,16 +923,20 @@ export default function MyPage() {
                          </Button>
                        </div>
                      ) : (
-                       myCourses.map((course) => {
+                       enrichedCourses.map((course) => {
                          const isExpired = isExpiredCourse(course);
+                         const isViewExhausted = !isExpired && isCouponViewExhausted(course);
+                         const isBlocked = isExpired || isViewExhausted;
                          return (
                          <Card key={course.id} className="overflow-hidden border-none shadow-sm rounded-xl sm:rounded-2xl group hover:shadow-2xl transition-all bg-white flex flex-col justify-between">
                            <div>
                              <div className="aspect-[16/9] bg-gray-100 relative">
                                 <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
-                                 {isExpired && (
+                                 {isBlocked && (
                                    <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-10">
-                                     <span className="text-white font-black text-sm bg-red-600 px-3.5 py-1.5 rounded-full shadow-lg shadow-red-600/30">수강일 만료</span>
+                                     <span className="text-white font-black text-sm bg-red-600 px-3.5 py-1.5 rounded-full shadow-lg shadow-red-600/30">
+                                       {isExpired ? '수강일 만료' : `시청 횟수 만료 (${course.coupon_view_count || 0}/${course.coupon_max_views}회)`}
+                                     </span>
                                    </div>
                                  )}
                                 <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20">
@@ -716,16 +950,19 @@ export default function MyPage() {
                                   </Badge>
                                 </div>
                              </div>
-                             <div className="p-5 sm:p-8 space-y-4 sm:space-y-6">
+                             <div className="p-5 sm:p-8 space-y-4 sm:space-y-5">
                                 <div className="space-y-1.5 sm:space-y-2">
                                    <h4 className="text-base sm:text-lg font-black text-gray-900 line-clamp-2 sm:line-clamp-1 leading-snug">{course.title}</h4>
                                    <p className="text-xs sm:text-sm font-bold text-gray-400">강사: {course.instructor}</p>
                                 </div>
-                                <div className="space-y-2 bg-slate-50 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100">
-                                   <div className="flex items-start gap-2 text-xs font-bold text-slate-500 font-sans w-full">
-                                      <Clock className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-                                      <div className="flex-1 min-w-0">{renderStudyPeriod(course)}</div>
-                                   </div>
+                                <div className="space-y-2.5">
+                                  <div className="space-y-2 bg-slate-50 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100">
+                                     <div className="flex items-start gap-2 text-xs font-bold text-slate-500 font-sans w-full">
+                                        <Clock className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                                        <div className="flex-1 min-w-0">{renderStudyPeriod(course)}</div>
+                                     </div>
+                                  </div>
+                                  {renderCouponWatchStatus(course)}
                                 </div>
                              </div>
                            </div>
@@ -733,11 +970,15 @@ export default function MyPage() {
                              <Button 
                                size="lg" 
                                variant="outline" 
-                               disabled={isExpired}
-                               className={`flex-1 h-12 sm:h-14 rounded-xl sm:rounded-2xl font-black text-sm font-sans transition-all ${isExpired ? '!bg-gray-200 !text-gray-400 !border-none cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 text-white'} ${(course.category === 'special_offline' || course.category === 'beone_exclusive_offline') ? 'hidden' : ''}`}
+                               disabled={isBlocked}
+                               className={`flex-1 h-12 sm:h-14 rounded-xl sm:rounded-2xl font-black text-sm font-sans transition-all ${isBlocked ? '!bg-gray-200 !text-gray-400 !border-none cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 text-white'} ${(course.category === 'special_offline' || course.category === 'beone_exclusive_offline') ? 'hidden' : ''}`}
                                onClick={() => navigate(`/course/${course.id}/learn`)}
                              >
-                               {isExpired ? "수강일 만료" : "강의실 입장"}
+                               {isExpired
+                                 ? "수강일 만료"
+                                 : isViewExhausted
+                                   ? `시청 만료 (${course.coupon_view_count || 0}/${course.coupon_max_views}회)`
+                                   : "강의실 입장"}
                              </Button>
                              <Button
                                size="lg"
@@ -851,11 +1092,11 @@ export default function MyPage() {
                     ) : filteredCourses.length === 0 ? (
                       <div className="col-span-full bg-white p-10 sm:p-20 rounded-xl sm:rounded-2xl text-center border-2 border-dashed border-gray-100 space-y-5 sm:space-y-6">
                         <BookOpen className="w-12 h-12 sm:w-16 sm:h-16 text-gray-200 mx-auto" />
-                        {statusFilter === 'active' && myCourses.length > 0 ? (
+                        {statusFilter === 'active' && enrichedCourses.length > 0 ? (
                           <>
                             <div>
                               <p className="text-lg sm:text-xl font-black text-gray-900">현재 수강 중인 강의가 없습니다.</p>
-                              <p className="text-sm text-gray-400 font-bold mt-1">수강 기간이 만료된 강의는 '전체'에서 확인하실 수 있습니다.</p>
+                              <p className="text-sm text-gray-400 font-bold mt-1">수강 기간 또는 시청 가능 횟수가 만료된 강의는 '전체'에서 확인하실 수 있습니다.</p>
                             </div>
                             <Button
                               variant="outline"
@@ -883,6 +1124,8 @@ export default function MyPage() {
                     ) : (
                       filteredCourses.map((course) => {
                         const isExpired = isExpiredCourse(course);
+                        const isViewExhausted = !isExpired && isCouponViewExhausted(course);
+                        const isBlocked = isExpired || isViewExhausted;
                         
                         if (viewType === 'list') {
                           return (
@@ -891,9 +1134,11 @@ export default function MyPage() {
                                 {/* Thumbnail */}
                                 <div className="w-full sm:w-44 aspect-[16/9] bg-gray-100 relative rounded-xl sm:rounded-2xl overflow-hidden shrink-0">
                                   <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
-                                  {isExpired && (
+                                  {isBlocked && (
                                     <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-10">
-                                      <span className="text-white font-black text-[10px] bg-red-600 px-2.5 py-1 rounded-full shadow-lg">수강만료</span>
+                                      <span className="text-white font-black text-[10px] bg-red-600 px-2.5 py-1 rounded-full shadow-lg">
+                                        {isExpired ? '수강만료' : `시청만료 (${course.coupon_view_count || 0}/${course.coupon_max_views})`}
+                                      </span>
                                     </div>
                                   )}
                                   <div className="absolute top-2 left-2 z-20">
@@ -909,15 +1154,16 @@ export default function MyPage() {
                                 </div>
 
                                 {/* Details */}
-                                <div className="space-y-2.5 sm:space-y-3 flex-1 min-w-0 w-full">
+                                <div className="space-y-2 sm:space-y-2.5 flex-1 min-w-0 w-full">
                                   <div>
                                     <h4 className="text-base sm:text-lg font-black text-gray-900 line-clamp-2 sm:truncate leading-snug">{course.title}</h4>
                                     <p className="text-xs sm:text-sm font-bold text-gray-400 mt-0.5">강사: {course.instructor}</p>
                                   </div>
                                   <div className="flex items-center gap-2 text-xs font-bold text-slate-500 font-sans max-w-md bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
                                     <Clock className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                                    <div className="truncate">{renderStudyPeriod(course)}</div>
+                                    <div className="flex-1 min-w-0">{renderStudyPeriod(course)}</div>
                                   </div>
+                                  {renderCouponWatchStatus(course, true)}
                                 </div>
                               </div>
 
@@ -926,11 +1172,15 @@ export default function MyPage() {
                                 {!(course.category === 'special_offline' || course.category === 'beone_exclusive_offline') && (
                                   <Button 
                                     size="default" 
-                                    disabled={isExpired}
-                                    className={`flex-1 sm:w-auto md:w-full lg:w-auto h-11 px-4 sm:px-5 rounded-xl font-black text-sm font-sans transition-all ${isExpired ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-none' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
+                                    disabled={isBlocked}
+                                    className={`flex-1 sm:w-auto md:w-full lg:w-auto h-11 px-4 sm:px-5 rounded-xl font-black text-sm font-sans transition-all ${isBlocked ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-none' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
                                     onClick={() => navigate(`/course/${course.id}/learn`)}
                                   >
-                                    {isExpired ? "수강일 만료" : "강의실 입장"}
+                                    {isExpired
+                                      ? "수강일 만료"
+                                      : isViewExhausted
+                                        ? `시청 만료 (${course.coupon_view_count || 0}/${course.coupon_max_views}회)`
+                                        : "강의실 입장"}
                                   </Button>
                                 )}
                                 <Button
@@ -952,9 +1202,11 @@ export default function MyPage() {
                             <div>
                               <div className="aspect-[16/9] bg-gray-100 relative">
                                  <img src={course.thumbnail || "https://images.unsplash.com/photo-1551288049-bbbda5012375?auto=format&fit=crop&q=80&w=800"} className="w-full h-full object-cover" alt="" />
-                                 {isExpired && (
+                                 {isBlocked && (
                                    <div className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-10">
-                                     <span className="text-white font-black text-sm bg-red-600 px-3.5 py-1.5 rounded-full shadow-lg shadow-red-600/30">수강일 만료</span>
+                                     <span className="text-white font-black text-sm bg-red-600 px-3.5 py-1.5 rounded-full shadow-lg shadow-red-600/30">
+                                       {isExpired ? '수강일 만료' : `시청 횟수 만료 (${course.coupon_view_count || 0}/${course.coupon_max_views}회)`}
+                                     </span>
                                    </div>
                                  )}
                                  <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20">
@@ -968,28 +1220,35 @@ export default function MyPage() {
                                    </Badge>
                                  </div>
                               </div>
-                              <div className="p-5 sm:p-8 pb-0 space-y-4 sm:space-y-6">
+                              <div className="p-5 sm:p-8 pb-0 space-y-4 sm:space-y-5">
                                  <div className="space-y-1.5 sm:space-y-2">
                                     <h4 className="text-base sm:text-lg font-black text-gray-900 line-clamp-2 sm:line-clamp-1 leading-snug">{course.title}</h4>
                                     <p className="text-xs sm:text-sm font-bold text-gray-400">강사: {course.instructor}</p>
                                  </div>
-                                 <div className="space-y-2 bg-slate-50 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100">
-                                    <div className="flex items-start gap-2 text-xs font-bold text-slate-500 font-sans w-full">
-                                       <Clock className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-                                       <div className="flex-1 min-w-0">{renderStudyPeriod(course)}</div>
-                                    </div>
-                                  </div>
+                                 <div className="space-y-2.5">
+                                   <div className="space-y-2 bg-slate-50 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100">
+                                      <div className="flex items-start gap-2 text-xs font-bold text-slate-500 font-sans w-full">
+                                         <Clock className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                                         <div className="flex-1 min-w-0">{renderStudyPeriod(course)}</div>
+                                      </div>
+                                   </div>
+                                   {renderCouponWatchStatus(course)}
+                                 </div>
                               </div>
                             </div>
                             <div className="p-5 sm:p-8 flex gap-2">
                               {!(course.category === 'special_offline' || course.category === 'beone_exclusive_offline') && (
                                 <Button 
                                   size="lg" 
-                                  disabled={isExpired}
-                                  className={`flex-1 h-12 sm:h-14 rounded-xl sm:rounded-2xl font-black text-sm font-sans transition-all ${isExpired ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-none' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
+                                  disabled={isBlocked}
+                                  className={`flex-1 h-12 sm:h-14 rounded-xl sm:rounded-2xl font-black text-sm font-sans transition-all ${isBlocked ? 'bg-gray-200 text-gray-400 cursor-not-allowed border-none' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
                                   onClick={() => navigate(`/course/${course.id}/learn`)}
                                 >
-                                  {isExpired ? "수강일 만료" : "강의실 입장"}
+                                  {isExpired
+                                    ? "수강일 만료"
+                                    : isViewExhausted
+                                      ? `시청 만료 (${course.coupon_view_count || 0}/${course.coupon_max_views}회)`
+                                      : "강의실 입장"}
                                 </Button>
                               )}
                               <Button
@@ -1397,10 +1656,22 @@ export default function MyPage() {
                                 className="p-5 rounded-xl border border-purple-200/80 bg-gradient-to-br from-white to-purple-50/30 flex flex-col justify-between gap-4 shadow-xs"
                               >
                                 <div className="space-y-2">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <Badge className="bg-purple-600 text-white border-none text-[11px] font-black rounded-md px-2.5 py-0.5 tabular-nums">
-                                      사용 시작부터 {cpn.duration_days}일 무료 수강
-                                    </Badge>
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <Badge className="bg-purple-600 text-white border-none text-[11px] font-black rounded-md px-2.5 py-0.5 tabular-nums">
+                                        사용 시작부터 {cpn.duration_days}일 무료 수강
+                                      </Badge>
+                                      <Badge
+                                        className={cn(
+                                          "border-none text-[11px] font-black rounded-md px-2 py-0.5 tabular-nums",
+                                          cpn.max_views
+                                            ? "bg-indigo-100 text-indigo-700 hover:bg-indigo-100"
+                                            : "bg-slate-100 text-slate-600 hover:bg-slate-100"
+                                        )}
+                                      >
+                                        {cpn.max_views ? `최대 ${cpn.max_views}회 시청` : '무제한 시청'}
+                                      </Badge>
+                                    </div>
                                     <span className="font-mono text-[11px] font-bold text-slate-400">{cpn.code}</span>
                                   </div>
                                   <h4 className="text-base sm:text-lg font-black text-slate-900 break-keep">
@@ -1464,47 +1735,83 @@ export default function MyPage() {
                       </div>
                     ) : (
                       <div className="divide-y divide-slate-100">
-                        {historyCoupons.map((cpn) => (
-                          <div
-                            key={cpn.id}
-                            className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                          >
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <Badge
-                                  className={`text-[11px] font-black border-none rounded-md ${
-                                    cpn.status === 'used'
-                                      ? 'bg-emerald-100 text-emerald-700'
-                                      : 'bg-slate-200 text-slate-600'
-                                  }`}
-                                >
-                                  {cpn.status === 'used' ? '사용완료' : '회수됨'}
-                                </Badge>
-                                <span className="text-sm font-black text-slate-800">{cpn.coupon_name}</span>
-                              </div>
-                              <p className="text-xs font-bold text-slate-600">
-                                강의: {cpn.course_title} ({cpn.duration_days}일권)
-                              </p>
-                              {cpn.used_at && cpn.enrollment_expires_at && (
-                                <p className="text-[11px] font-bold text-purple-600 tabular-nums">
-                                  적용 수강기간: {new Date(cpn.used_at).toLocaleDateString('ko-KR')} ~{' '}
-                                  {new Date(cpn.enrollment_expires_at).toLocaleDateString('ko-KR')} 23:59
+                        {historyCoupons.map((cpn) => {
+                          const isPeriodExpired = Boolean(
+                            cpn.enrollment_expires_at && new Date(cpn.enrollment_expires_at) <= new Date()
+                          );
+                          const isViewsExhausted = Boolean(
+                            cpn.status === 'used' &&
+                              cpn.max_views &&
+                              cpn.max_views > 0 &&
+                              (cpn.view_count || 0) >= cpn.max_views
+                          );
+                          const isUnavailable = isPeriodExpired || isViewsExhausted;
+
+                          return (
+                            <div
+                              key={cpn.id}
+                              className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                            >
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge
+                                    className={`text-[11px] font-black border-none rounded-md ${
+                                      cpn.status === 'used'
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : 'bg-slate-200 text-slate-600'
+                                    }`}
+                                  >
+                                    {cpn.status === 'used' ? '사용완료' : '회수됨'}
+                                  </Badge>
+                                  {cpn.status === 'used' && (
+                                    <Badge
+                                      className={cn(
+                                        "text-[11px] font-black border-none rounded-md tabular-nums",
+                                        isViewsExhausted
+                                          ? "bg-rose-100 text-rose-700"
+                                          : "bg-indigo-100 text-indigo-700"
+                                      )}
+                                    >
+                                      {cpn.max_views
+                                        ? `시청 ${cpn.view_count || 0} / ${cpn.max_views}회`
+                                        : `시청 ${cpn.view_count || 0}회 (무제한)`}
+                                    </Badge>
+                                  )}
+                                  <span className="text-sm font-black text-slate-800">{cpn.coupon_name}</span>
+                                </div>
+                                <p className="text-xs font-bold text-slate-600">
+                                  강의: {cpn.course_title} ({cpn.duration_days}일권
+                                  {cpn.max_views ? ` · 최대 ${cpn.max_views}회 시청` : ' · 무제한 시청'})
                                 </p>
+                                {cpn.used_at && cpn.enrollment_expires_at && (
+                                  <p className="text-[11px] font-bold text-purple-600 tabular-nums">
+                                    적용 수강기간: {new Date(cpn.used_at).toLocaleDateString('ko-KR')} ~{' '}
+                                    {new Date(cpn.enrollment_expires_at).toLocaleDateString('ko-KR')} 23:59
+                                  </p>
+                                )}
+                              </div>
+
+                              {cpn.status === 'used' && cpn.course_id && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={isUnavailable}
+                                  onClick={() => navigate(`/course/${cpn.course_id}/learn`)}
+                                  className={cn(
+                                    "rounded-lg border-slate-200 font-black text-xs h-9 px-3.5 whitespace-nowrap self-start sm:self-auto",
+                                    isUnavailable && "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                  )}
+                                >
+                                  {isPeriodExpired
+                                    ? '수강기간 만료'
+                                    : isViewsExhausted
+                                      ? `시청 횟수 만료 (${cpn.view_count}/${cpn.max_views}회)`
+                                      : '강의실 바로가기'}
+                                </Button>
                               )}
                             </div>
-
-                            {cpn.status === 'used' && cpn.course_id && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => navigate(`/course/${cpn.course_id}/learn`)}
-                                className="rounded-lg border-slate-200 font-black text-xs h-9 px-3.5 whitespace-nowrap self-start sm:self-auto"
-                              >
-                                강의실 바로가기
-                              </Button>
-                            )}
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -1626,17 +1933,32 @@ export default function MyPage() {
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-100">
-                      {myPayments.map((pay) => (
+                      {myPayments.map((pay) => {
+                        const upperStatus = String(pay.status || '').toUpperCase();
+                        const isCompleted = upperStatus === 'COMPLETED' || upperStatus === 'PAID';
+                        const isPending = upperStatus === 'PENDING';
+                        const isRefunded = upperStatus === 'REFUNDED';
+                        const statusLabel = isCompleted
+                          ? '결제완료'
+                          : isPending
+                            ? '대기중'
+                            : isRefunded
+                              ? '환불완료'
+                              : '결제취소';
+                        const displayUid = String(pay.merchant_uid || pay.id || '').replace(/__SUB_\d+$/, '');
+
+                        return (
                         <div key={pay.id} className="p-5 sm:p-8 hover:bg-gray-50/30 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
                           <div className="space-y-2 sm:space-y-3 min-w-0">
                             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                               <Badge className={cn(
                                 "font-black px-2.5 py-0.5 sm:px-3 sm:py-1 text-xs border-none",
-                                (pay.status === 'completed' || pay.status === 'PAID') ? "bg-emerald-100 text-emerald-700" :
-                                (pay.status === 'pending' || pay.status === 'PENDING') ? "bg-yellow-100 text-yellow-700" :
+                                isCompleted ? "bg-emerald-100 text-emerald-700" :
+                                isPending ? "bg-yellow-100 text-yellow-700" :
+                                isRefunded ? "bg-rose-100 text-rose-700" :
                                 "bg-gray-100 text-gray-600"
                               )}>
-                                {(pay.status === 'completed' || pay.status === 'PAID') ? '결제완료' : (pay.status === 'pending' || pay.status === 'PENDING') ? '대기중' : '결제취소'}
+                                {statusLabel}
                               </Badge>
                               <span className="text-[11px] sm:text-xs font-mono text-gray-400">
                                 {pay.created_at ? new Date(pay.created_at).toLocaleString('ko-KR') : '-'}
@@ -1644,10 +1966,10 @@ export default function MyPage() {
                             </div>
 
                             <h4 className="text-base sm:text-lg font-black text-gray-900 leading-snug break-keep">
-                              {pay.courses?.title || '강좌 수강권'}
+                              {pay.courses?.title || pay.order_name || '강좌 수강권'}
                             </h4>
                             <p className="text-[11px] sm:text-xs text-gray-400 font-bold break-all">
-                              주문 고유번호: <span className="font-mono">{pay.id}</span>
+                              주문번호: <span className="font-mono">{displayUid}</span>
                             </p>
                           </div>
 
@@ -1665,7 +1987,8 @@ export default function MyPage() {
                             </div>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1785,6 +2108,14 @@ export default function MyPage() {
                     <span className="text-slate-600 font-extrabold shrink-0">무료 수강 기간</span>
                     <span className="font-black text-purple-700 tabular-nums">
                       사용 시작일로부터 {redeemTargetCoupon.duration_days}일
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-600 font-extrabold shrink-0">최대 시청 가능 횟수</span>
+                    <span className="font-black text-indigo-700 tabular-nums">
+                      {redeemTargetCoupon.max_views
+                        ? `수강 기간 내 최대 ${redeemTargetCoupon.max_views}회`
+                        : '제한 없음 (무제한 시청)'}
                     </span>
                   </div>
                 </div>

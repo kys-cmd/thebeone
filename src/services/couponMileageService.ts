@@ -9,6 +9,7 @@ export interface CouponTemplate {
   course_instructor?: string;
   course_thumbnail?: string;
   duration_days: number;
+  max_views: number | null;
   description: string;
   active: boolean;
   issued_count: number;
@@ -31,6 +32,9 @@ export interface AdminUserCouponRecord {
   course_id: string;
   course_title: string;
   duration_days: number;
+  max_views: number | null;
+  view_count: number;
+  last_viewed_at?: string | null;
   status: 'available' | 'used' | 'revoked';
   issue_memo: string;
   issued_at: string;
@@ -102,11 +106,26 @@ export interface MemberCouponItem {
   course_is_duration_based?: boolean;
   course_ended?: boolean;
   duration_days: number;
+  max_views: number | null;
+  view_count: number;
+  last_viewed_at?: string | null;
   status: 'available' | 'used' | 'revoked';
   issue_memo: string;
   issued_at: string;
   used_at: string | null;
   enrollment_expires_at: string | null;
+}
+
+export interface CourseCouponWatchStatus {
+  isCouponEnrollment: boolean;
+  isCouponRestricted: boolean;
+  couponId: string | null;
+  couponName: string | null;
+  maxViews: number | null;
+  viewCount: number;
+  remainingViews: number | null;
+  isLimitReached: boolean;
+  expiresAt: string | null;
 }
 
 export function isCourseBeforeStartDate(startDate?: string | null): boolean {
@@ -179,6 +198,8 @@ async function callCoreApi<T = any>(action: string, payload: Record<string, any>
     err.courseTitle = data?.courseTitle;
     err.courseStartDate = data?.courseStartDate;
     err.courseEndDate = data?.courseEndDate;
+    err.maxViews = data?.maxViews ?? null;
+    err.viewCount = data?.viewCount ?? 0;
     throw err;
   }
 
@@ -211,6 +232,7 @@ export const couponMileageService = {
     name: string;
     courseId: string;
     durationDays: number;
+    maxViews?: number | null;
     description?: string;
   }) {
     return callCoreApi('admin-create-coupon-template', params);
@@ -222,6 +244,7 @@ export const couponMileageService = {
     name?: string;
     courseId?: string;
     durationDays?: number;
+    maxViews?: number | null;
     description?: string;
     active?: boolean;
   }) {
@@ -240,10 +263,12 @@ export const couponMileageService = {
     userIds?: string[];
     issueMemo?: string;
     preventDuplicateUnused?: boolean;
+    sendNotification?: boolean;
   }): Promise<{
     status: string;
     issuedCount: number;
     skippedCount: number;
+    notifiedCount?: number;
     message: string;
   }> {
     return callCoreApi('admin-issue-coupons', params);
@@ -261,9 +286,11 @@ export const couponMileageService = {
     adjustType: 'add' | 'subtract';
     amount: number;
     reason: string;
+    sendNotification?: boolean;
   }): Promise<{
     status: string;
     updatedCount: number;
+    notifiedCount?: number;
     message: string;
   }> {
     return callCoreApi('admin-issue-mileage', params);
@@ -293,9 +320,53 @@ export const couponMileageService = {
     courseId: string;
     courseTitle: string;
     durationDays: number;
+    maxViews?: number | null;
     usedAt: string;
     expiresAt: string;
   }> {
     return callCoreApi('redeem-user-coupon', params);
+  },
+
+  // 일반 회원: 특정 강의의 쿠폰 수강 및 시청 횟수 현황 조회
+  async getCourseCouponWatchStatus(courseId: string): Promise<CourseCouponWatchStatus> {
+    const res = await callCoreApi('get-course-coupon-watch-status', { courseId });
+    return {
+      isCouponEnrollment: Boolean(res.isCouponEnrollment),
+      isCouponRestricted: Boolean(res.isCouponRestricted),
+      couponId: res.couponId || null,
+      couponName: res.couponName || null,
+      maxViews: typeof res.maxViews === 'number' && res.maxViews > 0 ? res.maxViews : null,
+      viewCount: Math.max(0, Number(res.viewCount) || 0),
+      remainingViews: typeof res.remainingViews === 'number' ? Math.max(0, res.remainingViews) : null,
+      isLimitReached: Boolean(res.isLimitReached),
+      expiresAt: res.expiresAt || null,
+    };
+  },
+
+  // 일반 회원: 강의실 시청 시 쿠폰 시청 횟수 기록 (세션 중복 방지 및 제한 초과 차단)
+  async recordCouponCourseView(params: {
+    courseId: string;
+    sessionKey: string;
+    lessonId?: string;
+  }): Promise<
+    CourseCouponWatchStatus & {
+      incremented: boolean;
+      isCurrentSessionAllowed: boolean;
+    }
+  > {
+    const res = await callCoreApi('record-coupon-course-view', params);
+    return {
+      isCouponEnrollment: Boolean(res.isCouponEnrollment),
+      isCouponRestricted: Boolean(res.isCouponRestricted),
+      couponId: res.couponId || null,
+      couponName: res.couponName || null,
+      maxViews: typeof res.maxViews === 'number' && res.maxViews > 0 ? res.maxViews : null,
+      viewCount: Math.max(0, Number(res.viewCount) || 0),
+      remainingViews: typeof res.remainingViews === 'number' ? Math.max(0, res.remainingViews) : null,
+      isLimitReached: Boolean(res.isLimitReached),
+      expiresAt: res.expiresAt || null,
+      incremented: Boolean(res.incremented),
+      isCurrentSessionAllowed: res.isCurrentSessionAllowed !== false,
+    };
   },
 };

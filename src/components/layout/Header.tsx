@@ -40,7 +40,10 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { motion } from 'motion/react';
-import { notificationService } from '@/services/notificationService';
+import {
+  notificationService,
+  getNotificationCategoryLabel,
+} from '@/services/notificationService';
 
 export default function Header() {
   const { user, setUser } = useAuthStore();
@@ -112,21 +115,26 @@ export default function Header() {
       fetchNotifications();
     });
 
+    const handleLocalRefresh = () => {
+      fetchNotifications();
+    };
+    window.addEventListener('notifications-updated', handleLocalRefresh);
+
     return () => {
       sub.unsubscribe();
+      window.removeEventListener('notifications-updated', handleLocalRefresh);
     };
   }, [user]);
 
-  const handleMarkAsRead = async (id: string, link?: string) => {
+  const handleOpenNotification = async (notif: any) => {
     if (!user) return;
     try {
-      await notificationService.markAsRead(id, user.id);
+      await notificationService.markAsRead(notif.id, user.id);
       fetchNotifications();
-      if (link) {
-        navigate(link);
-      }
+      navigate(`/notifications/${notif.id}`);
     } catch (err) {
       console.error(err);
+      navigate(`/notifications/${notif.id}`);
     }
   };
 
@@ -317,10 +325,17 @@ export default function Header() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="end"
-                  className="w-[calc(100vw-24px)] max-w-[340px] max-h-[440px] p-2 shadow-2xl rounded-xl border border-slate-100 mt-2 flex flex-col"
+                  className="w-[calc(100vw-24px)] max-w-[360px] max-h-[480px] p-2 shadow-2xl rounded-xl border border-slate-100 mt-2 flex flex-col bg-white"
                 >
-                  <div className="p-3 border-b flex justify-between items-center bg-slate-50/70 rounded-t-xl shrink-0">
-                    <span className="font-extrabold text-xs text-slate-800">새로운 알림</span>
+                  <div className="p-3 border-b flex justify-between items-center bg-slate-50/70 rounded-t-lg shrink-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-extrabold text-xs text-slate-800">수신 알림</span>
+                      {unreadCount > 0 && (
+                        <span className="text-[10px] font-black text-purple-600 tabular-nums">
+                          ({unreadCount}건 미확인)
+                        </span>
+                      )}
+                    </div>
                     {unreadCount > 0 && (
                       <button
                         onClick={handleMarkAllAsRead}
@@ -330,35 +345,48 @@ export default function Header() {
                       </button>
                     )}
                   </div>
-                  <div className="overflow-y-auto max-h-[340px] py-1 text-left select-none no-scrollbar flex-1">
+                  <div className="overflow-y-auto max-h-[330px] py-1 text-left select-none no-scrollbar flex-1">
                     {notifications.length === 0 ? (
                       <div className="py-12 text-center text-slate-400 font-bold text-xs flex flex-col items-center justify-center gap-2 p-4">
                         <Inbox className="w-8 h-8 text-slate-300" />
                         받은 새 알림이 없습니다.
                       </div>
                     ) : (
-                      notifications.map((notif) => (
+                      notifications.slice(0, 15).map((notif) => (
                         <DropdownMenuItem
                           key={notif.id}
-                          onClick={() => handleMarkAsRead(notif.id, notif.link)}
+                          onClick={() => handleOpenNotification(notif)}
                           className={cn(
-                            'p-3 rounded-xl cursor-pointer flex flex-col items-start gap-1 font-semibold text-xs leading-normal border-b border-slate-50 last:border-none focus:bg-purple-50',
-                            notif.isRead ? 'opacity-60 bg-white' : 'bg-purple-50/30'
+                            'p-3 rounded-lg cursor-pointer flex flex-col items-start gap-1 font-semibold text-xs leading-normal border-b border-slate-50 last:border-none focus:bg-purple-50',
+                            notif.isRead ? 'opacity-70 bg-white' : 'bg-purple-50/35'
                           )}
                         >
                           <div className="flex items-center justify-between w-full">
                             <span className="font-extrabold text-purple-700 text-[10px]">
-                              {notif.category === 'chat' ? '채팅' : notif.category === 'notice' ? '공지' : '알림'}
+                              {getNotificationCategoryLabel(notif.category)}
                             </span>
                             <span className="text-[10px] text-slate-400 font-medium font-mono tabular-nums">
-                              {notif.created_at ? new Date(notif.created_at).toLocaleDateString() : ''}
+                              {notif.created_at ? new Date(notif.created_at).toLocaleDateString('ko-KR') : ''}
                             </span>
                           </div>
-                          <span className="font-bold text-slate-900 leading-tight block truncate w-full">{notif.title}</span>
-                          <span className="text-slate-500 font-medium line-clamp-2 leading-relaxed">{notif.message}</span>
+                          <span className="font-bold text-slate-900 leading-tight block truncate w-full">
+                            {notif.title}
+                          </span>
+                          <span className="text-slate-500 font-medium line-clamp-2 leading-relaxed w-full">
+                            {notif.summary || notif.message}
+                          </span>
                         </DropdownMenuItem>
                       ))
                     )}
+                  </div>
+                  <div className="pt-1.5 border-t border-slate-100 shrink-0">
+                    <DropdownMenuItem
+                      onClick={() => navigate('/notifications')}
+                      className="w-full py-2.5 px-3 rounded-lg bg-slate-50 hover:bg-purple-50 text-purple-700 font-extrabold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <span>전체 알림 센터에서 자세히 보기</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </DropdownMenuItem>
                   </div>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -382,24 +410,6 @@ export default function Header() {
               </Button>
             )}
 
-            {/* Desktop Chat Trigger */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                if (user) {
-                  navigate('/chat');
-                } else {
-                  toast.error('로그인이 필요한 서비스입니다.');
-                  navigate('/auth/login');
-                }
-              }}
-              className="hidden lg:flex relative rounded-full h-10 w-10 text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
-              title="실시간 메신저"
-            >
-              <MessageSquare className="h-5 w-5 text-slate-700" />
-            </Button>
-
             {/* User Profile Dropdown (Desktop) or Guest Auth Buttons */}
             {user ? (
               <div className="hidden lg:flex items-center">
@@ -422,10 +432,18 @@ export default function Header() {
                       </div>
                     </div>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate('/mypage')} className="p-2.5 rounded-xl cursor-pointer font-semibold text-sm">
+                    <DropdownMenuItem onClick={() => navigate('/mypage')} className="p-2.5 rounded-lg cursor-pointer font-semibold text-sm">
                       마이페이지
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/mypage?tab=classroom')} className="p-2.5 rounded-xl cursor-pointer font-semibold text-sm">
+                    <DropdownMenuItem onClick={() => navigate('/notifications')} className="p-2.5 rounded-lg cursor-pointer flex items-center justify-between text-sm">
+                      <span className="font-semibold">알림 센터</span>
+                      {unreadCount > 0 && (
+                        <Badge className="bg-purple-600 text-white font-bold font-mono text-[10px] h-5 min-w-5 rounded-md flex items-center justify-center px-1.5 tabular-nums">
+                          {unreadCount}
+                        </Badge>
+                      )}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/mypage?tab=classroom')} className="p-2.5 rounded-lg cursor-pointer font-semibold text-sm">
                       내 강의실
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/cart')} className="p-2.5 rounded-xl cursor-pointer flex items-center justify-between text-sm">
@@ -589,6 +607,7 @@ export default function Header() {
                       <div className="space-y-1 pt-3 border-t border-slate-100">
                         <p className="px-3 text-[11px] font-bold text-slate-400 mb-1.5">고객지원</p>
                         {[
+                          ...(user ? [{ to: '/notifications', label: '알림 센터', icon: Bell }] : []),
                           { to: '/support/notice', label: '공지사항', icon: Megaphone },
                           { to: '/support/faq', label: '자주 묻는 질문', icon: HelpCircle },
                           { to: '/support/inquiry', label: '1:1 문의', icon: MessageSquare },

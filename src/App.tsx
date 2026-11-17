@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 import { authService } from '@/services/authService';
 import { PROFILE_COMPLETION_PATH, isProfileIncomplete } from '@/lib/profile';
 import Header from './components/layout/Header';
-import { FloatingChat } from './components/community/FloatingChat';
 import Footer from './components/layout/Footer';
 import Home from './pages/Home';
 import CourseDetail from './pages/CourseDetail';
@@ -19,9 +18,9 @@ import MembershipPage from './pages/Membership';
 import LifeCoaching from './pages/LifeCoaching';
 import LivePage from './pages/Live';
 import TechTreePage from './pages/TechTree';
-import ChatPage from './pages/Chat';
 import AboutPage from './pages/About';
 import MyPage from './pages/MyPage';
+import NotificationsPage from './pages/Notifications';
 import LearningPlayer from './pages/LearningPlayer';
 import CartPage from './pages/Cart';
 import Login from './pages/auth/Login';
@@ -59,6 +58,7 @@ const AdminSystemDiagnostics = lazy(() => import('./pages/admin/SystemDiagnostic
 const AdminFontDemo = lazy(() => import('./pages/admin/FontDemo'));
 const AdminLiveManagement = lazy(() => import('./pages/admin/LiveManagement'));
 const AdminCouponMileageManagement = lazy(() => import('./pages/admin/CouponMileageManagement'));
+const AdminNotificationManagement = lazy(() => import('./pages/admin/NotificationManagement'));
 
 /**
  * 기본정보 입력을 마치지 않은 회원도 접근할 수 있어야 하는 경로.
@@ -126,34 +126,12 @@ function PublicLayout() {
 
   const isIncomplete = isProfileIncomplete(user, provider);
 
-  const isPopup = typeof window !== 'undefined' && (
-    new URLSearchParams(location.search).get('popup') === 'true' ||
-    new URLSearchParams(window.location.search).get('popup') === 'true' ||
-    sessionStorage.getItem('is_popup_chat') === 'true' ||
-    window.name === 'BOneChatWindow'
-  );
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('popup') === 'true') {
-      sessionStorage.setItem('is_popup_chat', 'true');
-    }
-  }, [location.search]);
-
   if (!isLoading && isIncomplete && !isAuthRoute && location.pathname !== '/mypage') {
     return <Navigate to={PROFILE_COMPLETION_PATH} replace />;
   }
 
-  if (isPopup) {
-    return (
-      <main className="w-screen h-screen overflow-hidden flex flex-col bg-white">
-        <Outlet />
-      </main>
-    );
-  }
-
-  const isChatRoomOnMobile = location.pathname === '/chat' && !!new URLSearchParams(location.search).get('room');
   const isLiveOnMobile = location.pathname.startsWith('/live');
-  const isDedicatedMobileView = isChatRoomOnMobile || isLiveOnMobile;
+  const isDedicatedMobileView = isLiveOnMobile;
 
   return (
     <>
@@ -236,16 +214,8 @@ export default function App() {
 }
 
 function AppContent() {
-  const location = useLocation();
-  const isPopup = typeof window !== 'undefined' && (
-    location.pathname === '/chat' ||
-    new URLSearchParams(location.search).get('popup') === 'true' ||
-    sessionStorage.getItem('is_popup_chat') === 'true' ||
-    window.name === 'BOneChatWindow'
-  );
-
   return (
-    <div className={isPopup ? "w-screen h-screen overflow-hidden flex flex-col font-sans antialiased bg-white" : "flex min-h-screen flex-col font-sans antialiased"}>
+    <div className="flex min-h-screen flex-col font-sans antialiased">
       <Suspense fallback={
         <div className="min-h-screen flex items-center justify-center bg-gray-50 font-bold text-purple-600">
           페이지를 불러오는 중...
@@ -271,6 +241,7 @@ function AppContent() {
           <Route path="users/:id" element={<AdminUserManagement />} />
           <Route path="students" element={<AdminStudentManagement />} />
           <Route path="coupons" element={<AdminCouponMileageManagement />} />
+          <Route path="notifications" element={<AdminNotificationManagement />} />
           <Route path="community" element={<AdminCommunityManagement />} />
           <Route path="community/create" element={<AdminCommunityEditor />} />
           <Route path="community/edit/:id" element={<AdminCommunityEditor />} />
@@ -303,9 +274,12 @@ function AppContent() {
           <Route path="/lifecoaching" element={<LifeCoaching />} />
           <Route path="/course/:id" element={<CourseDetail />} />
           <Route path="/community" element={<CommunityPage />} />
-          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/chat" element={<Navigate to="/" replace />} />
+          <Route path="/chat/*" element={<Navigate to="/" replace />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/mypage" element={<MyPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/notifications/:id" element={<NotificationsPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/auth/login" element={<Login />} />
           <Route path="/auth/register" element={<Register />} />
@@ -330,7 +304,6 @@ function AppContent() {
       </Routes>
       </Suspense>
       <Toaster position="top-center" richColors />
-      {!isPopup && <FloatingChat />}
     </div>
   );
 }

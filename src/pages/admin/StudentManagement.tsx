@@ -38,6 +38,7 @@ import {
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabase';
+import { purchaseService } from '@/services/purchaseService';
 import { Course } from '@/types';
 
 interface StudentEnrollment {
@@ -110,35 +111,35 @@ export default function AdminStudentManagement() {
       if (coursesError) throw coursesError;
       setCourses(coursesData || []);
 
-      // 2. Fetch enrollments with nested profiles and courses
-      const { data: enrollmentsData, error: enrollError } = await supabase
-        .from('enrollments')
-        .select(`
-          id,
-          created_at,
-          expires_at,
-          course_id,
-          user_id,
-          profiles (
-            id,
-            name,
-            nickname,
-            email,
-            mobile_phone,
-            phone
-          ),
-          courses (
-            id,
-            title,
-            instructor,
-            start_date,
-            end_date
-          )
-        `)
-        .eq('is_deleted', false)
-        .order('created_at', { ascending: false });
+      // 2. Fetch enrollments via backend admin endpoint (auto-reconciles paid orders & bypasses client RLS), with fallback
+      let enrollmentsData: any[] | null = await purchaseService.getAdminEnrollments();
+      if (!enrollmentsData) {
+        const { data: fallbackEnrollments, error: enrollError } = await supabase
+          .from('enrollments')
+          .select(`
+            *,
+            profiles (
+              id,
+              name,
+              nickname,
+              email,
+              mobile_phone,
+              phone
+            ),
+            courses (
+              id,
+              title,
+              instructor,
+              start_date,
+              end_date
+            )
+          `)
+          .eq('is_deleted', false)
+          .order('created_at', { ascending: false });
 
-      if (enrollError) throw enrollError;
+        if (enrollError) throw enrollError;
+        enrollmentsData = fallbackEnrollments || [];
+      }
 
       // Map nested properties into flat safe types
       const mappedEnrollments: StudentEnrollment[] = (enrollmentsData || []).map((e: any) => ({

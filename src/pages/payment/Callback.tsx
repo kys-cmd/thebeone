@@ -5,6 +5,7 @@ import { CheckCircle2, XCircle, Loader2, Mail, ShieldAlert, Check } from 'lucide
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { safeResponseJson } from '@/lib/safeFetch';
+import { purchaseService } from '@/services/purchaseService';
 
 // KG Inicis resultCode - Korean clear description helper
 function analyzeInicisCode(code: string | null | undefined): { title: string; desc: string; solution: string } {
@@ -189,6 +190,8 @@ export default function PaymentCallback() {
       if (isSuccess) {
         setStatus('success');
         setMessage(messageParam || '결제가 성공적으로 완료되었습니다.');
+        window.dispatchEvent(new Event('cart-updated'));
+        purchaseService.syncMyPaidEnrollments().catch(() => {});
       } else {
         setStatus('error');
         const finalErrorMsg = messageParam || resultMsg || '결제 처리가 거절되었습니다.';

@@ -1,5 +1,9 @@
 import crypto from "crypto";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import {
+  insertCouponIssuedNotifications,
+  insertMileageIssuedNotifications,
+} from "./notificationHandler";
 
 export const COUPON_MILEAGE_ACTIONS = new Set([
   "admin-get-coupon-mileage-dashboard",
@@ -11,6 +15,8 @@ export const COUPON_MILEAGE_ACTIONS = new Set([
   "admin-issue-mileage",
   "get-my-coupons-and-mileage",
   "redeem-user-coupon",
+  "get-course-coupon-watch-status",
+  "record-coupon-course-view",
 ]);
 
 export interface CoreApiResult {
@@ -104,6 +110,191 @@ function formatKstDateTime(dateInput: Date | string): string {
     return `${year}년 ${month}월 ${day}일`;
   }
   return `${year}년 ${month}월 ${day}일 ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function extractStoredMaxViews(meta: Record<string, any> | null | undefined): number | null {
+  const raw = meta?.max_views;
+  if (raw === null || raw === undefined || raw === "") return null;
+  const num = Math.floor(Number(raw));
+  if (!Number.isFinite(num) || num <= 0) return null;
+  return num;
+}
+
+function extractStoredViewCount(meta: Record<string, any> | null | undefined): number {
+  return Math.max(0, Math.floor(Number(meta?.view_count) || 0));
+}
+
+function normalizeMaxViewsInput(raw: any): {
+  ok: boolean;
+  value: number | null;
+  message?: string;
+} {
+  if (raw === null || raw === undefined || raw === "" || Number(raw) === 0) {
+    return { ok: true, value: null };
+  }
+  const parsed = Math.floor(Number(raw));
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 1000) {
+    return {
+      ok: false,
+      value: null,
+      message: "최대 시청 가능 횟수는 1회 이상 1,000회 이하로 입력하거나 무제한으로 설정해 주세요.",
+    };
+  }
+  return { ok: true, value: parsed };
+}
+
+async function resolveActiveCouponForCourse(
+  supabaseAdmin: SupabaseClient,
+  userId: string,
+  courseId: string
+): Promise<{
+  isCouponEnrollment: boolean;
+  isCouponRestricted: boolean;
+  couponRow: any | null;
+  couponMeta: Record<string, any>;
+  couponId: string | null;
+  couponName: string | null;
+  maxViews: number | null;
+  viewCount: number;
+  remainingViews: number | null;
+  isLimitReached: boolean;
+  expiresAt: string | null;
+}> {
+  const emptyResult = {
+    isCouponEnrollment: false,
+    isCouponRestricted: false,
+    couponRow: null,
+    couponMeta: {},
+    couponId: null,
+    couponName: null,
+    maxViews: null,
+    viewCount: 0,
+    remainingViews: null,
+    isLimitReached: false,
+    expiresAt: null,
+  };
+
+  if (!userId || !courseId) return emptyResult;
+
+  const [profileRes, courseRes, ordersRes, enrollRes, couponsRes] = await Promise.all([
+    supabaseAdmin.from("profiles").select("id, role").eq("id", userId).maybeSingle(),
+    supabaseAdmin.from("courses").select("id, category, min_member_grade, is_free, is_duration_based").eq("id", courseId).maybeSingle(),
+    supabaseAdmin
+      .from("orders")
+      .select("id, status, created_at")
+      .eq("user_id", userId)
+      .eq("course_id", courseId)
+      .order("created_at", { ascending: false }),
+    supabaseAdmin
+      .from("enrollments")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("course_id", courseId)
+      .eq("is_deleted", false)
+      .order("created_at", { ascending: false }),
+    supabaseAdmin
+      .from("support_contents")
+      .select("*")
+      .eq("type", "user_coupon")
+      .eq("title", userId)
+      .eq("is_deleted", false)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const role = String(profileRes.data?.role || "user");
+  if (role === "admin" || role === "super_admin") {
+    return emptyResult;
+  }
+
+  const course = courseRes.data;
+  if (!course || course.is_free) {
+    return emptyResult;
+  }
+
+  const isBeOneCourse =
+    course.category === "beone_exclusive" ||
+    course.category === "beone_exclusive_online" ||
+    course.category === "beone_exclusive_offline" ||
+    course.min_member_grade === "beone_member" ||
+    course.min_member_grade === "bione_member";
+  if (isBeOneCourse && (role === "beone_member" || role === "bione_member")) {
+    return emptyResult;
+  }
+
+  const activeEnrollments = (enrollRes.data || []).filter(
+    (e: any) => String(e.status || "active").toLowerCase() !== "expired"
+  );
+  const latestEnrollment = activeEnrollments[0] || null;
+
+  // 상시(무기한) 수강 등록 상태라면 쿠폰 제한 대상이 아님
+  if (latestEnrollment && !latestEnrollment.expires_at) {
+    return emptyResult;
+  }
+
+  const usedCouponCandidates = (couponsRes.data || [])
+    .map((row: any) => ({
+      row,
+      meta: safeParseJson<Record<string, any>>(row.content, {}),
+    }))
+    .filter((item) => item.meta.course_id === courseId && item.meta.status === "used")
+    .sort((a, b) => {
+      const aTime = new Date(a.meta.used_at || a.row.updated_at || a.row.created_at).getTime();
+      const bTime = new Date(b.meta.used_at || b.row.updated_at || b.row.created_at).getTime();
+      return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+    });
+
+  if (usedCouponCandidates.length === 0) {
+    return emptyResult;
+  }
+
+  const latestCoupon = usedCouponCandidates[0];
+  const couponUsedMs = new Date(
+    latestCoupon.meta.used_at || latestCoupon.row.updated_at || latestCoupon.row.created_at
+  ).getTime();
+
+  // 유료 결제로 정상 승인(PAID/COMPLETED)된 주문이 쿠폰 사용 이후 존재하거나 상시 정규 강의 구매자인 경우 쿠폰 제한 제외
+  const paidOrders = (ordersRes.data || []).filter((o: any) => {
+    const st = String(o.status || "").toUpperCase();
+    return st === "COMPLETED" || st === "PAID";
+  });
+
+  if (paidOrders.length > 0) {
+    if (!course.is_duration_based) {
+      return emptyResult;
+    }
+    const latestPaidMs = new Date(paidOrders[0].created_at).getTime();
+    if (Number.isFinite(latestPaidMs) && Number.isFinite(couponUsedMs) && latestPaidMs > couponUsedMs) {
+      return emptyResult;
+    }
+    if (latestEnrollment?.expires_at && latestCoupon.meta.enrollment_expires_at) {
+      const enrExpMs = new Date(latestEnrollment.expires_at).getTime();
+      const cpnExpMs = new Date(latestCoupon.meta.enrollment_expires_at).getTime();
+      if (Number.isFinite(enrExpMs) && Number.isFinite(cpnExpMs) && enrExpMs - cpnExpMs > 60_000) {
+        return emptyResult;
+      }
+    }
+  }
+
+  const maxViews = extractStoredMaxViews(latestCoupon.meta);
+  const viewCount = extractStoredViewCount(latestCoupon.meta);
+  const remainingViews = maxViews !== null ? Math.max(0, maxViews - viewCount) : null;
+  const isLimitReached = maxViews !== null ? viewCount >= maxViews : false;
+  const expiresAt =
+    latestCoupon.meta.enrollment_expires_at || latestEnrollment?.expires_at || null;
+
+  return {
+    isCouponEnrollment: true,
+    isCouponRestricted: maxViews !== null,
+    couponRow: latestCoupon.row,
+    couponMeta: latestCoupon.meta,
+    couponId: latestCoupon.row.id,
+    couponName: latestCoupon.meta.coupon_name || "무료 수강 쿠폰",
+    maxViews,
+    viewCount,
+    remainingViews,
+    isLimitReached,
+    expiresAt,
+  };
 }
 
 export async function handleCouponMileageAction(params: {
@@ -250,6 +441,9 @@ export async function handleCouponMileageAction(params: {
         course_id: meta.course_id || "",
         course_title: course?.title || meta.course_title || "삭제된 강의",
         duration_days: Number(meta.duration_days) || 7,
+        max_views: extractStoredMaxViews(meta),
+        view_count: extractStoredViewCount(meta),
+        last_viewed_at: meta.last_viewed_at || null,
         status,
         issue_memo: meta.issue_memo || "",
         issued_at: meta.issued_at || row.created_at,
@@ -270,6 +464,7 @@ export async function handleCouponMileageAction(params: {
         course_instructor: course?.instructor || "",
         course_thumbnail: course?.thumbnail || "",
         duration_days: Number(meta.duration_days) || 7,
+        max_views: extractStoredMaxViews(meta),
         description: meta.description || "",
         active: Boolean(row.active),
         issued_count: issuedCountByTemplate.get(row.id) || 0,
@@ -349,9 +544,10 @@ export async function handleCouponMileageAction(params: {
   // 2. ADMIN: 강의 무료 수강 쿠폰 종류(템플릿) 생성
   // ===========================================================================
   if (action === "admin-create-coupon-template") {
-    const { name, courseId, durationDays, description } = body;
+    const { name, courseId, durationDays, maxViews, description } = body;
     const cleanName = String(name || "").trim();
     const parsedDays = Math.floor(Number(durationDays));
+    const maxViewsCheck = normalizeMaxViewsInput(maxViews);
 
     if (!cleanName) {
       return { httpStatus: 400, payload: { status: "error", message: "쿠폰 종류 이름을 입력해 주세요." } };
@@ -361,6 +557,9 @@ export async function handleCouponMileageAction(params: {
     }
     if (!Number.isFinite(parsedDays) || parsedDays < 1 || parsedDays > 3650) {
       return { httpStatus: 400, payload: { status: "error", message: "수강 가능 기간은 1일 이상 3,650일 이하의 숫자로 입력해 주세요." } };
+    }
+    if (!maxViewsCheck.ok) {
+      return { httpStatus: 400, payload: { status: "error", message: maxViewsCheck.message } };
     }
 
     const { data: course, error: courseErr } = await supabaseAdmin
@@ -379,6 +578,7 @@ export async function handleCouponMileageAction(params: {
       course_id: course.id,
       course_title: course.title,
       duration_days: parsedDays,
+      max_views: maxViewsCheck.value,
       description: String(description || "").trim(),
       created_by: requestingUser.id,
     };
@@ -403,11 +603,12 @@ export async function handleCouponMileageAction(params: {
       return { httpStatus: 500, payload: { status: "error", message: insertErr.message } };
     }
 
+    const viewDesc = maxViewsCheck.value ? ` · 최대 ${maxViewsCheck.value}회 시청` : " · 무제한 시청";
     return {
       httpStatus: 200,
       payload: {
         status: "success",
-        message: `'${cleanName}' (${course.title} · 사용 시점부터 ${parsedDays}일 무료 수강) 쿠폰 종류가 생성되었습니다.`,
+        message: `'${cleanName}' (${course.title} · 사용 시점부터 ${parsedDays}일 무료 수강${viewDesc}) 쿠폰 종류가 생성되었습니다.`,
         templateId: inserted.id,
       },
     };
@@ -417,7 +618,7 @@ export async function handleCouponMileageAction(params: {
   // 3. ADMIN: 쿠폰 종류 수정 / 활성 상태 변경
   // ===========================================================================
   if (action === "admin-update-coupon-template") {
-    const { templateId, name, courseId, durationDays, description, active } = body;
+    const { templateId, name, courseId, durationDays, maxViews, description, active } = body;
     if (!templateId) {
       return { httpStatus: 400, payload: { status: "error", message: "수정할 쿠폰 종류 ID가 필요합니다." } };
     }
@@ -457,6 +658,15 @@ export async function handleCouponMileageAction(params: {
       return { httpStatus: 400, payload: { status: "error", message: "수강 가능 기간은 1일 이상 3,650일 이하로 설정해 주세요." } };
     }
 
+    let nextMaxViews = extractStoredMaxViews(prevMeta);
+    if (maxViews !== undefined) {
+      const maxViewsCheck = normalizeMaxViewsInput(maxViews);
+      if (!maxViewsCheck.ok) {
+        return { httpStatus: 400, payload: { status: "error", message: maxViewsCheck.message } };
+      }
+      nextMaxViews = maxViewsCheck.value;
+    }
+
     const nextTitle = name !== undefined ? String(name).trim() : existing.title;
     if (!nextTitle) {
       return { httpStatus: 400, payload: { status: "error", message: "쿠폰 종류 이름을 입력해 주세요." } };
@@ -469,6 +679,7 @@ export async function handleCouponMileageAction(params: {
       course_id: nextCourseId,
       course_title: nextCourseTitle,
       duration_days: nextDays,
+      max_views: nextMaxViews,
       description: description !== undefined ? String(description).trim() : prevMeta.description || "",
       updated_by: requestingUser.id,
     };
@@ -526,7 +737,14 @@ export async function handleCouponMileageAction(params: {
   // 5. ADMIN: 회원별 개별 / 다량 쿠폰 발행
   // ===========================================================================
   if (action === "admin-issue-coupons") {
-    const { templateId, targetMode, userIds, issueMemo, preventDuplicateUnused } = body;
+    const {
+      templateId,
+      targetMode,
+      userIds,
+      issueMemo,
+      preventDuplicateUnused,
+      sendNotification = true,
+    } = body;
 
     if (!templateId) {
       return { httpStatus: 400, payload: { status: "error", message: "발급할 쿠폰 종류를 선택해 주세요." } };
@@ -550,6 +768,7 @@ export async function handleCouponMileageAction(params: {
     const tplMeta = safeParseJson<Record<string, any>>(templateRow.content, {});
     const courseId = tplMeta.course_id;
     const durationDays = Math.max(1, Math.floor(Number(tplMeta.duration_days) || 7));
+    const maxViews = extractStoredMaxViews(tplMeta);
 
     const { data: course } = await supabaseAdmin
       .from("courses")
@@ -629,7 +848,12 @@ export async function handleCouponMileageAction(params: {
 
     const nowIso = new Date().toISOString();
     const cleanMemo = String(issueMemo || "").trim();
-    const rowsToInsert = targetMembers.map((member) => ({
+    const preparedCoupons = targetMembers.map((member) => ({
+      member,
+      code: generateCouponCode(),
+    }));
+
+    const rowsToInsert = preparedCoupons.map(({ member, code }) => ({
       type: "user_coupon",
       title: member.id,
       active: true,
@@ -638,12 +862,16 @@ export async function handleCouponMileageAction(params: {
       updated_at: nowIso,
       content: JSON.stringify({
         template_id: templateRow.id,
-        code: generateCouponCode(),
+        code,
         coupon_type: "FREE_COURSE",
         coupon_name: templateRow.title,
         course_id: course.id,
         course_title: course.title,
         duration_days: durationDays,
+        max_views: maxViews,
+        view_count: 0,
+        last_viewed_at: null,
+        watch_sessions: [],
         status: "available",
         issued_at: nowIso,
         issued_by: requestingUser.id,
@@ -664,16 +892,36 @@ export async function handleCouponMileageAction(params: {
       }
     }
 
+    let notifiedCount = 0;
+    if (sendNotification !== false) {
+      notifiedCount = await insertCouponIssuedNotifications({
+        supabaseAdmin,
+        issuedItems: preparedCoupons.map(({ member, code }) => ({
+          userId: member.id,
+          userName: member.name || member.full_name || member.nickname || "회원",
+          couponName: templateRow.title,
+          couponCode: code,
+          courseId: course.id,
+          courseTitle: course.title,
+          durationDays,
+          maxViews,
+          issueMemo: cleanMemo,
+        })),
+      });
+    }
+
+    const pushSuffix = sendNotification !== false ? " (실시간 알림 푸시 발송 완료)" : "";
     return {
       httpStatus: 200,
       payload: {
         status: "success",
         issuedCount: rowsToInsert.length,
         skippedCount,
+        notifiedCount,
         message:
           skippedCount > 0
-            ? `총 ${rowsToInsert.length}명에게 '${templateRow.title}' 쿠폰을 발행했습니다. (기보유 ${skippedCount}명 제외)`
-            : `총 ${rowsToInsert.length}명에게 '${templateRow.title}' 쿠폰을 발행했습니다.`,
+            ? `총 ${rowsToInsert.length}명에게 '${templateRow.title}' 쿠폰을 발행했습니다.${pushSuffix} (기보유 ${skippedCount}명 제외)`
+            : `총 ${rowsToInsert.length}명에게 '${templateRow.title}' 쿠폰을 발행했습니다.${pushSuffix}`,
       },
     };
   }
@@ -740,7 +988,7 @@ export async function handleCouponMileageAction(params: {
   // 7. ADMIN: 회원별 개별 / 다량 마일리지 지급 및 차감
   // ===========================================================================
   if (action === "admin-issue-mileage") {
-    const { targetMode, userIds, adjustType, amount, reason } = body;
+    const { targetMode, userIds, adjustType, amount, reason, sendNotification = true } = body;
     const parsedAmount = Math.floor(Number(amount));
     const mode: "add" | "subtract" = adjustType === "subtract" ? "subtract" : "add";
     const cleanReason = String(reason || "").trim() || (mode === "add" ? "관리자 마일리지 지급" : "관리자 마일리지 차감");
@@ -784,6 +1032,16 @@ export async function handleCouponMileageAction(params: {
     const batchId = `MLG-${Date.now()}`;
     const nowIso = new Date().toISOString();
     const logRows: any[] = [];
+    const mileageNotificationItems: Array<{
+      userId: string;
+      userName: string;
+      adjustType: "add" | "subtract";
+      requestedAmount: number;
+      actualDelta: number;
+      previousMileage: number;
+      afterMileage: number;
+      reason: string;
+    }> = [];
     let updatedCount = 0;
     let firstUpdateError: string | null = null;
 
@@ -808,6 +1066,7 @@ export async function handleCouponMileageAction(params: {
           }
 
           updatedCount++;
+          const displayName = member.name || member.full_name || member.nickname || "회원";
           logRows.push({
             type: "mileage_log",
             title: member.id,
@@ -825,8 +1084,18 @@ export async function handleCouponMileageAction(params: {
               reason: cleanReason,
               issued_by: requestingUser.id,
               user_email: member.email || "",
-              user_name: member.name || member.full_name || member.nickname || "",
+              user_name: displayName,
             }),
+          });
+          mileageNotificationItems.push({
+            userId: member.id,
+            userName: displayName,
+            adjustType: mode,
+            requestedAmount: parsedAmount,
+            actualDelta,
+            previousMileage: prevMileage,
+            afterMileage: nextMileage,
+            reason: cleanReason,
           });
         })
       );
@@ -851,12 +1120,22 @@ export async function handleCouponMileageAction(params: {
       }
     }
 
+    let notifiedCount = 0;
+    if (sendNotification !== false && mileageNotificationItems.length > 0) {
+      notifiedCount = await insertMileageIssuedNotifications({
+        supabaseAdmin,
+        mileageItems: mileageNotificationItems,
+      });
+    }
+
+    const pushSuffix = sendNotification !== false ? " (실시간 알림 푸시 발송 완료)" : "";
     return {
       httpStatus: 200,
       payload: {
         status: "success",
         updatedCount,
-        message: `총 ${updatedCount}명의 회원에게 ${parsedAmount.toLocaleString()}P 마일리지 ${mode === "add" ? "지급" : "차감"} 처리가 완료되었습니다.`,
+        notifiedCount,
+        message: `총 ${updatedCount}명의 회원에게 ${parsedAmount.toLocaleString()}P 마일리지 ${mode === "add" ? "지급" : "차감"} 처리가 완료되었습니다.${pushSuffix}`,
       },
     };
   }
@@ -946,6 +1225,9 @@ export async function handleCouponMileageAction(params: {
         course_is_duration_based: isDurationBased,
         course_ended: courseEnded,
         duration_days: Math.max(1, Number(meta.duration_days) || 7),
+        max_views: extractStoredMaxViews(meta),
+        view_count: extractStoredViewCount(meta),
+        last_viewed_at: meta.last_viewed_at || null,
         status,
         issue_memo: meta.issue_memo || "",
         issued_at: meta.issued_at || row.created_at,
@@ -1036,6 +1318,20 @@ export async function handleCouponMileageAction(params: {
 
     const courseId = couponMeta.course_id;
     const durationDays = Math.max(1, Math.floor(Number(couponMeta.duration_days) || 7));
+    let maxViews = extractStoredMaxViews(couponMeta);
+
+    // 템플릿에 max_views가 설정되어 있으나 예전에 발급된 쿠폰 메타에 누락된 경우 템플릿 값 보완 참조
+    if (couponMeta.max_views === undefined && couponMeta.template_id) {
+      const { data: tplRow } = await supabaseAdmin
+        .from("support_contents")
+        .select("content")
+        .eq("id", couponMeta.template_id)
+        .eq("type", "coupon_template")
+        .maybeSingle();
+      if (tplRow) {
+        maxViews = extractStoredMaxViews(safeParseJson(tplRow.content, {}));
+      }
+    }
 
     const { data: course, error: courseErr } = await supabaseAdmin
       .from("courses")
@@ -1095,7 +1391,8 @@ export async function handleCouponMileageAction(params: {
     const usedAtIso = usedAt.toISOString();
     const expiresAtIso = calculateCouponEnrollmentExpiry(usedAt, durationDays);
 
-    // 기존 수강 이력 확인 (실수로 상시 수강 중이거나 더 긴 수강권을 덮어쓰지 않도록 보호)
+    // 기존 수강 이력 확인 (실수로 상시 수강 중이거나 더 긴 유료 수강권을 덮어쓰지 않도록 보호하되,
+    // 이전 쿠폰의 최대 시청 횟수를 모두 소진한 경우에는 새 쿠폰 즉시 적용 허용)
     const { data: existingRows, error: existCheckErr } = await supabaseAdmin
       .from("enrollments")
       .select("*")
@@ -1125,13 +1422,18 @@ export async function handleCouponMileageAction(params: {
       }
       const existingExpiryDate = new Date(existingEnrollment.expires_at);
       if (existingExpiryDate > new Date(expiresAtIso)) {
-        return {
-          httpStatus: 400,
-          payload: {
-            status: "error",
-            message: "현재 보유하신 수강 만료일이 쿠폰 적용 기간보다 더 길게 남아있습니다. 기존 수강 만료 후 사용해 주세요.",
-          },
-        };
+        const activeCtx = await resolveActiveCouponForCourse(supabaseAdmin, userId, course.id);
+        const isPrevCouponViewExhausted =
+          activeCtx.isCouponRestricted && activeCtx.isLimitReached;
+        if (!isPrevCouponViewExhausted) {
+          return {
+            httpStatus: 400,
+            payload: {
+              status: "error",
+              message: "현재 보유하신 수강 만료일이 쿠폰 적용 기간보다 더 길게 남아있습니다. 기존 수강 만료 후 사용해 주세요.",
+            },
+          };
+        }
       }
     }
 
@@ -1210,9 +1512,13 @@ export async function handleCouponMileageAction(params: {
       console.warn("[redeem-user-coupon] Linked community sync skipped:", commErr);
     }
 
-    // 쿠폰 사용 완료 마킹
+    // 쿠폰 사용 완료 마킹 (시청 횟수 초기화 포함)
     const updatedMeta = {
       ...couponMeta,
+      max_views: maxViews,
+      view_count: 0,
+      last_viewed_at: null,
+      watch_sessions: [],
       status: "used",
       used_at: usedAtIso,
       enrollment_expires_at: expiresAtIso,
@@ -1234,16 +1540,191 @@ export async function handleCouponMileageAction(params: {
       };
     }
 
+    const redeemMessage = maxViews
+      ? `'${course.title}' 강의 무료 수강 쿠폰이 적용되었습니다! 오늘부터 ${durationDays}일간 최대 ${maxViews}회 시청하실 수 있습니다.`
+      : `'${course.title}' 강의 무료 수강 쿠폰이 적용되었습니다! 오늘부터 ${durationDays}일간 자유롭게 수강하실 수 있습니다.`;
+
     return {
       httpStatus: 200,
       payload: {
         status: "success",
-        message: `'${course.title}' 강의 무료 수강 쿠폰이 적용되었습니다! 오늘부터 ${durationDays}일간 자유롭게 수강하실 수 있습니다.`,
+        message: redeemMessage,
         courseId: course.id,
         courseTitle: course.title,
         durationDays,
+        maxViews,
         usedAt: usedAtIso,
         expiresAt: expiresAtIso,
+      },
+    };
+  }
+
+  // ===========================================================================
+  // 10. MEMBER: 특정 강의의 쿠폰 수강 및 시청 가능 횟수 상태 조회
+  // ===========================================================================
+  if (action === "get-course-coupon-watch-status") {
+    const courseId = String(body.courseId || "").trim();
+    if (!courseId) {
+      return { httpStatus: 400, payload: { status: "error", message: "강의 ID가 필요합니다." } };
+    }
+
+    const ctx = await resolveActiveCouponForCourse(supabaseAdmin, requestingUser.id, courseId);
+    return {
+      httpStatus: 200,
+      payload: {
+        status: "success",
+        isCouponEnrollment: ctx.isCouponEnrollment,
+        isCouponRestricted: ctx.isCouponRestricted,
+        couponId: ctx.couponId,
+        couponName: ctx.couponName,
+        maxViews: ctx.maxViews,
+        viewCount: ctx.viewCount,
+        remainingViews: ctx.remainingViews,
+        isLimitReached: ctx.isLimitReached,
+        expiresAt: ctx.expiresAt,
+      },
+    };
+  }
+
+  // ===========================================================================
+  // 11. MEMBER: 쿠폰 수강 강의 시청 횟수 기록 및 최대 횟수 초과 차단
+  // ===========================================================================
+  if (action === "record-coupon-course-view") {
+    const courseId = String(body.courseId || "").trim();
+    const cleanSessionKey = String(body.sessionKey || "").trim();
+    const lessonId = String(body.lessonId || "").trim();
+
+    if (!courseId || !cleanSessionKey) {
+      return {
+        httpStatus: 400,
+        payload: { status: "error", message: "강의 ID와 시청 세션 키가 필요합니다." },
+      };
+    }
+
+    const ctx = await resolveActiveCouponForCourse(supabaseAdmin, requestingUser.id, courseId);
+    if (!ctx.isCouponEnrollment || !ctx.couponRow) {
+      return {
+        httpStatus: 200,
+        payload: {
+          status: "success",
+          incremented: false,
+          isCouponEnrollment: false,
+          isCouponRestricted: false,
+          couponId: null,
+          couponName: null,
+          maxViews: null,
+          viewCount: 0,
+          remainingViews: null,
+          isLimitReached: false,
+          isCurrentSessionAllowed: true,
+          expiresAt: null,
+        },
+      };
+    }
+
+    if (ctx.expiresAt && new Date(ctx.expiresAt).getTime() <= Date.now()) {
+      return {
+        httpStatus: 403,
+        payload: {
+          status: "error",
+          code: "COUPON_EXPIRED",
+          message: "쿠폰 무료 수강 기간이 만료되었습니다.",
+        },
+      };
+    }
+
+    const rawSessions = Array.isArray(ctx.couponMeta.watch_sessions)
+      ? ctx.couponMeta.watch_sessions
+      : [];
+    const alreadyRecordedInSession = rawSessions.some(
+      (s: any) => s && String(s.sessionKey || "") === cleanSessionKey
+    );
+
+    if (alreadyRecordedInSession) {
+      return {
+        httpStatus: 200,
+        payload: {
+          status: "success",
+          incremented: false,
+          isCouponEnrollment: true,
+          isCouponRestricted: ctx.isCouponRestricted,
+          couponId: ctx.couponId,
+          couponName: ctx.couponName,
+          maxViews: ctx.maxViews,
+          viewCount: ctx.viewCount,
+          remainingViews: ctx.remainingViews,
+          isLimitReached: ctx.isLimitReached,
+          isCurrentSessionAllowed: true,
+          expiresAt: ctx.expiresAt,
+        },
+      };
+    }
+
+    // 새로운 시청 세션 시작 시 최대 시청 가능 횟수 초과 여부 검사
+    if (ctx.maxViews !== null && ctx.viewCount >= ctx.maxViews) {
+      return {
+        httpStatus: 403,
+        payload: {
+          status: "error",
+          code: "COUPON_VIEW_LIMIT_EXCEEDED",
+          maxViews: ctx.maxViews,
+          viewCount: ctx.viewCount,
+          message: `쿠폰 최대 시청 가능 횟수(${ctx.maxViews}회)를 모두 소진하여 더 이상 시청하실 수 없습니다.`,
+        },
+      };
+    }
+
+    const nowIso = new Date().toISOString();
+    const nextViewCount = ctx.viewCount + 1;
+    const nextSessions = [
+      ...rawSessions.slice(-99),
+      {
+        sessionKey: cleanSessionKey,
+        lessonId,
+        viewedAt: nowIso,
+      },
+    ];
+
+    const updatedMeta = {
+      ...ctx.couponMeta,
+      view_count: nextViewCount,
+      last_viewed_at: nowIso,
+      watch_sessions: nextSessions,
+    };
+
+    const { error: saveErr } = await supabaseAdmin
+      .from("support_contents")
+      .update({
+        content: JSON.stringify(updatedMeta),
+        updated_at: nowIso,
+      })
+      .eq("id", ctx.couponRow.id);
+
+    if (saveErr) {
+      return {
+        httpStatus: 500,
+        payload: { status: "error", message: `시청 횟수 기록 중 오류가 발생했습니다: ${saveErr.message}` },
+      };
+    }
+
+    const nextRemaining = ctx.maxViews !== null ? Math.max(0, ctx.maxViews - nextViewCount) : null;
+    const nextLimitReached = ctx.maxViews !== null ? nextViewCount >= ctx.maxViews : false;
+
+    return {
+      httpStatus: 200,
+      payload: {
+        status: "success",
+        incremented: true,
+        isCouponEnrollment: true,
+        isCouponRestricted: ctx.isCouponRestricted,
+        couponId: ctx.couponId,
+        couponName: ctx.couponName,
+        maxViews: ctx.maxViews,
+        viewCount: nextViewCount,
+        remainingViews: nextRemaining,
+        isLimitReached: nextLimitReached,
+        isCurrentSessionAllowed: true,
+        expiresAt: ctx.expiresAt,
       },
     };
   }

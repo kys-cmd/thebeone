@@ -95,6 +95,20 @@ export default function AdminSalesManagement() {
     }
   };
 
+  const handleReconcilePayments = async () => {
+    try {
+      setIsProcessing('reconcile');
+      const res = await purchaseService.reconcilePayments();
+      toast.success(res.message);
+      await fetchOrders(true);
+    } catch (error: any) {
+      console.error(error);
+      toast.error(`결제·수강 복구 실패: ${error.message || '알 수 없는 오류'}`);
+    } finally {
+      setIsProcessing(null);
+    }
+  };
+
   const handleReprocessOrder = async (orderId: string) => {
     try {
       setIsProcessing(orderId);
@@ -229,10 +243,21 @@ export default function AdminSalesManagement() {
     fetchOrders();
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (skipAutoToast: boolean = false) => {
     setIsLoading(true);
     try {
-      const data = await purchaseService.getAllOrders(200);
+      const data: any = await purchaseService.getAllOrders(300);
+      const recon = data?.reconciliation;
+      if (
+        !skipAutoToast &&
+        recon &&
+        (Number(recon.recoveredOrdersCount) > 0 || Number(recon.backfilledEnrollmentsCount) > 0)
+      ) {
+        toast.success(
+          `KG이니시스 승인 누락 건 자동 복구 완료 (결제 ${recon.recoveredOrdersCount}건 / 수강권 ${recon.backfilledEnrollmentsCount}건)`
+        );
+      }
+
       // Filter out unpaid/uncompleted records completely
       const completedOnly = (data || []).filter((o: any) => {
         const s = (o.status || '').toUpperCase();
@@ -260,11 +285,11 @@ export default function AdminSalesManagement() {
 
     if ((tid === '-' || applNum === '-') && order.logs && order.logs.length > 0) {
       const successLog = order.logs.find((l: any) => l.status === 'SUCCESS') || order.logs[0];
-      if (successLog && successLog.raw_response) {
+      const rawPayload = successLog?.raw_response ?? successLog?.raw_data;
+      if (rawPayload) {
         try {
-          const rawRes = successLog.raw_response;
-          const parsed = typeof rawRes === 'string' ? JSON.parse(rawRes) : rawRes;
-          const rawObj = parsed.details || parsed;
+          const parsed = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
+          const rawObj = parsed?.details || parsed || {};
 
           if (tid === '-') {
             tid = rawObj.tid || rawObj.TID || rawObj.P_TID || rawObj.AuthTID || rawObj.payment_tid || '-';
@@ -404,8 +429,20 @@ export default function AdminSalesManagement() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button 
+            onClick={handleReconcilePayments}
+            disabled={isProcessing !== null}
+            className="h-12 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-lg shadow-indigo-200 transition-all active:scale-95 gap-2"
+          >
+            {isProcessing === 'reconcile' ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <ShieldCheck className="w-4 h-4" />
+            )}
+            결제·수강 누락 복구 동기화
+          </Button>
+          <Button 
             onClick={handleGlobalSync}
-            disabled={isProcessing === 'global'}
+            disabled={isProcessing !== null}
             className="h-12 px-6 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-black shadow-lg shadow-amber-200 transition-all active:scale-95 gap-2"
           >
             {isProcessing === 'global' ? (
@@ -422,9 +459,6 @@ export default function AdminSalesManagement() {
           >
             <Download className="w-4 h-4" />
             엑셀 다운로드
-          </Button>
-          <Button className="h-12 px-8 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-black shadow-lg shadow-purple-200 transition-all active:scale-95">
-            전체 통계 보기
           </Button>
         </div>
       </header>
@@ -558,7 +592,7 @@ export default function AdminSalesManagement() {
 
                   // Course ID formatting
                   const courseId = order.course_id || '-';
-                  const courseTitle = order.course?.title || '삭제된 강의 정보';
+                  const courseTitle = order.course?.title || order.order_name || '삭제된 강의 정보';
 
                   return (
                     <tr key={order.id || idx} className="hover:bg-purple-50/20 transition-colors group">

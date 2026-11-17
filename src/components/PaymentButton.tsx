@@ -62,15 +62,17 @@ export const PaymentButton: React.FC<PaymentButtonProps> = ({ lecture, user, com
 
     try {
       // 1. Check if the course is already in the Cart (PENDING status)
-      const { data: existingOrder, error: fetchErr } = await supabase
+      const { data: existingOrders, error: fetchErr } = await supabase
         .from('orders')
         .select('id, merchant_uid')
         .eq('user_id', user.id)
         .eq('course_id', lecture.id)
         .eq('status', 'PENDING')
-        .maybeSingle();
+        .order('created_at', { ascending: false })
+        .limit(1);
 
       if (fetchErr) throw fetchErr;
+      const existingOrder = existingOrders?.[0];
 
       let oid = '';
       if (existingOrder) {
@@ -83,20 +85,28 @@ export const PaymentButton: React.FC<PaymentButtonProps> = ({ lecture, user, com
         const timestamp = Date.now().toString();
         oid = `OID_${lecture.id.substring(0, 8).toUpperCase()}_${timestamp.substring(5)}`;
 
-        // 3. Insert PENDING order row representatively
+        // 3. Insert PENDING order row representatively (schema-resilient if order_name is absent)
+        const basePayload = {
+          user_id: user.id,
+          course_id: lecture.id,
+          amount: Number(lecture.price),
+          status: 'PENDING',
+          merchant_uid: oid,
+          created_at: new Date().toISOString()
+        };
+
         const { error: insertErr } = await supabase
           .from('orders')
-          .insert([{
-            user_id: user.id,
-            course_id: lecture.id,
-            amount: Number(lecture.price),
-            status: 'PENDING',
-            order_name: lecture.title,
-            merchant_uid: oid,
-            created_at: new Date().toISOString()
-          }]);
+          .insert([{ ...basePayload, order_name: lecture.title }]);
 
-        if (insertErr) throw insertErr;
+        if (insertErr) {
+          if (String(insertErr.message || '').toLowerCase().includes('order_name')) {
+            const { error: retryErr } = await supabase.from('orders').insert([basePayload]);
+            if (retryErr) throw retryErr;
+          } else {
+            throw insertErr;
+          }
+        }
         
         window.dispatchEvent(new Event('cart-updated'));
         

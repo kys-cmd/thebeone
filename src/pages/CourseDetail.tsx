@@ -12,7 +12,8 @@ import {
   Trash2,
   Edit2,
   Ticket,
-  AlertTriangle
+  AlertTriangle,
+  Eye
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +34,7 @@ import { instructorService } from '@/services/instructorService';
 import { reviewService, Review } from '@/services/reviewService';
 import {
   couponMileageService,
+  CourseCouponWatchStatus,
   formatCourseStartDateLabel,
   isCourseAfterEndDate,
   isCourseBeforeStartDate,
@@ -249,6 +251,7 @@ export default function CourseDetail() {
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [enrolledCount, setEnrolledCount] = useState(0);
   const [availableCourseCoupon, setAvailableCourseCoupon] = useState<MemberCouponItem | null>(null);
+  const [couponWatchStatus, setCouponWatchStatus] = useState<CourseCouponWatchStatus | null>(null);
   const [redeemingCourseCoupon, setRedeemingCourseCoupon] = useState(false);
   const [couponConfirmOpen, setCouponConfirmOpen] = useState(false);
   const tabsRef = useRef<HTMLDivElement>(null);
@@ -294,10 +297,15 @@ export default function CourseDetail() {
 
         if (user) {
           const isAdmin = user.role === 'super_admin' || user.role === 'admin';
-          const enrolled = isAdmin ? true : await courseService.checkEnrollment(user.id, id);
+          const [enrolled, watchStatus] = await Promise.all([
+            isAdmin ? Promise.resolve(true) : courseService.checkEnrollment(user.id, id),
+            isAdmin ? Promise.resolve(null) : couponMileageService.getCourseCouponWatchStatus(id).catch(() => null),
+          ]);
           setIsEnrolled(enrolled);
+          setCouponWatchStatus(watchStatus);
 
-          if (!enrolled) {
+          const isViewExhausted = Boolean(watchStatus?.isCouponRestricted && watchStatus?.isLimitReached);
+          if (!enrolled || isViewExhausted) {
             try {
               const wallet = await couponMileageService.getMyCouponsAndMileage();
               const matched = wallet.coupons.find(
@@ -422,6 +430,10 @@ export default function CourseDetail() {
       setIsEnrolled(true);
       setAvailableCourseCoupon(null);
       setCouponConfirmOpen(false);
+      if (id) {
+        const refreshedWatch = await couponMileageService.getCourseCouponWatchStatus(id).catch(() => null);
+        setCouponWatchStatus(refreshedWatch);
+      }
     } catch (err: any) {
       const errMsg = String(err?.message || '');
       if (
@@ -438,6 +450,11 @@ export default function CourseDetail() {
       setRedeemingCourseCoupon(false);
     }
   };
+
+  const isCouponViewExhausted = Boolean(
+    !isAdminUser && couponWatchStatus?.isCouponRestricted && couponWatchStatus?.isLimitReached
+  );
+  const effectiveIsEnrolled = isEnrolled && !isCouponViewExhausted;
 
   const renderPrimaryAction = (compact: boolean) => {
     const btnHeight = compact ? 'h-12 text-sm sm:text-base rounded-xl' : 'h-16 text-lg sm:text-xl rounded-2xl';
@@ -488,7 +505,7 @@ export default function CourseDetail() {
           </div>
         );
       }
-      if (isEnrolled) {
+      if (effectiveIsEnrolled) {
         if (isOffline) {
           return (
             <div className={cn(
@@ -520,7 +537,7 @@ export default function CourseDetail() {
       );
     }
 
-    if (isEnrolled) {
+    if (effectiveIsEnrolled) {
       if (isOffline) {
         return (
           <div className={cn(
@@ -722,7 +739,33 @@ export default function CourseDetail() {
                   )}
                 </div>
 
-                {!isEnrolled && availableCourseCoupon && (
+                {isCouponViewExhausted && (
+                  <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 space-y-1 text-xs font-bold text-rose-800 break-keep">
+                    <p className="font-black text-rose-700 flex items-center gap-1.5">
+                      <Eye className="w-4 h-4 shrink-0" />
+                      쿠폰 최대 시청 횟수 만료 ({couponWatchStatus?.viewCount || 0} / {couponWatchStatus?.maxViews}회)
+                    </p>
+                    <p className="text-[11px] text-rose-700/90 leading-relaxed">
+                      쿠폰으로 부여된 최대 시청 가능 횟수를 모두 사용하셨습니다. 정규 수강 신청 또는 추가 쿠폰 적용으로 계속 수강하실 수 있습니다.
+                    </p>
+                  </div>
+                )}
+
+                {effectiveIsEnrolled && couponWatchStatus?.isCouponEnrollment && (
+                  <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200 flex items-center justify-between gap-2 text-xs font-bold text-indigo-900">
+                    <span className="inline-flex items-center gap-1.5 font-extrabold">
+                      <Eye className="w-4 h-4 text-indigo-600 shrink-0" />
+                      쿠폰 수강 중 · 시청 횟수
+                    </span>
+                    <Badge className="bg-indigo-600 hover:bg-indigo-600 text-white border-none text-[11px] font-black tabular-nums">
+                      {couponWatchStatus.maxViews
+                        ? `${couponWatchStatus.viewCount} / ${couponWatchStatus.maxViews}회`
+                        : `${couponWatchStatus.viewCount}회 (무제한)`}
+                    </Badge>
+                  </div>
+                )}
+
+                {!effectiveIsEnrolled && availableCourseCoupon && (
                   <div
                     className={cn(
                       'p-4 rounded-xl border space-y-2.5',
@@ -747,21 +790,29 @@ export default function CourseDetail() {
                         <Ticket className="w-4 h-4" />
                         보유 무료 수강 쿠폰 {isAfterCourseEnd ? '(종료됨)' : isBeforeCourseStart ? '(개시 전)' : '사용 가능'}
                       </span>
-                      <Badge
-                        className={cn(
-                          'text-white border-none text-[11px] font-black rounded-md tabular-nums',
-                          isAfterCourseEnd
-                            ? 'bg-rose-600'
-                            : isBeforeCourseStart
-                              ? 'bg-amber-600'
-                              : 'bg-purple-600'
+                      <div className="flex items-center gap-1">
+                        <Badge
+                          className={cn(
+                            'text-white border-none text-[11px] font-black rounded-md tabular-nums',
+                            isAfterCourseEnd
+                              ? 'bg-rose-600'
+                              : isBeforeCourseStart
+                                ? 'bg-amber-600'
+                                : 'bg-purple-600'
+                          )}
+                        >
+                          {availableCourseCoupon.duration_days}일 무료
+                        </Badge>
+                        {availableCourseCoupon.max_views && (
+                          <Badge className="bg-indigo-600 text-white border-none text-[11px] font-black rounded-md tabular-nums">
+                            최대 {availableCourseCoupon.max_views}회
+                          </Badge>
                         )}
-                      >
-                        {availableCourseCoupon.duration_days}일 무료
-                      </Badge>
+                      </div>
                     </div>
                     <p className="text-xs font-bold text-slate-600 break-keep">
                       {availableCourseCoupon.coupon_name} · 사용 시작일로부터 {availableCourseCoupon.duration_days}일간 무료 수강
+                      {availableCourseCoupon.max_views ? ` (최대 ${availableCourseCoupon.max_views}회 시청)` : ''}
                     </p>
                     {isBeforeCourseStart && (
                       <p className="text-[11px] font-extrabold text-amber-800 flex items-start gap-1 break-keep">
@@ -1039,7 +1090,7 @@ export default function CourseDetail() {
 
       {/* Sticky Mobile Bottom Purchase Bar */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] z-40 shadow-[0_-8px_24px_rgba(15,23,42,0.06)]">
-        {!isEnrolled && availableCourseCoupon && (
+        {!effectiveIsEnrolled && availableCourseCoupon && (
           <div
             className={cn(
               'max-w-2xl mx-auto mb-2.5 flex items-center justify-between gap-2 border rounded-lg px-3 py-2',
@@ -1064,7 +1115,9 @@ export default function CourseDetail() {
                 ? '무료 쿠폰 보유 · 이미 종료된 강의입니다'
                 : isBeforeCourseStart
                   ? '무료 쿠폰 보유 · 개시일 이후 사용 가능'
-                  : `무료 쿠폰 보유 (${availableCourseCoupon.duration_days}일 수강권)`}
+                  : `무료 쿠폰 보유 (${availableCourseCoupon.duration_days}일${
+                      availableCourseCoupon.max_views ? ` · 최대 ${availableCourseCoupon.max_views}회` : ''
+                    })`}
             </span>
             <Button
               size="sm"
@@ -1210,6 +1263,14 @@ export default function CourseDetail() {
                     <span className="text-slate-600 font-extrabold shrink-0">적용 기간</span>
                     <span className="font-black text-purple-700 tabular-nums">
                       사용 시작일로부터 {availableCourseCoupon.duration_days}일 무료
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-slate-600 font-extrabold shrink-0">최대 시청 가능 횟수</span>
+                    <span className="font-black text-indigo-700 tabular-nums">
+                      {availableCourseCoupon.max_views
+                        ? `수강 기간 내 최대 ${availableCourseCoupon.max_views}회`
+                        : '제한 없음 (무제한 시청)'}
                     </span>
                   </div>
                 </div>

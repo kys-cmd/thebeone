@@ -86,7 +86,7 @@ export default function Cart() {
       window.dispatchEvent(new Event('cart-updated'));
       toast.success('수강 항목이 바구니에서 제외되었습니다.');
     } catch (err: any) {
-      alert(`항목 삭제에 실패했습니다: ${err.message || '인증/네트워크 오류'}`);
+      toast.error(`항목 삭제에 실패했습니다: ${err.message || '인증/네트워크 오류'}`);
     }
   };
 
@@ -116,32 +116,42 @@ export default function Cart() {
     }
   };
 
-  // 5. Individual Item Regular Payment Trigger (Inicis Unified Hook)
-  const handlePayment = async (item: any) => {
+  // 5. Selected Items Unified Payment Trigger (supports both single and multi-item Cart checkout)
+  const handleCheckoutSelected = async () => {
     if (!user) {
-      alert('로그인이 필요한 서비스입니다.');
+      toast.error('로그인이 필요한 서비스입니다.');
       return;
     }
-    if (!isSdkLoaded) {
-      alert('결제 연동 스크립트가 로딩 중입니다. 잠시 후 편하게 다시 시도해 주세요.');
+    if (selectedItems.length === 0) {
+      toast.error('결제할 강의를 선택해 주세요.');
+      return;
+    }
+    if (!isSdkLoaded && finalTotal > 0) {
+      toast.error('결제 연동 스크립트가 로딩 중입니다. 잠시 후 다시 시도해 주세요.');
       return;
     }
 
-    // 마일리지 할인 차감액 계산
-    const itemAmount = Number(item.amount || item.price || 0);
-    const mileageToUse = Math.min(appliedMileage, itemAmount);
-    const priceToPay = Math.max(0, itemAmount - mileageToUse);
+    const firstItem = selectedItems[0];
+    const firstTitle = firstItem.courses?.title || firstItem.order_name || '온라인 교육 강좌 수강권';
+    const combinedCourseName =
+      selectedItems.length > 1
+        ? `${firstTitle} 외 ${selectedItems.length - 1}건`
+        : firstTitle;
 
     try {
       await requestPayment({
-        price: priceToPay,
-        courseId: item.course_id,
-        courseName: item.courses?.title || '온라인 교육 강좌 수강권',
+        price: finalTotal,
+        courseId: firstItem.course_id,
+        items: selectedItems.map((it) => ({
+          orderId: it.id,
+          courseId: it.course_id,
+        })),
+        courseName: combinedCourseName,
         userId: user.id,
         userEmail: user.email || '',
         userName: user.name || '구매자',
         userPhone: user.mobile_phone || '010-0000-0000',
-        mileageUsed: mileageToUse
+        mileageUsed: appliedMileage,
       });
     } catch (err: any) {
       toast.error(`결제 오류: ${err.message || '결제 승인 프로세스를 불러오지 못했습니다.'}`);
@@ -422,7 +432,7 @@ export default function Cart() {
                   <div className="space-y-3 pt-1 sm:pt-2">
                     {selectedItems.length > 0 ? (
                       <Button
-                        onClick={() => handlePayment(selectedItems[0])}
+                        onClick={handleCheckoutSelected}
                         disabled={isPaying}
                         className="w-full h-12 sm:h-13 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-sm rounded-2xl shadow-md shadow-purple-100 flex items-center justify-center gap-1.5 transition-all"
                       >
@@ -465,7 +475,7 @@ export default function Cart() {
               </p>
             </div>
             <Button
-              onClick={() => selectedItems.length > 0 && handlePayment(selectedItems[0])}
+              onClick={handleCheckoutSelected}
               disabled={isPaying || selectedItems.length === 0}
               className="h-12 px-6 bg-purple-600 hover:bg-purple-700 text-white font-black text-sm rounded-xl shadow-md shadow-purple-100 shrink-0 flex items-center gap-1.5"
             >
