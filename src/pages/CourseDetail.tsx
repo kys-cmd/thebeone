@@ -329,6 +329,94 @@ export default function CourseDetail() {
     loadCourse();
   }, [id, user]);
 
+  useEffect(() => {
+    if (!course) return;
+
+    const siteName = 'BE ONE: 비원아카데미';
+    const fullTitle = course.title ? `${course.title} | ${siteName}` : siteName;
+    const desc =
+      String(course.description || '').replace(/\s+/g, ' ').trim() ||
+      `${course.instructor ? `${course.instructor} 강사 · ` : ''}정규강의, 특강, 그리고 강력한 커뮤니티가 결합된 비원아카데미입니다.`;
+    const pageUrl = `${window.location.origin}${window.location.pathname}`;
+
+    const resolveAbsoluteImage = (raw?: string | null): string | null => {
+      const trimmed = String(raw || '').trim();
+      if (!trimmed || trimmed.startsWith('data:') || trimmed.startsWith('blob:')) return null;
+      const assetsMatch = trimmed.match(/^(?:https?:\/\/[^/]+)?\/api\/assets\/([^/]+)\/([^?#]+)(?:\?[^#]*)?/i);
+      if (assetsMatch) {
+        const supUrl = String(
+          (window as any).ENV_CONFIG?.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || ''
+        )
+          .trim()
+          .replace(/\/$/, '');
+        const encodedPath = assetsMatch[2]
+          .split('/')
+          .map((seg) => {
+            try {
+              return encodeURIComponent(decodeURIComponent(seg));
+            } catch {
+              return encodeURIComponent(seg);
+            }
+          })
+          .join('/');
+        if (supUrl) {
+          return `${supUrl}/storage/v1/object/public/${assetsMatch[1]}/${encodedPath}`;
+        }
+        return `${window.location.origin}/api/assets/${assetsMatch[1]}/${encodedPath}`;
+      }
+      if (trimmed.startsWith('//')) return `https:${trimmed}`;
+      if (/^https?:\/\//i.test(trimmed)) return trimmed;
+      if (trimmed.startsWith('/')) return `${window.location.origin}${trimmed}`;
+      return null;
+    };
+
+    const layoutBlocks = Array.isArray((course.layout as any)?.blocks)
+      ? (course.layout as any).blocks
+      : [];
+    const blockImg = layoutBlocks.find((b: any) => b?.type === 'image' && b?.content)?.content;
+    const ogImageUrl =
+      resolveAbsoluteImage(course.thumbnail) ||
+      resolveAbsoluteImage(course.hero_image) ||
+      resolveAbsoluteImage(blockImg);
+
+    document.title = fullTitle;
+
+    const upsertMeta = (attr: 'name' | 'property', key: string, content: string | null) => {
+      let tag = document.head.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
+      if (!content) {
+        if (tag) tag.remove();
+        return;
+      }
+      if (!tag) {
+        tag = document.createElement('meta');
+        tag.setAttribute(attr, key);
+        document.head.appendChild(tag);
+      }
+      tag.setAttribute('content', content);
+    };
+
+    upsertMeta('name', 'description', desc);
+    upsertMeta('property', 'og:type', 'website');
+    upsertMeta('property', 'og:site_name', siteName);
+    upsertMeta('property', 'og:title', fullTitle);
+    upsertMeta('property', 'og:description', desc);
+    upsertMeta('property', 'og:url', pageUrl);
+    upsertMeta('property', 'og:image', ogImageUrl);
+    upsertMeta('property', 'og:image:alt', fullTitle);
+    upsertMeta('name', 'twitter:card', ogImageUrl ? 'summary_large_image' : 'summary');
+    upsertMeta('name', 'twitter:title', fullTitle);
+    upsertMeta('name', 'twitter:description', desc);
+    upsertMeta('name', 'twitter:image', ogImageUrl);
+
+    let canonical = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute('href', pageUrl);
+  }, [course]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">

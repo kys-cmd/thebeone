@@ -20,6 +20,11 @@ import {
   handleInicisSettingsAction,
 } from "./src/server/inicisConfigHelper";
 import {
+  fetchCourseOgMeta,
+  getRequestOrigin,
+  injectOgTagsIntoHtml,
+} from "./src/server/courseOgHelper";
+import {
   completeApprovedOrdersAndEnroll,
   fetchAdminEnrollments,
   fetchEnrichedAdminOrders,
@@ -5005,6 +5010,33 @@ async function startServer() {
       }
       try {
         const vite = viteInstance || (await vitePromise);
+
+        const courseMatch = req.method === "GET" ? req.path.match(/^\/course\/([^/]+)\/?$/) : null;
+        if (courseMatch && !req.path.includes(".")) {
+          try {
+            const courseId = decodeURIComponent(courseMatch[1]);
+            const origin = getRequestOrigin(req.headers);
+            const ogMeta = await fetchCourseOgMeta({
+              supabaseAdmin,
+              courseId,
+              origin,
+              requestPath: req.path,
+              supabaseUrl,
+            });
+            if (ogMeta) {
+              const indexHtmlPath = path.join(process.cwd(), "index.html");
+              if (fs.existsSync(indexHtmlPath)) {
+                const rawHtml = fs.readFileSync(indexHtmlPath, "utf-8");
+                const transformed = await vite.transformIndexHtml(req.originalUrl, rawHtml);
+                const injected = injectOgTagsIntoHtml(transformed, ogMeta);
+                return res.status(200).setHeader("Content-Type", "text/html; charset=utf-8").send(injected);
+              }
+            }
+          } catch (ogErr) {
+            console.warn("[Dev SSR OG] Fallback to default Vite middleware:", ogErr);
+          }
+        }
+
         vite.middlewares(req, res, next);
       } catch (err) {
         next(err);
@@ -5014,13 +5046,34 @@ async function startServer() {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     // SPA Fallback for production
-    app.get("*", (req, res, next) => {
+    app.get("*", async (req, res, next) => {
       if (req.path.startsWith("/api") || req.path === "/config.js") {
         return next();
       }
       const indexPath = path.join(distPath, "index.html");
       if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
+        const courseMatch = req.path.match(/^\/course\/([^/]+)\/?$/);
+        if (courseMatch && !req.path.includes(".")) {
+          try {
+            const courseId = decodeURIComponent(courseMatch[1]);
+            const origin = getRequestOrigin(req.headers);
+            const ogMeta = await fetchCourseOgMeta({
+              supabaseAdmin,
+              courseId,
+              origin,
+              requestPath: req.path,
+              supabaseUrl,
+            });
+            if (ogMeta) {
+              const rawHtml = fs.readFileSync(indexPath, "utf-8");
+              const injected = injectOgTagsIntoHtml(rawHtml, ogMeta);
+              return res.status(200).setHeader("Content-Type", "text/html; charset=utf-8").send(injected);
+            }
+          } catch (ogErr) {
+            console.warn("[Prod SSR OG] Fallback to index.html:", ogErr);
+          }
+        }
+        return res.sendFile(indexPath);
       } else {
         console.error(`Production index.html missing at: ${indexPath}`);
         res.status(404).send("Application not built or index.html missing.");

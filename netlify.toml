@@ -136,6 +136,13 @@
   status = 200
   force = true
 
+# 1.5 Course detail OpenGraph SSR injection for blog/social link previews
+[[redirects]]
+  from = "/course/:id"
+  to = "/.netlify/functions/og-course?id=:id"
+  status = 200
+  force = true
+
 # 2. SPA Fallback (Redirect all other routes to index.html)
 [[redirects]]
   from = "/*"
