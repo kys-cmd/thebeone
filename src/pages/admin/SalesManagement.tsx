@@ -663,17 +663,17 @@ export default function AdminSalesManagement() {
       {/* 매출 내역 테이블 */}
       <Card className="rounded-xl border border-slate-200/80 shadow-none overflow-hidden bg-white">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
+          <table className="w-full min-w-[820px] lg:min-w-0 lg:table-fixed text-left border-collapse text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500">
-                <th className="py-3.5 px-4 whitespace-nowrap">결제일자</th>
-                <th className="py-3.5 px-4 whitespace-nowrap">승인번호</th>
-                <th className="py-3.5 px-4 whitespace-nowrap">구매자명</th>
-                <th className="py-3.5 px-4">상품 내용</th>
-                <th className="py-3.5 px-4 text-right whitespace-nowrap">결제금액</th>
-                <th className="py-3.5 px-4 whitespace-nowrap">결제방법</th>
-                <th className="py-3.5 px-4 text-center whitespace-nowrap">결제 상태</th>
-                <th className="py-3.5 px-4 text-right whitespace-nowrap">관리</th>
+                <th className="py-3 px-2.5 xl:px-3 w-[100px] whitespace-nowrap">결제일자</th>
+                <th className="py-3 px-2.5 xl:px-3 w-[96px] whitespace-nowrap">승인번호</th>
+                <th className="py-3 px-2.5 xl:px-3 w-[84px] whitespace-nowrap">구매자명</th>
+                <th className="py-3 px-2.5 xl:px-3">상품 내용</th>
+                <th className="py-3 px-2.5 xl:px-3 w-[96px] text-right whitespace-nowrap">결제금액</th>
+                <th className="py-3 px-2.5 xl:px-3 w-[108px] whitespace-nowrap">결제방법</th>
+                <th className="py-3 px-2.5 xl:px-3 w-[72px] text-center whitespace-nowrap">결제 상태</th>
+                <th className="py-3 px-2.5 xl:px-3 w-[144px] text-right whitespace-nowrap">관리</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
@@ -691,74 +691,79 @@ export default function AdminSalesManagement() {
                   const details = extractOrderPaymentDetails(order);
                   const realName = order.profile?.name || '';
                   const nickName = order.profile?.nickname || '';
-                  const purchaserName =
+                  const purchaserDisplay = realName || nickName || '익명';
+                  const purchaserFullTitle =
                     realName && nickName && realName !== nickName
                       ? `${realName} (${nickName})`
-                      : realName || nickName || '익명';
+                      : purchaserDisplay;
                   const courseTitle = order.course?.title || order.order_name || '삭제된 강의 정보';
                   const canRefund = isOrderCompletedStatus(order.status);
 
                   return (
                     <tr key={order.id || idx} className="hover:bg-slate-50/70 transition-colors">
                       {/* 1. 결제일자 */}
-                      <td className="py-3.5 px-4 whitespace-nowrap tabular-nums">
-                        <div className="text-sm font-medium text-slate-900">
+                      <td className="py-3 px-2.5 xl:px-3 whitespace-nowrap tabular-nums">
+                        <div className="text-xs font-medium text-slate-900">
                           {order.created_at ? format(new Date(order.created_at), 'yyyy-MM-dd', { locale: ko }) : '-'}
                         </div>
-                        <div className="text-xs text-slate-400">
+                        <div className="text-[11px] text-slate-400">
                           {order.created_at ? format(new Date(order.created_at), 'HH:mm:ss', { locale: ko }) : ''}
                         </div>
                       </td>
 
                       {/* 2. 승인번호 */}
-                      <td className="py-3.5 px-4 whitespace-nowrap font-mono tabular-nums text-xs text-slate-700">
-                        {details.applNum !== '-' ? (
-                          <span className="font-semibold text-slate-900">{details.applNum}</span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
+                      <td className="py-3 px-2.5 xl:px-3 whitespace-nowrap font-mono tabular-nums text-xs text-slate-700">
+                        <div className="truncate" title={details.applNum}>
+                          {details.applNum !== '-' ? (
+                            <span className="font-semibold text-slate-900">{details.applNum}</span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </div>
                       </td>
 
                       {/* 3. 구매자명 */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="text-sm font-semibold text-slate-900">{purchaserName}</div>
+                      <td className="py-3 px-2.5 xl:px-3">
+                        <div className="text-xs font-semibold text-slate-900 truncate" title={purchaserFullTitle}>
+                          {purchaserDisplay}
+                        </div>
                       </td>
 
                       {/* 4. 상품 내용 */}
-                      <td className="py-3.5 px-4 max-w-[260px]">
-                        <div className="text-sm font-medium text-slate-800 truncate" title={courseTitle}>
+                      <td className="py-3 px-2.5 xl:px-3 min-w-0">
+                        <div className="text-xs font-medium text-slate-800 truncate" title={courseTitle}>
                           {courseTitle}
                         </div>
                       </td>
 
                       {/* 5. 결제금액 */}
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap font-mono tabular-nums font-semibold text-slate-900">
+                      <td className="py-3 px-2.5 xl:px-3 text-right whitespace-nowrap font-mono tabular-nums text-xs font-semibold text-slate-900">
                         ₩{Number(order.amount || 0).toLocaleString()}
                       </td>
 
                       {/* 6. 결제방법 (PC 또는 모바일) */}
-                      <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-700">
+                      <td className="py-3 px-2.5 xl:px-3 whitespace-nowrap text-xs text-slate-700">
                         <span className="font-semibold text-slate-900">{details.payDeviceLabel}</span>
-                        <span className="text-slate-300 mx-1.5" aria-hidden="true">·</span>
+                        <span className="text-slate-300 mx-1" aria-hidden="true">·</span>
                         <span className="text-slate-500">{details.payMethodLabel}</span>
                       </td>
 
                       {/* 7. 결제 상태 */}
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                      <td className="py-3 px-2.5 xl:px-3 text-center whitespace-nowrap">
                         {renderStatusText(order.status)}
                       </td>
 
                       {/* 8. 메뉴: 상세보기 & 환불 */}
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center justify-end gap-1.5">
+                      <td className="py-3 px-2.5 xl:px-3 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center justify-end gap-1">
                           <Button
                             type="button"
                             onClick={() => setDetailOrder(order)}
                             variant="outline"
                             size="sm"
-                            className="h-8 px-3 rounded-lg text-xs font-semibold text-slate-700 border-slate-200 hover:bg-slate-100 whitespace-nowrap shrink-0 gap-1 cursor-pointer"
+                            className="h-7 px-2.5 rounded-lg text-xs font-semibold text-slate-700 border-slate-200 hover:bg-slate-100 whitespace-nowrap shrink-0 gap-1 cursor-pointer"
                           >
-                            <Eye className="w-3.5 h-3.5" />
+                            <Eye className="w-3 h-3" />
                             상세보기
                           </Button>
 
@@ -769,12 +774,12 @@ export default function AdminSalesManagement() {
                               disabled={isProcessing !== null}
                               variant="outline"
                               size="sm"
-                              className="h-8 px-3 rounded-lg text-xs font-semibold text-rose-600 border-rose-200 bg-rose-50/70 hover:bg-rose-100 whitespace-nowrap shrink-0 gap-1 cursor-pointer"
+                              className="h-7 px-2.5 rounded-lg text-xs font-semibold text-rose-600 border-rose-200 bg-rose-50/70 hover:bg-rose-100 whitespace-nowrap shrink-0 gap-1 cursor-pointer"
                             >
                               {isProcessing === order.id + '_refund' ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <Loader2 className="w-3 h-3 animate-spin" />
                               ) : (
-                                <RotateCcw className="w-3.5 h-3.5" />
+                                <RotateCcw className="w-3 h-3" />
                               )}
                               환불
                             </Button>
