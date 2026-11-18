@@ -113,7 +113,7 @@ export default function AdminLayout() {
       </aside>
 
       {/* Content */}
-      <div className="flex-1 ml-72">
+      <div className="flex-1 min-w-0 ml-72">
         {/* Top Header */}
         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-10 sticky top-0 z-20">
           <div className="relative w-96 group">
