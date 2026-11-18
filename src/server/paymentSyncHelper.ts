@@ -1216,6 +1216,7 @@ export function parsePgPayloadObject(rawInput: any): Record<string, any> | null 
 
 export function extractPgApprovalFields(rawObj: Record<string, any> | null | undefined): {
   tid: string;
+  mid: string;
   applNum: string;
   payDevice: string;
   cardName: string;
@@ -1230,6 +1231,7 @@ export function extractPgApprovalFields(rawObj: Record<string, any> | null | und
   if (!rawObj || typeof rawObj !== "object") {
     return {
       tid: "",
+      mid: "",
       applNum: "",
       payDevice: "",
       cardName: "",
@@ -1298,8 +1300,11 @@ export function extractPgApprovalFields(rawObj: Record<string, any> | null | und
     hasRealInicisTid &&
     (resCode === "0000" || resCode === "00" || (Boolean(applNum) && resCode === ""));
 
+  const mid = String(rawObj.mid || rawObj.P_MID || "").trim();
+
   return {
     tid,
+    mid,
     applNum,
     payDevice,
     cardName,
@@ -1729,9 +1734,10 @@ export async function fetchEnrichedAdminOrders(
 export async function resolveOrderInicisTidAndMethod(
   supabaseAdmin: SupabaseClient,
   order: any
-): Promise<{ tid: string; payMethod: string }> {
+): Promise<{ tid: string; payMethod: string; mid: string }> {
   let tid = String(order?.payment_tid || "").trim();
   let rawMethod = String(order?.payment_method || "").trim();
+  let mid = "";
   const baseUid = getBaseMerchantUid(order?.merchant_uid);
 
   try {
@@ -1762,11 +1768,12 @@ export async function resolveOrderInicisTidAndMethod(
       const obj = parsePgPayloadObject(l.raw_response ?? l.raw_data);
       const info = extractPgApprovalFields(obj);
       if (info.tid && !tid) tid = info.tid;
+      if (info.mid && !mid) mid = info.mid;
       if (info.payMethod && !rawMethod) rawMethod = info.payMethod;
-      if (tid) break;
+      if (tid && mid) break;
     }
 
-    if (!tid && baseUid) {
+    if ((!tid || !mid) && baseUid) {
       const { data: apiLog } = await supabaseAdmin
         .from("payment_api_logs")
         .select("*")
@@ -1779,7 +1786,8 @@ export async function resolveOrderInicisTidAndMethod(
       if (apiLog?.response_data) {
         const obj = parsePgPayloadObject(apiLog.response_data);
         const info = extractPgApprovalFields(obj);
-        if (info.tid) tid = info.tid;
+        if (info.tid && !tid) tid = info.tid;
+        if (info.mid && !mid) mid = info.mid;
         if (info.payMethod && !rawMethod) rawMethod = info.payMethod;
       }
     }
@@ -1789,12 +1797,40 @@ export async function resolveOrderInicisTidAndMethod(
 
   let inicisCancelMethod = "Card";
   const upper = rawMethod.toUpperCase();
-  if (upper.includes("CARD") || upper.includes("신용카드")) inicisCancelMethod = "Card";
-  else if (upper.includes("VBANK") || upper.includes("가상계좌")) inicisCancelMethod = "Vacct";
-  else if (upper.includes("BANK") || upper.includes("DIRECTBANK") || upper.includes("계좌")) inicisCancelMethod = "Acct";
-  else if (upper.includes("HPP") || upper.includes("휴대폰")) inicisCancelMethod = "HPP";
+  const upperTid = tid.toUpperCase();
+  if (
+    upper.includes("VBANK") ||
+    upper.includes("VACCT") ||
+    upper.includes("가상계좌") ||
+    upperTid.includes("VBNK") ||
+    upperTid.includes("VBANK")
+  ) {
+    inicisCancelMethod = "Vacct";
+  } else if (
+    upper.includes("BANK") ||
+    upper.includes("DIRECTBANK") ||
+    upper.includes("ACCT") ||
+    upper.includes("계좌") ||
+    upperTid.includes("BANK") ||
+    upperTid.includes("ACCT")
+  ) {
+    inicisCancelMethod = "Acct";
+  } else if (
+    upper.includes("HPP") ||
+    upper.includes("MOBILE") ||
+    upper.includes("휴대폰") ||
+    upperTid.includes("HPP")
+  ) {
+    inicisCancelMethod = "HPP";
+  } else if (
+    upper.includes("CARD") ||
+    upper.includes("신용카드") ||
+    upperTid.includes("CARD")
+  ) {
+    inicisCancelMethod = "Card";
+  }
 
-  return { tid, payMethod: inicisCancelMethod };
+  return { tid, payMethod: inicisCancelMethod, mid };
 }
 
 /**

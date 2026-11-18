@@ -864,10 +864,10 @@ export default function CourseDetail() {
         </div>
       </section>
 
-      {/* Sticky Section Tabs */}
+      {/* Section Tabs */}
       <div
         ref={tabsRef}
-        className="sticky top-14 sm:top-16 lg:top-20 bg-white/95 backdrop-blur-md border-b border-slate-100 z-30"
+        className="bg-white border-b border-slate-100"
       >
         <div className="container mx-auto px-4">
           <div className="flex items-center gap-6 sm:gap-10 h-12 sm:h-14 overflow-x-auto no-scrollbar">

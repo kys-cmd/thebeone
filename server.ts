@@ -13,6 +13,13 @@ import iconv from "iconv-lite";
 import { COUPON_MILEAGE_ACTIONS, handleCouponMileageAction } from "./src/server/couponMileageHandler";
 import { NOTIFICATION_ACTIONS, handleNotificationAction } from "./src/server/notificationHandler";
 import {
+  INICIS_ENDPOINTS,
+  INICIS_SETTINGS_ACTIONS,
+  buildInicisRefundRequest,
+  getInicisRuntimeConfig,
+  handleInicisSettingsAction,
+} from "./src/server/inicisConfigHelper";
+import {
   completeApprovedOrdersAndEnroll,
   fetchAdminEnrollments,
   fetchEnrichedAdminOrders,
@@ -50,18 +57,7 @@ const supabaseAdmin = (supabaseUrl && supabaseServiceRoleKey)
 // ==========================================
 // KG INICIS CONFIGURATION & ENDPOINTS
 // ==========================================
-const INICIS_ENDPOINTS = {
-  sandbox: {
-    stdpay: "https://stgstdpay.inicis.com/api/payAuth",
-    cancel: "https://stginiapi.inicis.com/api/v1/refund",
-    stdjs: "https://stgstdpay.inicis.com/stdjs/INIStdPay.js",
-  },
-  production: {
-    stdpay: "https://stdpay.inicis.com/api/payAuth",
-    cancel: "https://iniapi.inicis.com/api/v1/refund",
-    stdjs: "https://stdpay.inicis.com/stdjs/INIStdPay.js",
-  },
-};
+// INICIS_ENDPOINTS imported from ./src/server/inicisConfigHelper
 
 // Timezone-resilient Korean Standard Time (KST, UTC+9) 14-digit generator
 function getInicisKstTimestamp(): string {
@@ -112,36 +108,9 @@ function calculateCourseEnrollmentExpiry(course: any, nowDate: Date = new Date()
   return expiresAt.toISOString();
 }
 
-// Retrieve PG configuration from database with environment fallback
+// Retrieve PG configuration from database & encrypted vault with environment fallback
 async function getInicisConfig() {
-  if (supabaseAdmin) {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from("payment_settings")
-        .select("*")
-        .limit(1)
-        .maybeSingle();
-
-      if (!error && data?.pg_id && data?.inicis_sign_key) {
-        const isSandbox = data.pg_mode ? data.pg_mode !== "live" : (data.is_sandbox !== false);
-        return {
-          mid: data.pg_id,
-          signKey: data.inicis_sign_key,
-          apiKey: data.inicis_api_key || null,
-          isSandbox: isSandbox,
-        };
-      }
-    } catch (e) {
-      console.warn("[getInicisConfig] DB loading from payment_settings failed, fallback defaults used:", e);
-    }
-  }
-
-  return {
-    mid: process.env.INICIS_MID || process.env.VITE_INICIS_MID || "INIpayTest",
-    signKey: process.env.INICIS_SIGNKEY || "SU5JQ0lTX1NJR05LRVlfVEVTVF9LRVk=",
-    apiKey: process.env.INICIS_APIKEY || "ltS7C37SSTG90S7S",
-    isSandbox: process.env.NODE_ENV !== "production",
-  };
+  return getInicisRuntimeConfig(supabaseAdmin);
 }
 
 async function startServer() {
@@ -2109,6 +2078,18 @@ async function startServer() {
         return res.status(result.httpStatus).json(result.payload);
       }
 
+      // INICIS API KEY VAULT SETTINGS (Admin-only)
+      if (INICIS_SETTINGS_ACTIONS.has(action)) {
+        const result = await handleInicisSettingsAction({
+          action,
+          body: req.body || {},
+          supabaseAdmin,
+          requestingUser,
+          isAdminCheck,
+        });
+        return res.status(result.httpStatus).json(result.payload);
+      }
+
       if (action === "sync-my-paid-enrollments") {
         if (!requestingUser) {
           return res.status(401).json({ status: "error", message: "로그인이 필요합니다." });
@@ -2813,39 +2794,53 @@ async function startServer() {
           });
         } else {
           // Real Inicis API request
-          const cancelUrl = config.isSandbox ? INICIS_ENDPOINTS.sandbox.cancel : INICIS_ENDPOINTS.production.cancel;
           const timestamp = getInicisKstTimestamp();
-          
-          // Determine cancellation API Key (iniAPI Key) dynamically to prevent hashData mismatch (ERR205)
-          const isSandboxFlg = config.isSandbox || config.mid === "INIpayTest";
-          const cancelKey = isSandboxFlg 
-            ? "ltS7C37SSTG90S7S" 
-            : (process.env.INICIS_APIKEY || (config as any).apiKey || (config as any).inicis_api_key || config.signKey);
+          const refundBuild = buildInicisRefundRequest({
+            config,
+            tid,
+            paymethod,
+            loggedMid: resolvedPg.mid,
+            reason,
+            timestamp,
+          });
 
-          // PlainText = key + type + paymethod + timestamp + clientIp + mid + tid
-          const type = "Refund";
-          const clientIp = "127.0.0.1";
-          const plainText = cancelKey + type + paymethod + timestamp + clientIp + config.mid + tid;
-          const hashData = crypto.createHash("sha512").update(plainText).digest("hex");
+          if ("errorCode" in refundBuild) {
+            return res.status(refundBuild.httpStatus).json({
+              status: "error",
+              code: refundBuild.errorCode,
+              message: refundBuild.message,
+            });
+          }
+
+          const {
+            cancelUrl,
+            effectiveMid,
+            type,
+            paymethod: resolvedPaymethod,
+            clientIp,
+            tid: cleanTid,
+            msg: refundMsg,
+            hashData,
+          } = refundBuild;
 
           const requestParams = new URLSearchParams();
           requestParams.append("type", type);
-          requestParams.append("paymethod", paymethod);
+          requestParams.append("paymethod", resolvedPaymethod);
           requestParams.append("timestamp", timestamp);
           requestParams.append("clientIp", clientIp);
-          requestParams.append("mid", config.mid);
-          requestParams.append("tid", tid);
-          requestParams.append("msg", reason || "관리자 환불 처리");
+          requestParams.append("mid", effectiveMid);
+          requestParams.append("tid", cleanTid);
+          requestParams.append("msg", refundMsg);
           requestParams.append("hashData", hashData);
 
           const reqObj = {
             type,
-            paymethod,
+            paymethod: resolvedPaymethod,
             timestamp,
             clientIp,
-            mid: config.mid,
-            tid,
-            msg: reason || "관리자 환불 처리"
+            mid: effectiveMid,
+            tid: cleanTid,
+            msg: refundMsg,
           };
 
           // Log Refund Request
@@ -2859,11 +2854,11 @@ async function startServer() {
           });
 
           try {
-            console.log(`[Refund] Requesting real Inicis cancel V2 at: ${cancelUrl} (TID: ${tid}, MID: ${config.mid}, PayMethod: ${paymethod})`);
+            console.log(`[Refund] Requesting real Inicis cancel V2 at: ${cancelUrl} (TID: ${cleanTid}, MID: ${effectiveMid}, PayMethod: ${resolvedPaymethod})`);
             const apiResponse = await fetch(cancelUrl, {
               method: "POST",
               headers: {
-                "Content-Type": "application/x-www-form-urlencoded"
+                "Content-Type": "application/x-www-form-urlencoded;charset=utf-8"
               },
               body: requestParams.toString()
             });
@@ -2897,9 +2892,13 @@ async function startServer() {
 
             // V2 cancel resultCode is typically "00" or "0000" on success
             if (resultCode !== "00" && resultCode !== "0000") {
+              const errHint =
+                resultCode === "ERR205"
+                  ? ` (상점아이디 ${effectiveMid}의 INIAPI Key가 이니시스 가맹점관리자 > 상점정보 > 계약정보 > 부가정보 > INIAPI Key와 일치하는지 [시스템 설정 > 결제 설정]에서 확인해 주세요.)`
+                  : "";
               return res.status(400).json({
                 status: "error",
-                message: `이니시스 실시간 거래 취소 거부 오류 [코드: ${resultCode}]: ${resultMsg}`
+                message: `이니시스 실시간 거래 취소 거부 오류 [코드: ${resultCode}]: ${resultMsg}${errHint}`
               });
             }
           } catch (fetchErr: any) {

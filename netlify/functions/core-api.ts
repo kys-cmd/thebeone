@@ -4,6 +4,12 @@ import crypto from "crypto";
 import { COUPON_MILEAGE_ACTIONS, handleCouponMileageAction } from "../../src/server/couponMileageHandler";
 import { NOTIFICATION_ACTIONS, handleNotificationAction } from "../../src/server/notificationHandler";
 import {
+  INICIS_SETTINGS_ACTIONS,
+  buildInicisRefundRequest,
+  getInicisRuntimeConfig,
+  handleInicisSettingsAction,
+} from "../../src/server/inicisConfigHelper";
+import {
   fetchAdminEnrollments,
   fetchEnrichedAdminOrders,
   fetchMemberSyncedData,
@@ -88,34 +94,7 @@ function getInicisKstTimestamp(): string {
 }
 
 async function getInicisConfig() {
-  if (supabaseAdmin) {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from("payment_settings")
-        .select("*")
-        .limit(1)
-        .maybeSingle();
-
-      if (!error && data?.pg_id && data?.inicis_sign_key) {
-        const isSandbox = data.pg_mode ? data.pg_mode !== "live" : (data.is_sandbox !== false);
-        return {
-          mid: data.pg_id,
-          signKey: data.inicis_sign_key,
-          apiKey: data.inicis_api_key || null,
-          isSandbox: isSandbox,
-        };
-      }
-    } catch (e) {
-      console.warn("[getInicisConfig] DB loading from payment_settings failed, fallback defaults used:", e);
-    }
-  }
-
-  return {
-    mid: process.env.INICIS_MID || process.env.VITE_INICIS_MID || "INIpayTest",
-    signKey: process.env.INICIS_SIGNKEY || "SU5JQ0lTX1NJR05LRVlfVEVTVF9LRVk=",
-    apiKey: process.env.INICIS_APIKEY || "ltS7C37SSTG90S7S",
-    isSandbox: process.env.NODE_ENV !== "production",
-  };
+  return getInicisRuntimeConfig(supabaseAdmin);
 }
 
 export const handler: Handler = async (event, context) => {
@@ -457,6 +436,21 @@ export const handler: Handler = async (event, context) => {
 
     if (NOTIFICATION_ACTIONS.has(action)) {
       const result = await handleNotificationAction({
+        action,
+        body,
+        supabaseAdmin,
+        requestingUser,
+        isAdminCheck: isAdminUser,
+      });
+      return {
+        statusCode: result.httpStatus,
+        headers: responseHeaders,
+        body: JSON.stringify(result.payload),
+      };
+    }
+
+    if (INICIS_SETTINGS_ACTIONS.has(action)) {
+      const result = await handleInicisSettingsAction({
         action,
         body,
         supabaseAdmin,
@@ -1500,35 +1494,55 @@ export const handler: Handler = async (event, context) => {
       if (isMockTid) {
         console.log(`[Refund] Mock / Sandbox bypass refund for OID: ${order.merchant_uid} because resolved TID is mock or absent.`);
       } else {
-        const cancelUrl = config.isSandbox ? INICIS_ENDPOINTS.sandbox.cancel : INICIS_ENDPOINTS.production.cancel;
         const timestamp = getInicisKstTimestamp();
+        const refundBuild = buildInicisRefundRequest({
+          config,
+          tid,
+          paymethod,
+          loggedMid: resolvedPg.mid,
+          reason,
+          timestamp,
+        });
 
-        const isSandboxFlg = config.isSandbox || config.mid === "INIpayTest";
-        const cancelKey = isSandboxFlg
-          ? "ltS7C37SSTG90S7S"
-          : (process.env.INICIS_APIKEY || (config as any).apiKey || (config as any).inicis_api_key || config.signKey);
+        if ("errorCode" in refundBuild) {
+          return {
+            statusCode: refundBuild.httpStatus,
+            headers: responseHeaders,
+            body: JSON.stringify({
+              status: "error",
+              code: refundBuild.errorCode,
+              message: refundBuild.message,
+            }),
+          };
+        }
 
-        const type = "Refund";
-        const clientIp = "127.0.0.1";
-        const plainText = cancelKey + type + paymethod + timestamp + clientIp + config.mid + tid;
-        const hashData = crypto.createHash("sha512").update(plainText).digest("hex");
+        const {
+          cancelUrl,
+          effectiveMid,
+          type,
+          paymethod: resolvedPaymethod,
+          clientIp,
+          tid: cleanTid,
+          msg: refundMsg,
+          hashData,
+        } = refundBuild;
 
         const requestParams = new URLSearchParams();
         requestParams.append("type", type);
-        requestParams.append("paymethod", paymethod);
+        requestParams.append("paymethod", resolvedPaymethod);
         requestParams.append("timestamp", timestamp);
         requestParams.append("clientIp", clientIp);
-        requestParams.append("mid", config.mid);
-        requestParams.append("tid", tid);
-        requestParams.append("msg", reason || "관리자 환불 처리");
+        requestParams.append("mid", effectiveMid);
+        requestParams.append("tid", cleanTid);
+        requestParams.append("msg", refundMsg);
         requestParams.append("hashData", hashData);
 
         try {
-          console.log(`[Refund] Requesting real Inicis cancel V2 at: ${cancelUrl} (TID: ${tid}, MID: ${config.mid}, PayMethod: ${paymethod})`);
+          console.log(`[Refund] Requesting real Inicis cancel V2 at: ${cancelUrl} (TID: ${cleanTid}, MID: ${effectiveMid}, PayMethod: ${resolvedPaymethod})`);
           const apiResponse = await fetch(cancelUrl, {
             method: "POST",
             headers: {
-              "Content-Type": "application/x-www-form-urlencoded"
+              "Content-Type": "application/x-www-form-urlencoded;charset=utf-8"
             },
             body: requestParams.toString()
           });
@@ -1547,12 +1561,16 @@ export const handler: Handler = async (event, context) => {
           const resultMsg = result.resultMsg || rawText || "Inicis Response Error";
 
           if (resultCode !== "00" && resultCode !== "0000") {
+            const errHint =
+              resultCode === "ERR205"
+                ? ` (상점아이디 ${effectiveMid}의 INIAPI Key가 이니시스 가맹점관리자 > 상점정보 > 계약정보 > 부가정보 > INIAPI Key와 일치하는지 [시스템 설정 > 결제 설정]에서 확인해 주세요.)`
+                : "";
             return {
               statusCode: 400,
               headers: responseHeaders,
               body: JSON.stringify({
                 status: "error",
-                message: `이니시스 실시간 거래 취소 거부 오류 [코드: ${resultCode}]: ${resultMsg}`
+                message: `이니시스 실시간 거래 취소 거부 오류 [코드: ${resultCode}]: ${resultMsg}${errHint}`
               })
             };
           }

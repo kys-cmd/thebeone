@@ -87,6 +87,38 @@ export default function AdminSystemSettings() {
     payment_methods_direct: ['bank_transfer']
   });
   const [isPaymentLoading, setIsPaymentLoading] = useState(false);
+  const [inicisApiKeyInput, setInicisApiKeyInput] = useState('');
+  const [inicisApiKeyStatus, setInicisApiKeyStatus] = useState<{
+    configured: boolean;
+    source: string;
+    maskedKey: string;
+  }>({ configured: false, source: 'none', maskedKey: '' });
+
+  const loadInicisApiKeyStatus = async () => {
+    try {
+      const { data: sessionRes } = await supabase.auth.getSession();
+      const token = sessionRes.session?.access_token;
+      if (!token) return;
+      const res = await fetch('/api/core-api', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'admin-get-inicis-api-key-status' }),
+      });
+      const json = await res.json();
+      if (json?.status === 'success') {
+        setInicisApiKeyStatus({
+          configured: Boolean(json.configured),
+          source: String(json.source || 'none'),
+          maskedKey: String(json.maskedKey || ''),
+        });
+      }
+    } catch {
+      // Ignore silent status check errors
+    }
+  };
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -99,6 +131,7 @@ export default function AdminSystemSettings() {
         
         setConfig(configData);
         setPaymentSettings(paymentData);
+        await loadInicisApiKeyStatus();
       } catch (error) {
         toast.error('설정을 불러오는 중 오류가 발생했습니다.');
       } finally {
@@ -118,11 +151,66 @@ export default function AdminSystemSettings() {
       // Save Payment Settings
       await cmsService.savePaymentSettings(paymentSettings);
 
+      // If admin entered a new INIAPI Key, encrypt & store it securely on backend
+      const trimmedApiKey = inicisApiKeyInput.trim();
+      if (trimmedApiKey) {
+        const { data: sessionRes } = await supabase.auth.getSession();
+        const token = sessionRes.session?.access_token;
+        if (!token) {
+          throw new Error('INIAPI Key 저장을 위해 로그인 세션이 필요합니다.');
+        }
+        const apiRes = await fetch('/api/core-api', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            action: 'admin-save-inicis-api-key',
+            apiKey: trimmedApiKey,
+          }),
+        });
+        const apiJson = await apiRes.json();
+        if (!apiRes.ok || apiJson?.status !== 'success') {
+          throw new Error(apiJson?.message || 'INIAPI Key 저장에 실패했습니다.');
+        }
+        setInicisApiKeyInput('');
+      }
+
+      await loadInicisApiKeyStatus();
       toast.success('설정이 안전하게 저장되었습니다.');
     } catch (error: any) {
       toast.error(error.message || '저장 중 오류가 발생했습니다.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleClearInicisApiKey = async () => {
+    try {
+      setIsPaymentLoading(true);
+      const { data: sessionRes } = await supabase.auth.getSession();
+      const token = sessionRes.session?.access_token;
+      if (!token) return;
+      const res = await fetch('/api/core-api', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'admin-save-inicis-api-key', clear: true }),
+      });
+      const json = await res.json();
+      if (!res.ok || json?.status !== 'success') {
+        throw new Error(json?.message || 'INIAPI Key 초기화 실패');
+      }
+      setInicisApiKeyInput('');
+      await loadInicisApiKeyStatus();
+      toast.success('저장된 INIAPI Key가 초기화되었습니다.');
+    } catch (err: any) {
+      toast.error(err?.message || '초기화에 실패했습니다.');
+    } finally {
+      setIsPaymentLoading(false);
     }
   };
 
@@ -441,13 +529,57 @@ export default function AdminSystemSettings() {
                         onChange={e => setPaymentSettings({...paymentSettings, inicis_sign_key: e.target.value})}
                         placeholder="SignKey 입력"
                       />
-                      <p className="text-[10px] text-muted-foreground">이니시스 가맹점 관리자 {'->'} 변경/추가 {'->'} API 요청정보</p>
-                      <div className="mt-3 p-2.5 bg-purple-50/70 rounded-lg border border-purple-100 text-[10px] leading-relaxed text-purple-700">
-                        <strong className="text-purple-900 block mb-0.5">💡 실 운영 환불(취소) 처리용 주요 정보:</strong>
-                        실시간 거래 취소 API 승인은 표준 사인키와 무관하게 이니시스 가맹점 관리자에서 명세한 <strong className="font-bold underline text-purple-800">iniAPIKey (상점 취소 Key)</strong>를 필수 요구합니다. 
-                        인프라 설정 또는 환경 변수(<code className="bg-white text-purple-900 px-1 py-0.5 rounded font-mono border tracking-tight text-[9px]">INICIS_APIKEY</code>)에 해당 취소용 API Key를 등록해주시면 에러 없는 원 터치 즉시 환불이 보장됩니다.
-                      </div>
+                      <p className="text-[10px] text-muted-foreground">이니시스 가맹점 관리자 {'->'} 상점정보 {'->'} 계약정보 {'->'} 일반결제/웹표준 SignKey</p>
                     </div>
+                  </div>
+
+                  {/* INIAPI Key (실시간 환불 / 취소 API 키) */}
+                  <div className="space-y-2.5 p-4 bg-purple-50/60 rounded-xl border border-purple-100">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Label className="text-purple-900 font-black">
+                        환불/취소 API Key (INIAPI Key)
+                      </Label>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                          inicisApiKeyStatus.configured
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}
+                      >
+                        {inicisApiKeyStatus.source === 'test_default'
+                          ? '테스트 키(INIpayTest) 자동 적용 중'
+                          : inicisApiKeyStatus.configured
+                            ? `등록됨 (${inicisApiKeyStatus.maskedKey})`
+                            : '미등록 (실운영 환불 시 필수)'}
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        type="password"
+                        value={inicisApiKeyInput}
+                        onChange={e => setInicisApiKeyInput(e.target.value)}
+                        placeholder={
+                          inicisApiKeyStatus.configured
+                            ? `새 INIAPI Key 입력 시 변경됨 (현재: ${inicisApiKeyStatus.maskedKey})`
+                            : '이니시스 가맹점관리자 부가정보 > INIAPI Key 입력'
+                        }
+                        className="bg-white font-mono text-xs"
+                      />
+                      {inicisApiKeyStatus.source === 'vault' || inicisApiKeyStatus.source === 'db' ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={isPaymentLoading}
+                          onClick={handleClearInicisApiKey}
+                          className="shrink-0 text-xs font-bold border-purple-200 text-purple-700 hover:bg-purple-100"
+                        >
+                          키 초기화
+                        </Button>
+                      ) : null}
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-purple-700">
+                      실시간 환불 처리 시 <strong className="font-black">ERR205 (hashData 불일치)</strong> 방지를 위해 반드시 이니시스 가맹점관리자(<code className="bg-white px-1 rounded border text-[10px]">상점정보 &gt; 계약정보 &gt; 부가정보 &gt; INIAPI Key</code>)의 키를 입력한 뒤 우측 상단 <strong className="font-black">[전체 설정 저장]</strong>을 눌러주세요. (<code className="bg-white px-1 rounded border text-[10px]">INIpayTest</code> 테스트 결제는 공식 테스트 키가 자동 적용됩니다.)
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
