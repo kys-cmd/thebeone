@@ -732,11 +732,11 @@ export default function CourseDetail() {
             <div className="flex-1 space-y-5 sm:space-y-7 w-full">
               {/* Mobile Thumbnail Preview */}
               {course.thumbnail && (
-                <div className="lg:hidden aspect-video w-full rounded-2xl overflow-hidden border border-white/15 shadow-xl mb-2">
+                <div className="lg:hidden w-full rounded-2xl overflow-hidden border border-white/15 shadow-xl mb-2">
                   <img
                     src={course.thumbnail}
                     referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover"
+                    className="w-full h-auto block"
                     alt={course.title}
                   />
                 </div>
@@ -786,9 +786,14 @@ export default function CourseDetail() {
 
             {/* Quick Purchase Card (Desktop) */}
             <div className="w-full lg:w-[420px] bg-white rounded-2xl shadow-2xl p-8 sticky top-28 text-slate-900 border border-slate-100 hidden lg:block">
-              <div className="aspect-video rounded-xl overflow-hidden mb-8 relative border border-slate-100">
+              <div
+                className={cn(
+                  'rounded-xl overflow-hidden mb-8 relative border border-slate-100 bg-slate-100',
+                  !course.thumbnail && 'aspect-video'
+                )}
+              >
                 {course.thumbnail ? (
-                  <img src={course.thumbnail} referrerPolicy="no-referrer" className="w-full h-full object-cover" alt={course.title} />
+                  <img src={course.thumbnail} referrerPolicy="no-referrer" className="w-full h-auto block" alt={course.title} />
                 ) : (
                   <div className="w-full h-full bg-slate-100 flex items-center justify-center">
                     {isOffline ? (
