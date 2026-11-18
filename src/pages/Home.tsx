@@ -195,18 +195,18 @@ export default function Home() {
   }, [finalBanners.length, currentSlide, siteConfig?.banner_interval]);
 
   return (
-    <div className="flex flex-col gap-8 sm:gap-14 md:gap-20 pb-14 md:pb-20 pt-3 sm:pt-5 md:pt-0">
+    <div className="flex flex-col gap-8 sm:gap-14 md:gap-20 pb-14 md:pb-20 pt-0 sm:pt-5 md:pt-0">
       {/* Hero Banner Carousel (Responsive for Mobile + Desktop with Touch Swipe) */}
       <section className="mt-0 md:mt-6 overflow-hidden">
-        <div className="container mx-auto px-4">
+        <div className="container mx-auto px-0 sm:px-4">
           {!loading ? (
             <div
-              className="relative w-full aspect-[16/8.5] sm:aspect-[21/8] md:aspect-[1920/450] rounded-2xl overflow-hidden shadow-md sm:shadow-xl"
+              className="relative w-full md:aspect-[1920/450] rounded-none sm:rounded-2xl overflow-hidden shadow-md sm:shadow-xl bg-slate-900"
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
             >
               <div
-                className="flex h-full transition-transform duration-500 ease-out"
+                className="flex items-center md:items-stretch md:h-full transition-transform duration-500 ease-out"
                 style={{
                   transform: `translateX(-${currentSlide * 100}%)`,
                 }}
@@ -214,16 +214,22 @@ export default function Home() {
                 {finalBanners.map((banner, index) => {
                   const hasImg = !!banner.image;
                   const slideContent = (
-                    <div className="w-full shrink-0 h-full relative text-left">
+                    <div
+                      className="w-full md:h-full relative text-left flex items-center justify-center"
+                      style={{ backgroundColor: banner.bg_color || '#0f172a' }}
+                    >
                       {hasImg ? (
                         <img
                           src={banner.image}
                           referrerPolicy="no-referrer"
-                          className="absolute inset-0 w-full h-full object-cover"
+                          className="w-full h-auto max-h-[360px] md:max-h-none md:absolute md:inset-0 md:w-full md:h-full object-contain md:object-cover block"
                           alt={banner.title || '배너 이미지'}
                         />
                       ) : (
-                        <div className="w-full h-full flex flex-col justify-center items-center p-5 sm:p-8 bg-purple-900 text-white select-none">
+                        <div
+                          className="w-full min-h-[160px] sm:min-h-[210px] md:h-full flex flex-col justify-center items-center p-5 sm:p-8 text-white select-none"
+                          style={{ backgroundColor: banner.bg_color || '#581c87' }}
+                        >
                           <h1 className="text-base sm:text-2xl md:text-4xl font-extrabold text-center tracking-tight break-keep">
                             {banner.title}
                           </h1>
@@ -238,11 +244,11 @@ export default function Home() {
                   );
 
                   return banner.link ? (
-                    <Link key={index} to={banner.link} className="w-full shrink-0 h-full block">
+                    <Link key={index} to={banner.link} className="w-full shrink-0 md:h-full block">
                       {slideContent}
                     </Link>
                   ) : (
-                    <div key={index} className="w-full shrink-0 h-full">
+                    <div key={index} className="w-full shrink-0 md:h-full">
                       {slideContent}
                     </div>
                   );
@@ -250,17 +256,19 @@ export default function Home() {
               </div>
 
               {/* Slide Counter */}
-              <div className="absolute bottom-2.5 left-3 sm:bottom-5 sm:left-6 z-20 flex items-center bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full">
-                <div className="flex items-center gap-1 text-white/70 font-bold text-[10px] sm:text-xs tabular-nums">
-                  <span className="text-white">{String(currentSlide + 1).padStart(2, '0')}</span>
-                  <span className="opacity-40">/</span>
-                  <span>{String(finalBanners.length).padStart(2, '0')}</span>
+              {finalBanners.length > 1 && (
+                <div className="absolute bottom-2 left-2.5 sm:bottom-4 sm:left-5 md:bottom-5 md:left-6 z-20 flex items-center bg-black/50 backdrop-blur-sm px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full">
+                  <div className="flex items-center gap-1 text-white/70 font-bold text-[10px] sm:text-xs tabular-nums">
+                    <span className="text-white">{String(currentSlide + 1).padStart(2, '0')}</span>
+                    <span className="opacity-40">/</span>
+                    <span>{String(finalBanners.length).padStart(2, '0')}</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Desktop & Tablet Controls */}
               {finalBanners.length > 1 && (
-                <div className="hidden sm:flex absolute bottom-5 right-6 z-20 items-center bg-black/55 backdrop-blur-md rounded-full p-1">
+                <div className="hidden sm:flex absolute bottom-3 right-4 md:bottom-5 md:right-6 z-20 items-center bg-black/55 backdrop-blur-md rounded-full p-1">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -284,7 +292,7 @@ export default function Home() {
               )}
             </div>
           ) : (
-            <div className="aspect-[16/8.5] sm:aspect-[21/8] md:aspect-[1920/450] w-full flex items-center justify-center bg-slate-100 rounded-2xl">
+            <div className="aspect-[1920/450] w-full flex items-center justify-center bg-slate-100 rounded-none sm:rounded-2xl">
               <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-purple-600" />
             </div>
           )}
