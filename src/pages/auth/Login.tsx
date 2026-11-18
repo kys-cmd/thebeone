@@ -289,16 +289,8 @@ export default function Login() {
         {mode === 'login' ? (
           <>
             {/* Header */}
-            <div className="text-center space-y-4 sm:space-y-6">
-              <Link to="/" className="inline-flex flex-col items-center gap-3 sm:gap-4">
-                 <div className="w-14 h-14 sm:w-16 sm:h-16 bg-purple-600 rounded-xl flex items-center justify-center shadow-xl shadow-purple-200">
-                   <span className="text-white text-2xl sm:text-3xl font-black">BE</span>
-                 </div>
-                 <h1 className="text-2xl sm:text-3xl font-black tracking-tighter text-gray-900 whitespace-pre-line">당신의 성장이{'\n'}시작되는 곳</h1>
-              </Link>
-              <p className="text-sm sm:text-base text-gray-400 font-medium whitespace-pre-line">
-                비원아카데미와 함께{'\n'}자본주의의 지도를 그려보세요.
-              </p>
+            <div className="text-center">
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tighter text-gray-900">비원아카데미 회원 로그인</h1>
             </div>
 
             {/* Form area */}
@@ -360,7 +352,7 @@ export default function Login() {
               </div>
 
               <Button type="submit" disabled={loading} className="w-full h-14 sm:h-16 bg-purple-600 hover:bg-purple-700 text-white font-black text-base sm:text-xl rounded-xl shadow-xl shadow-purple-200 mt-4">
-                {loading ? '로그인 중...' : '매뉴얼 로그인'}
+                {loading ? '로그인 중...' : '로그인'}
               </Button>
 
               <div className="relative flex py-4 items-center">
@@ -711,9 +703,6 @@ export default function Login() {
           </>
         )}
 
-        <p className="text-center text-[10px] text-gray-300 font-bold uppercase tracking-widest">
-          Premium Knowledge Platform BE ONE Academy
-        </p>
       </motion.div>
     </div>
   );

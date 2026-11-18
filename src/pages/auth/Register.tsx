@@ -197,9 +197,8 @@ export default function Register() {
         className="w-full max-w-[600px] bg-white rounded-xl sm:rounded-xl shadow-xl sm:shadow-2xl border border-gray-100 p-6 sm:p-10 md:p-14 space-y-7 sm:space-y-12"
       >
         {/* Header */}
-        <div className="text-center space-y-2.5 sm:space-y-4">
-          <h1 className="text-2xl sm:text-4xl font-black tracking-tighter text-gray-900">새로운 여정의 시작</h1>
-          <p className="text-xs sm:text-base text-gray-400 font-medium break-keep">단 1분이면 비원아카데미의 모든 혜택을 누릴 수 있습니다.</p>
+        <div className="text-center">
+          <h1 className="text-2xl sm:text-4xl font-black tracking-tighter text-gray-900">비원아카데미 회원가입</h1>
         </div>
 
         {/* Social SSO Action */}
@@ -278,7 +277,7 @@ export default function Register() {
         <form onSubmit={handleRegister} className="space-y-6 sm:space-y-8">
            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5 sm:gap-y-8">
               <div className="space-y-2">
-                 <Label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Email (ID)</Label>
+                 <Label className="text-xs font-black text-gray-500 pl-1">이메일(ID)</Label>
                  <Input 
                    required
                    type="email"
@@ -289,7 +288,7 @@ export default function Register() {
                  />
               </div>
               <div className="space-y-2">
-                 <Label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Full Name</Label>
+                 <Label className="text-xs font-black text-gray-500 pl-1">실명(이름)</Label>
                  <Input 
                   required
                   value={formData.fullName || ''}
@@ -299,7 +298,7 @@ export default function Register() {
                 />
               </div>
               <div className="space-y-2">
-                 <Label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Password</Label>
+                 <Label className="text-xs font-black text-gray-500 pl-1">비밀번호</Label>
                  <Input 
                   required
                   type="password"
@@ -310,7 +309,7 @@ export default function Register() {
                 />
               </div>
               <div className="space-y-2">
-                 <Label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Confirm Password</Label>
+                 <Label className="text-xs font-black text-gray-500 pl-1">비밀번호 확인</Label>
                  <Input 
                   required
                   type="password"
@@ -321,7 +320,7 @@ export default function Register() {
                 />
               </div>
               <div className="space-y-2">
-                 <Label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Nickname</Label>
+                 <Label className="text-xs font-black text-gray-500 pl-1">닉네임(활동명)</Label>
                  <Input 
                   required
                   value={formData.nickname || ''}
@@ -331,7 +330,7 @@ export default function Register() {
                 />
               </div>
               <div className="space-y-2">
-                 <Label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Phone</Label>
+                 <Label className="text-xs font-black text-gray-500 pl-1">연락처</Label>
                  <Input
                   required
                   value={formData.phone || ''}
@@ -361,7 +360,7 @@ export default function Register() {
                 )}
               </div>
               <div className="space-y-4">
-                 <Label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Gender</Label>
+                 <Label className="text-xs font-black text-gray-500 pl-1">성별</Label>
                  <RadioGroup 
                    value={formData.gender} 
                    onValueChange={(val) => setFormData({...formData, gender: val})}
@@ -378,7 +377,7 @@ export default function Register() {
                  </RadioGroup>
               </div>
               <div className="space-y-2">
-                 <Label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Birthday</Label>
+                 <Label className="text-xs font-black text-gray-500 pl-1">생년월일</Label>
                  <Input 
                   required
                   type="date"
