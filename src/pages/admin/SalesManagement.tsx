@@ -1,29 +1,30 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  CreditCard, 
-  Search, 
-  Filter, 
-  Download, 
-  MoreHorizontal, 
+import {
+  CreditCard,
+  Search,
+  Download,
   Loader2,
-  Calendar,
-  User,
-  Mail,
-  BookOpen,
-  ArrowUpDown,
   RefreshCw,
   ShieldCheck,
-  Trash2,
-  Activity,
-  Award,
   AlertTriangle,
   CheckCircle2,
-  Power
+  Power,
+  Eye,
+  Copy,
+  Check,
+  RotateCcw,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { purchaseService } from '@/services/purchaseService';
 import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
@@ -32,14 +33,54 @@ import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { safeResponseJson } from '@/lib/safeFetch';
 
+interface OrderPaymentDetails {
+  tid: string;
+  applNum: string;
+  payDevice: 'PC' | 'MOBILE' | '';
+  payDeviceLabel: string;
+  payMethodLabel: string;
+  cardName: string;
+  applDateTime: string;
+  isInicisLinked: boolean;
+}
+
+function formatInicisPayMethodName(rawMethod?: string): string {
+  const upper = String(rawMethod || '').trim().toUpperCase();
+  if (!upper) return '신용카드';
+  if (upper.includes('VBANK') || upper.includes('VACCT') || upper.includes('가상계좌')) return '가상계좌';
+  if (upper.includes('BANK') || upper.includes('ACCT') || upper.includes('계좌이체') || upper.includes('DIRECTBANK')) return '계좌이체';
+  if (upper.includes('HPP') || upper.includes('MOBILE') || upper.includes('PHONE') || upper.includes('휴대폰')) return '휴대폰';
+  if (upper.includes('CARD') || upper.includes('WCARD') || upper.includes('카드') || upper.includes('신용')) return '신용카드';
+  return rawMethod || '신용카드';
+}
+
+function isOrderCompletedStatus(status?: string): boolean {
+  const s = String(status || '').toUpperCase();
+  return s === 'PAID' || s === 'COMPLETED';
+}
+
+function isOrderRefundedStatus(status?: string): boolean {
+  const s = String(status || '').toUpperCase();
+  return s === 'CANCELLED' || s === 'REFUNDED';
+}
+
 export default function AdminSalesManagement() {
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'pending' | 'failed'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'refunded'>('all');
+  const [deviceFilter, setDeviceFilter] = useState<'all' | 'PC' | 'MOBILE'>('all');
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
-  
-  // --- 전체 결제 기능 상태 제어 ---
+
+  // 상세보기 모달 상태
+  const [detailOrder, setDetailOrder] = useState<any | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // 환불 확인 모달 상태
+  const [refundTargetOrder, setRefundTargetOrder] = useState<any | null>(null);
+  const [refundReason, setRefundReason] = useState('고객 요청 환불');
+
+  // 전체 결제 기능 상태 제어
   const [isPaymentEnabled, setIsPaymentEnabled] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('beone_payment_enabled');
@@ -59,8 +100,6 @@ export default function AdminSalesManagement() {
     }
   };
 
-  // --- Sandbox states are removed ---
-
   const handleGlobalSync = async () => {
     try {
       setIsProcessing('global');
@@ -74,16 +113,18 @@ export default function AdminSalesManagement() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          action: 'sync-all-communities'
-        })
+          action: 'sync-all-communities',
+        }),
       });
       const result = await safeResponseJson(response);
       if (result.status === 'success') {
-        toast.success(`전체 동기화 성공: 만료 권한 ${result.expiredCount || 0}건 자동 수거, 신규 커뮤니티 권한 ${result.createdMembershipsCount || 0}건 가입 동기화 완료!`);
-        fetchOrders();
+        toast.success(
+          `전체 동기화 성공: 만료 권한 ${result.expiredCount || 0}건 자동 수거, 신규 커뮤니티 권한 ${result.createdMembershipsCount || 0}건 가입 동기화 완료`
+        );
+        fetchOrders(true);
       } else {
         throw new Error(result.message || '알 수 없는 오류');
       }
@@ -109,99 +150,14 @@ export default function AdminSalesManagement() {
     }
   };
 
-  const handleReprocessOrder = async (orderId: string) => {
-    try {
-      setIsProcessing(orderId);
-      const session = (await supabase.auth.getSession()).data.session;
-      if (!session) {
-        toast.error('세션 정보가 유효하지 않습니다.');
-        return;
-      }
-
-      const response = await fetch('/api/core-api', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          action: 'reprocess-order',
-          orderId
-        })
-      });
-      const result = await safeResponseJson(response);
-      if (result.status === 'success') {
-        toast.success('주문 정보가 PAID 로 자동 갱신되었으며, 복식부기 및 수강/커뮤니티 연동 권한이 재처리되었습니다!');
-        fetchOrders();
-      } else {
-        throw new Error(result.message);
-      }
-    } catch (error: any) {
-      console.error(error);
-      toast.error(`주문 재처리 실패: ${error.message}`);
-    } finally {
-      setIsProcessing(null);
-    }
+  const openRefundModal = (order: any) => {
+    setRefundTargetOrder(order);
+    setRefundReason('고객 요청 환불');
   };
 
-  const handleRegrantPermission = async (userId: string, courseId: string, orderId: string) => {
-    try {
-      setIsProcessing(orderId + '_regrant');
-      const session = (await supabase.auth.getSession()).data.session;
-      if (!session) {
-        toast.error('세션 정보가 유효하지 않습니다.');
-        return;
-      }
-
-      const response = await fetch('/api/core-api', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          action: 'grant-enrollment',
-          userId,
-          courseId
-        })
-      });
-      const result = await safeResponseJson(response);
-      if (result.status === 'success') {
-        toast.success(result.message || '권한 및 커뮤니티 가입이 정상 동기화되었습니다.');
-        fetchOrders();
-      } else {
-        throw new Error(result.message);
-      }
-    } catch (error: any) {
-      console.error(error);
-      toast.error(`권한 강제 부여 오류: ${error.message}`);
-    } finally {
-      setIsProcessing(null);
-    }
-  };
-
-  const handleDeleteOrder = async (orderId: string) => {
-    if (!confirm('정말로 이 결제 대기 데이터를 영구 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.')) {
-      return;
-    }
-
-    try {
-      setIsProcessing(orderId + '_delete');
-      await purchaseService.deleteOrder(orderId);
-      toast.success('결제 대기 데이터가 성공적으로 삭제되었습니다.');
-      fetchOrders();
-    } catch (error: any) {
-      console.error('Failed to delete order:', error);
-      toast.error(`삭제 실패: ${error.message || '알 수 없는 오류'}`);
-    } finally {
-      setIsProcessing(null);
-    }
-  };
-
-  // --- 이니시스 실시간 거래 환불 연계 처리 ---
-  const handleRefundOrder = async (orderId: string) => {
-    const reason = prompt('환불 처리 사유를 입력해주세요 (공란 가능):', '고객 요청 환불');
-    if (reason === null) return; // 취소 버튼 누른 경우
+  const handleConfirmRefund = async () => {
+    if (!refundTargetOrder) return;
+    const orderId = refundTargetOrder.id;
 
     try {
       setIsProcessing(orderId + '_refund');
@@ -215,19 +171,23 @@ export default function AdminSalesManagement() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           action: 'refund-order',
           orderId,
-          reason
-        })
+          reason: refundReason.trim() || '고객 요청 환불',
+        }),
       });
 
       const result = await safeResponseJson(response);
       if (result.status === 'success') {
         toast.success(result.message || '이니시스 실시간 연계 승인 취소 및 환불 처리가 완료되었습니다.');
-        fetchOrders();
+        setRefundTargetOrder(null);
+        if (detailOrder?.id === orderId) {
+          setDetailOrder(null);
+        }
+        await fetchOrders(true);
       } else {
         throw new Error(result.message || '환불 승인 거절 또는 통신 오류');
       }
@@ -258,12 +218,12 @@ export default function AdminSalesManagement() {
         );
       }
 
-      // Filter out unpaid/uncompleted records completely
-      const completedOnly = (data || []).filter((o: any) => {
-        const s = (o.status || '').toUpperCase();
-        return s === 'PAID' || s === 'COMPLETED';
+      // 결제완료(PAID/COMPLETED) 및 환불완료(CANCELLED/REFUNDED) 거래만 표시 (결제 전 이탈 PENDING/FAILED 제외)
+      const salesOrders = (data || []).filter((o: any) => {
+        const s = String(o.status || '').toUpperCase();
+        return s === 'PAID' || s === 'COMPLETED' || s === 'CANCELLED' || s === 'REFUNDED';
       });
-      setOrders(completedOnly);
+      setOrders(salesOrders);
     } catch (error: any) {
       console.error('Error fetching orders:', error);
       const isMissingTable = error.message?.includes('relation') && error.message?.includes('does not exist');
@@ -277,61 +237,157 @@ export default function AdminSalesManagement() {
     }
   };
 
-  const extractOrderPaymentDetails = (order: any) => {
-    let tid = order.tid && order.tid !== '-' ? order.tid : '-';
-    let applNum = order.applNum && order.applNum !== '-' ? order.applNum : '-';
-    let payDevice = order.payDevice || '';
-    let cardName = order.cardName || '';
+  const extractOrderPaymentDetails = (order: any): OrderPaymentDetails => {
+    let tid = order.tid && order.tid !== '-' ? String(order.tid) : '-';
+    let applNum = order.applNum && order.applNum !== '-' ? String(order.applNum) : '-';
+    let payDeviceRaw = String(order.payDevice || '').toUpperCase();
+    let cardName = String(order.cardName || '');
+    let applDate = String(order.applDate || '');
+    let applTime = String(order.applTime || '');
+    let rawMethod = String(order.payment_method || '');
 
-    if ((tid === '-' || applNum === '-') && order.logs && order.logs.length > 0) {
+    if ((tid === '-' || applNum === '-' || !payDeviceRaw) && order.logs && order.logs.length > 0) {
       const successLog = order.logs.find((l: any) => l.status === 'SUCCESS') || order.logs[0];
       const rawPayload = successLog?.raw_response ?? successLog?.raw_data;
       if (rawPayload) {
         try {
           const parsed = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
-          const rawObj = parsed?.details || parsed || {};
+          const rawObj = parsed?.details && typeof parsed.details === 'object' ? parsed.details : parsed || {};
 
           if (tid === '-') {
-            tid = rawObj.tid || rawObj.TID || rawObj.P_TID || rawObj.AuthTID || rawObj.payment_tid || '-';
+            tid = String(rawObj.tid || rawObj.TID || rawObj.P_TID || rawObj.AuthTID || rawObj.payment_tid || '-');
           }
           if (applNum === '-') {
-            applNum = rawObj.applNum || rawObj.CARD_ApplNum || rawObj.applNo || rawObj.P_AUTH_NO || rawObj.P_AUTH_NUM || rawObj.AuthCode || rawObj.applCode || rawObj.appl_num || '-';
+            applNum = String(
+              rawObj.applNum ||
+                rawObj.CARD_ApplNum ||
+                rawObj.applNo ||
+                rawObj.P_AUTH_NO ||
+                rawObj.P_AUTH_NUM ||
+                rawObj.AuthCode ||
+                rawObj.applCode ||
+                rawObj.appl_num ||
+                '-'
+            );
           }
-          if (!payDevice) {
-            payDevice = rawObj.payDevice || (String(tid).startsWith('INIMX_') ? 'MOBILE' : String(tid).startsWith('Stdpay') ? 'PC' : '');
+          if (!payDeviceRaw) {
+            if (rawObj.payDevice) payDeviceRaw = String(rawObj.payDevice).toUpperCase();
+            else if (rawObj.P_TID || String(tid).startsWith('INIMX_')) payDeviceRaw = 'MOBILE';
+            else if (String(tid).startsWith('Stdpay')) payDeviceRaw = 'PC';
           }
           if (!cardName) {
-            cardName = rawObj.P_FN_NM || rawObj.CARD_PurchaseName || '';
+            cardName = String(rawObj.P_FN_NM || rawObj.CARD_PurchaseName || rawObj.cardName || '');
           }
-        } catch (e) {
-          // ignore
+          if (!applDate && (rawObj.applDate || rawObj.P_AUTH_DT)) {
+            applDate = String(rawObj.applDate || String(rawObj.P_AUTH_DT).substring(0, 8));
+          }
+          if (!applTime && (rawObj.applTime || rawObj.P_AUTH_DT)) {
+            applTime = String(rawObj.applTime || String(rawObj.P_AUTH_DT).substring(8, 14));
+          }
+          if (!rawMethod && (rawObj.payMethod || rawObj.P_TYPE || successLog.payment_method)) {
+            rawMethod = String(rawObj.payMethod || rawObj.P_TYPE || successLog.payment_method);
+          }
+        } catch {
+          // ignore invalid json
         }
       }
     }
 
+    if (!payDeviceRaw) {
+      if (tid.startsWith('INIMX_')) payDeviceRaw = 'MOBILE';
+      else if (tid.startsWith('Stdpay')) payDeviceRaw = 'PC';
+    }
+
+    const payDevice: 'PC' | 'MOBILE' | '' =
+      payDeviceRaw === 'MOBILE' ? 'MOBILE' : payDeviceRaw === 'PC' ? 'PC' : '';
+
     const isInicisLinked = Boolean(
       order.isInicisLinked ||
-      (tid !== '-' && (String(tid).startsWith('Stdpay') || String(tid).startsWith('INIMX_') || String(tid).startsWith('INI'))) ||
-      (applNum !== '-' && tid !== '-' && !String(tid).startsWith('direct_'))
+        (tid !== '-' &&
+          !tid.startsWith('TID-MOCK') &&
+          (tid.startsWith('Stdpay') || tid.startsWith('INIMX_') || tid.startsWith('INI') || tid.length >= 20)) ||
+        (applNum !== '-' && tid !== '-' && !tid.startsWith('direct_'))
     );
 
-    return { tid, applNum, payDevice, cardName, isInicisLinked };
+    const payDeviceLabel = payDevice === 'MOBILE' ? '모바일' : payDevice === 'PC' ? 'PC' : isInicisLinked ? 'PC' : '기타';
+    const payMethodLabel = formatInicisPayMethodName(rawMethod);
+
+    let applDateTime = '-';
+    if (applDate && applDate.length === 8) {
+      const y = applDate.slice(0, 4);
+      const m = applDate.slice(4, 6);
+      const d = applDate.slice(6, 8);
+      if (applTime && applTime.length >= 6) {
+        applDateTime = `${y}-${m}-${d} ${applTime.slice(0, 2)}:${applTime.slice(2, 4)}:${applTime.slice(4, 6)}`;
+      } else {
+        applDateTime = `${y}-${m}-${d}`;
+      }
+    } else if (order.created_at) {
+      applDateTime = format(new Date(order.created_at), 'yyyy-MM-dd HH:mm:ss', { locale: ko });
+    }
+
+    return {
+      tid,
+      applNum,
+      payDevice,
+      payDeviceLabel,
+      payMethodLabel,
+      cardName,
+      applDateTime,
+      isInicisLinked,
+    };
   };
 
-  const filteredOrders = orders.filter(order => {
-    const q = searchTerm.toLowerCase();
-    const { tid, applNum } = extractOrderPaymentDetails(order);
-    const matchesSearch = 
+  const filteredOrders = orders.filter((order) => {
+    const q = searchTerm.trim().toLowerCase();
+    const details = extractOrderPaymentDetails(order);
+
+    const matchesStatus =
+      statusFilter === 'all'
+        ? true
+        : statusFilter === 'completed'
+          ? isOrderCompletedStatus(order.status)
+          : isOrderRefundedStatus(order.status);
+
+    if (!matchesStatus) return false;
+
+    const matchesDevice =
+      deviceFilter === 'all'
+        ? true
+        : deviceFilter === 'PC'
+          ? details.payDeviceLabel === 'PC'
+          : details.payDeviceLabel === '모바일';
+
+    if (!matchesDevice) return false;
+
+    if (!q) return true;
+
+    return Boolean(
       order.profile?.name?.toLowerCase().includes(q) ||
-      order.profile?.nickname?.toLowerCase().includes(q) ||
-      order.profile?.email?.toLowerCase().includes(q) ||
-      order.course?.title?.toLowerCase().includes(q) ||
-      order.merchant_uid?.toLowerCase().includes(q) ||
-      tid.toLowerCase().includes(q) ||
-      applNum.toLowerCase().includes(q);
-    
-    return !!matchesSearch;
+        order.profile?.nickname?.toLowerCase().includes(q) ||
+        order.profile?.email?.toLowerCase().includes(q) ||
+        order.course?.title?.toLowerCase().includes(q) ||
+        order.order_name?.toLowerCase().includes(q) ||
+        order.merchant_uid?.toLowerCase().includes(q) ||
+        details.tid.toLowerCase().includes(q) ||
+        details.applNum.toLowerCase().includes(q)
+    );
   });
+
+  const completedCount = orders.filter((o) => isOrderCompletedStatus(o.status)).length;
+  const refundedCount = orders.filter((o) => isOrderRefundedStatus(o.status)).length;
+
+  const handleCopyText = async (label: string, value: string) => {
+    if (!value || value === '-') return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedField(label);
+      toast.success(`${label}가 클립보드에 복사되었습니다.`);
+      setTimeout(() => setCopiedField((prev) => (prev === label ? null : prev)), 1800);
+    } catch {
+      toast.error('클립보드 복사에 실패했습니다.');
+    }
+  };
 
   const handleExportExcel = () => {
     if (filteredOrders.length === 0) {
@@ -341,54 +397,51 @@ export default function AdminSalesManagement() {
 
     try {
       const excelData = filteredOrders.map((order, index) => {
-        const { tid, applNum, payDevice, cardName, isInicisLinked } = extractOrderPaymentDetails(order);
-
-        const formattedDate = order.created_at 
+        const details = extractOrderPaymentDetails(order);
+        const formattedDate = order.created_at
           ? format(new Date(order.created_at), 'yyyy-MM-dd HH:mm:ss', { locale: ko })
           : '-';
 
+        const statusText = isOrderRefundedStatus(order.status)
+          ? '환불완료'
+          : isOrderCompletedStatus(order.status)
+            ? '결제완료'
+            : '결제대기';
+
         return {
-          'No': index + 1,
-          '결제일시': formattedDate,
-          '주문번호 (Merchant UID)': order.merchant_uid || order.id?.split('-')[0] || '-',
-          'PG 연동 여부': isInicisLinked ? `KG이니시스 연동 (${payDevice === 'MOBILE' ? '모바일' : 'PC'})` : '수동/기타',
-          '승인 거래번호 (TID)': tid,
-          '승인번호': applNum,
-          '카드사/결제수단 상세': cardName || order.payment_method || 'CARD',
-          '구매자 실명': order.profile?.name || '-',
-          '구매자 닉네임': order.profile?.nickname || '-',
+          No: index + 1,
+          결제일자: formattedDate,
+          주문번호: order.merchant_uid || order.id?.split('-')[0] || '-',
+          '승인 거래번호(TID)': details.tid,
+          승인번호: details.applNum,
+          구매자명: order.profile?.name || order.profile?.nickname || '익명',
           '구매자 이메일': order.profile?.email || '-',
-          '강의명 (상품)': order.course?.title || '삭제된 강의 정보',
-          '코스 ID': order.course_id || '-',
-          '결제 금액': order.amount || 0,
-          '결제 방법': order.payment_method || 'CARD',
-          '결제 상태': (order.status || '').toUpperCase() === 'PAID' || (order.status || '').toUpperCase() === 'COMPLETED' ? '결제완료' : '결제대기'
+          '상품 내용': order.course?.title || order.order_name || '삭제된 강의 정보',
+          결제금액: order.amount || 0,
+          '결제방법(환경)': details.payDeviceLabel,
+          결제수단: details.cardName ? `${details.payMethodLabel} (${details.cardName})` : details.payMethodLabel,
+          '결제 상태': statusText,
         };
       });
 
       const worksheet = XLSX.utils.json_to_sheet(excelData);
-      
-      // Column widths helper
-      const max_widths = [
-        { wch: 6 },   // No
-        { wch: 22 },  // 결제일시
-        { wch: 25 },  // 주문번호
-        { wch: 25 },  // 승인 거래번호
-        { wch: 15 },  // 승인번호
-        { wch: 15 },  // 구매자 실명
-        { wch: 15 },  // 구매자 닉네임
-        { wch: 25 },  // 구매자 이메일
-        { wch: 35 },  // 강의명
-        { wch: 20 },  // 코스 ID
-        { wch: 12 },  // 결제 금액
-        { wch: 10 },  // 결제 방법
-        { wch: 10 }   // 결제 상태
+      worksheet['!cols'] = [
+        { wch: 6 },
+        { wch: 20 },
+        { wch: 24 },
+        { wch: 28 },
+        { wch: 14 },
+        { wch: 14 },
+        { wch: 24 },
+        { wch: 32 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 18 },
+        { wch: 12 },
       ];
-      worksheet['!cols'] = max_widths;
 
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "매출 내역");
-      
+      XLSX.utils.book_append_sheet(workbook, worksheet, '매출 내역');
       XLSX.writeFile(workbook, `매출내역_${new Date().toISOString().split('T')[0]}.xlsx`);
       toast.success('엑셀 파일이 성공적으로 생성되었습니다.');
     } catch (err: any) {
@@ -397,302 +450,335 @@ export default function AdminSalesManagement() {
     }
   };
 
-  const getOrderStatusBadge = (status: string) => {
-    const s = (status || '').toUpperCase();
-    if (s === 'COMPLETED' || s === 'PAID') {
+  const renderStatusText = (status: string) => {
+    if (isOrderRefundedStatus(status)) {
       return (
-        <Badge className="bg-green-100 text-green-600 hover:bg-green-100/80 border-none text-[10px] font-black h-7 px-3 rounded-full tracking-tighter">
-          결제완료
-        </Badge>
-      );
-    } else if (s === 'FAILED' || s === 'CANCELLED') {
-      return (
-        <Badge className="bg-rose-100 text-rose-600 hover:bg-rose-100/80 border-none text-[10px] font-black h-7 px-3 rounded-full tracking-tighter">
-          결제실패
-        </Badge>
-      );
-    } else {
-      return (
-        <Badge className="bg-amber-100 text-amber-600 hover:bg-amber-100/80 border-none text-[10px] font-black h-7 px-3 rounded-full tracking-tighter">
-          결제대기
-        </Badge>
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 whitespace-nowrap">
+          환불완료
+        </span>
       );
     }
+    if (isOrderCompletedStatus(status)) {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 whitespace-nowrap">
+          결제완료
+        </span>
+      );
+    }
+    if (String(status || '').toUpperCase() === 'FAILED') {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 whitespace-nowrap">
+          결제실패
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 whitespace-nowrap">
+        결제대기
+      </span>
+    );
   };
 
+  const detailPaymentInfo = detailOrder ? extractOrderPaymentDetails(detailOrder) : null;
+  const refundTargetInfo = refundTargetOrder ? extractOrderPaymentDetails(refundTargetOrder) : null;
+
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Header */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tighter text-gray-900">매출 및 결제 관리</h1>
-          <p className="text-sm text-gray-500 font-bold mt-1 italic">사이트의 모든 결제 데이터와 매출 회원 내역을 상세히 관리합니다.</p>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900">매출 및 결제 관리</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            결제 내역을 한눈에 확인하고, 거래별 상세 정보 조회 및 환불 처리를 진행합니다.
+          </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button 
+          <Button
             onClick={handleReconcilePayments}
             disabled={isProcessing !== null}
-            className="h-12 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-lg shadow-indigo-200 transition-all active:scale-95 gap-2"
+            className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs gap-1.5 whitespace-nowrap shrink-0"
           >
             {isProcessing === 'reconcile' ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
-              <ShieldCheck className="w-4 h-4" />
+              <ShieldCheck className="w-3.5 h-3.5" />
             )}
-            결제·수강 누락 복구 동기화
+            결제·수강 누락 복구
           </Button>
-          <Button 
+          <Button
             onClick={handleGlobalSync}
             disabled={isProcessing !== null}
-            className="h-12 px-6 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-black shadow-lg shadow-amber-200 transition-all active:scale-95 gap-2"
+            variant="outline"
+            className="h-10 px-4 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs gap-1.5 whitespace-nowrap shrink-0"
           >
             {isProcessing === 'global' ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className="w-3.5 h-3.5" />
             )}
-            커뮤니티 수동 동기화 & 만료 수거
+            커뮤니티 동기화
           </Button>
-          <Button 
+          <Button
             onClick={handleExportExcel}
-            variant="outline" 
-            className="h-12 px-6 rounded-2xl gap-2 font-black border-gray-100 shadow-sm hover:bg-gray-50 active:scale-95 transition-all"
+            variant="outline"
+            className="h-10 px-4 rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs gap-1.5 whitespace-nowrap shrink-0"
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-3.5 h-3.5" />
             엑셀 다운로드
           </Button>
         </div>
       </header>
 
-      {/* 💳 전체 결제 시스템 제어 및 활성화 통제 패널 */}
-      <Card className="rounded-xl border-none shadow-sm overflow-hidden bg-white">
-        <CardContent className="p-6 md:p-8 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-          <div className="flex gap-4 items-start">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md ${
-              isPaymentEnabled 
-                ? 'bg-green-50 text-green-600 shadow-green-100' 
-                : 'bg-amber-50 text-amber-600 shadow-amber-100'
-            }`}>
-              {isPaymentEnabled ? <CheckCircle2 className="w-6 h-6 text-green-600 animate-pulse" /> : <AlertTriangle className="w-6 h-6 text-amber-600" />}
+      {/* 전체 결제 시스템 제어 패널 */}
+      <Card className="rounded-xl border border-slate-200/80 shadow-none bg-white">
+        <CardContent className="p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+          <div className="flex gap-3.5 items-start">
+            <div
+              className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                isPaymentEnabled ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+              }`}
+            >
+              {isPaymentEnabled ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
             </div>
             <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-black tracking-tight text-gray-900">전체 결제 가능 제어 설정</h2>
-                <Badge className={`border-none text-[10px] font-black h-5 px-2.5 rounded-full ${
-                  isPaymentEnabled 
-                    ? 'bg-green-100 text-green-700 hover:bg-green-100/80' 
-                    : 'bg-amber-100 text-amber-700 hover:bg-amber-100/80'
-                }`}>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <h2 className="font-bold text-slate-900">전체 결제 가능 제어 설정</h2>
+                <span className="text-slate-300" aria-hidden="true">·</span>
+                <span className={`text-xs font-semibold ${isPaymentEnabled ? 'text-emerald-700' : 'text-amber-700'}`}>
                   {isPaymentEnabled ? '실시간 PG 결제 활성' : '수강 문의/승인 우회 모드'}
-                </Badge>
+                </span>
               </div>
-              <p className="text-xs text-gray-500 font-bold mt-2 leading-relaxed italic pr-2">
-                현재 사이트 결제 연동은 테스트 진행 중입니다. 전체 결제 기능을 <span className="text-amber-600 font-black">비활성화</span> 할 경우 전체 사이트에서 이니시스 실시간 카드/계좌 결제 대신 
-                <span className="text-purple-600 font-black ml-1 bg-purple-50 px-1 py-0.5 rounded">"현재 결제 기능 개발 중으로 관리자가 승인 후 강의를 청취하실 수 있습니다"</span>
-                라는 메시지를 띄우며, 학생들의 결제 시도를 수동 후반 승인으로 보장해 줍니다!
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                결제 기능을 비활성화하면 이니시스 실시간 결제 대신 관리자 확인 후 승인 안내가 노출됩니다.
               </p>
             </div>
           </div>
-          
-          <div className="flex flex-col sm:flex-row gap-2 shrink-0 bg-gray-50 p-2 rounded-2xl border border-gray-100">
+
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg shrink-0 self-start xl:self-center">
             <button
+              type="button"
               onClick={() => handleTogglePayment(true)}
-              className={`px-5 py-3 rounded-xl font-black text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer ${
-                isPaymentEnabled
-                  ? 'bg-green-600 text-white shadow-md shadow-green-100'
-                  : 'text-gray-400 hover:text-gray-600'
+              className={`px-3.5 py-2 rounded-md text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+                isPaymentEnabled ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Power className="w-3.5 h-3.5 shrink-0" />
-              전체 결제 활성화 (정상 운영)
+              결제 활성화
             </button>
             <button
+              type="button"
               onClick={() => handleTogglePayment(false)}
-              className={`px-5 py-3 rounded-xl font-black text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer ${
-                !isPaymentEnabled
-                  ? 'bg-amber-600 text-white shadow-md shadow-amber-100'
-                  : 'text-gray-400 hover:text-gray-600'
+              className={`px-3.5 py-2 rounded-md text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+                !isPaymentEnabled ? 'bg-white text-amber-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-              결제 비활성화 (테스트/점검 중)
+              결제 비활성화
             </button>
           </div>
         </CardContent>
       </Card>
 
-      {/* 🔮 모의 결제 콜백 Sandbox 테스팅 도구 */}
+      {/* 검색 및 상태/결제환경 필터 */}
+      <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between bg-white border border-slate-200/80 rounded-xl p-4">
+        <div className="relative flex-1 min-w-[260px]">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Input
+            placeholder="구매자명, 상품명, 승인번호, 주문번호, 거래번호 검색..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="h-10 pl-10 rounded-lg border-slate-200 bg-slate-50/70 focus:bg-white text-sm"
+          />
+        </div>
 
-
-      {/* Filter Bar */}
-      <Card className="rounded-xl border-none shadow-sm overflow-hidden">
-        <CardContent className="p-6 md:p-8">
-          <div className="flex flex-col md:flex-row gap-6">
-            <div className="flex-1 relative">
-              <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <Input 
-                placeholder="회원 이름, 이메일, 강의 제목, 주문번호, 승인번호(TID)로 조회..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-14 pl-12 rounded-2xl border-gray-100 bg-gray-50 focus:bg-white font-bold transition-all"
-              />
-            </div>
-            <div className="flex gap-2">
-              <div className="h-14 px-6 rounded-2xl bg-green-50 border border-green-100 flex items-center justify-center font-black text-sm text-green-700 min-w-[140px] gap-2">
-                <CheckCircle2 className="w-4 h-4 text-green-600 animate-pulse" />
-                결제완료 내역만 표기됨
-              </div>
-              <Button variant="outline" className="h-14 px-6 rounded-2xl border-gray-100 font-black gap-2">
-                 <Filter className="w-4 h-4" />
-                 상세 필터
-              </Button>
-            </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* 결제 상태 필터 */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                statusFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              전체 ({orders.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('completed')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                statusFilter === 'completed'
+                  ? 'bg-white text-emerald-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              결제완료 ({completedCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('refunded')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                statusFilter === 'refunded'
+                  ? 'bg-white text-rose-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              환불완료 ({refundedCount})
+            </button>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Main Table */}
-      <Card className="rounded-2xl border-none shadow-sm overflow-hidden bg-white">
+          {/* 결제방법(PC / 모바일) 필터 */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setDeviceFilter('all')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                deviceFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              전체 환경
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeviceFilter('PC')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                deviceFilter === 'PC' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              PC
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeviceFilter('MOBILE')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                deviceFilter === 'MOBILE' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              모바일
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 매출 내역 테이블 */}
+      <Card className="rounded-xl border border-slate-200/80 shadow-none overflow-hidden bg-white">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="w-full text-left border-collapse text-sm">
             <thead>
-              <tr className="bg-gray-50/50">
-                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px]">결제일시</th>
-                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px]">주문번호 (Merchant UID)</th>
-                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px]">승인 거래번호 (TID)</th>
-                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px]">승인번호</th>
-                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px]">구매자 (실명+닉네임)</th>
-                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px]">상품(강의) 및 코스 ID</th>
-                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px] text-right">결제 금액</th>
-                <th className="p-4 font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 text-[10px] text-center">상태</th>
-                <th className="p-4 text-right border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">비고</th>
+              <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500">
+                <th className="py-3.5 px-4 whitespace-nowrap">결제일자</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">승인번호</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">구매자명</th>
+                <th className="py-3.5 px-4">상품 내용</th>
+                <th className="py-3.5 px-4 text-right whitespace-nowrap">결제금액</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">결제방법</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap">결제 상태</th>
+                <th className="py-3.5 px-4 text-right whitespace-nowrap">관리</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50 bg-white">
+            <tbody className="divide-y divide-slate-100 bg-white">
               {isLoading ? (
                 <tr>
-                  <td colSpan={9} className="p-24 text-center">
-                    <div className="flex flex-col items-center gap-4">
-                      <Loader2 className="w-10 h-10 animate-spin text-purple-600" />
-                      <span className="text-sm font-black text-gray-400 italic">결제 데이터를 안전하게 동기화 중입니다...</span>
+                  <td colSpan={8} className="py-20 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+                      <span className="text-sm font-medium text-slate-500">결제 내역을 불러오는 중입니다...</span>
                     </div>
                   </td>
                 </tr>
               ) : filteredOrders.length > 0 ? (
                 filteredOrders.map((order, idx) => {
-                  const { tid, applNum, payDevice, cardName, isInicisLinked } = extractOrderPaymentDetails(order);
-
-                  // purchaser formatting: name + nickname
+                  const details = extractOrderPaymentDetails(order);
                   const realName = order.profile?.name || '';
                   const nickName = order.profile?.nickname || '';
-                  const email = order.profile?.email || '-';
-                  const hasBoth = realName && nickName;
-                  const purchaserText = hasBoth 
-                    ? `${realName}(${nickName})` 
-                    : (realName || nickName || '익명');
-
-                  // Course ID formatting
-                  const courseId = order.course_id || '-';
+                  const purchaserName =
+                    realName && nickName && realName !== nickName
+                      ? `${realName} (${nickName})`
+                      : realName || nickName || '익명';
                   const courseTitle = order.course?.title || order.order_name || '삭제된 강의 정보';
+                  const canRefund = isOrderCompletedStatus(order.status);
 
                   return (
-                    <tr key={order.id || idx} className="hover:bg-purple-50/20 transition-colors group">
-                      <td className="p-4 whitespace-nowrap">
-                        <div className="font-bold text-gray-900">{format(new Date(order.created_at), 'yyyy-MM-dd', { locale: ko })}</div>
-                        <div className="text-[10px] text-gray-400 italic mt-0.5">{format(new Date(order.created_at), 'HH:mm:ss', { locale: ko })}</div>
-                      </td>
-                      <td className="p-4 font-mono font-medium text-gray-600 break-all max-w-[160px]">
-                        <div>{order.merchant_uid || order.id.split('-')[0]}</div>
-                        {isInicisLinked ? (
-                          <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
-                            이니시스 연동 {payDevice === 'MOBILE' ? '(모바일)' : payDevice === 'PC' ? '(PC)' : ''}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-gray-100 text-gray-500">
-                            수동/기타 처리
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-4 font-mono text-gray-500 font-medium break-all max-w-[190px]">
-                        <div className="text-[11px] text-gray-700">{tid}</div>
-                        {cardName && (
-                          <div className="text-[10px] text-gray-400 font-sans mt-0.5">{cardName}</div>
-                        )}
-                      </td>
-                      <td className="p-4 font-mono">
-                        {applNum !== '-' ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 font-black text-xs border border-purple-200 tracking-tight">
-                            {applNum}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400 font-bold">-</span>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        <div className="font-extrabold text-gray-900">{purchaserText}</div>
-                        <div className="text-[10px] text-gray-400 mt-0.5 font-medium flex items-center gap-1">
-                          <Mail className="w-2.5 h-2.5" />
-                          {email}
+                    <tr key={order.id || idx} className="hover:bg-slate-50/70 transition-colors">
+                      {/* 1. 결제일자 */}
+                      <td className="py-3.5 px-4 whitespace-nowrap tabular-nums">
+                        <div className="text-sm font-medium text-slate-900">
+                          {order.created_at ? format(new Date(order.created_at), 'yyyy-MM-dd', { locale: ko }) : '-'}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          {order.created_at ? format(new Date(order.created_at), 'HH:mm:ss', { locale: ko }) : ''}
                         </div>
                       </td>
-                      <td className="p-4">
-                        <div className="font-extrabold text-gray-900 max-w-[200px] truncate" title={courseTitle}>
+
+                      {/* 2. 승인번호 */}
+                      <td className="py-3.5 px-4 whitespace-nowrap font-mono tabular-nums text-xs text-slate-700">
+                        {details.applNum !== '-' ? (
+                          <span className="font-semibold text-slate-900">{details.applNum}</span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+
+                      {/* 3. 구매자명 */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="text-sm font-semibold text-slate-900">{purchaserName}</div>
+                      </td>
+
+                      {/* 4. 상품 내용 */}
+                      <td className="py-3.5 px-4 max-w-[260px]">
+                        <div className="text-sm font-medium text-slate-800 truncate" title={courseTitle}>
                           {courseTitle}
                         </div>
-                        <div className="text-[10px] text-gray-400 mt-0.5 font-mono">
-                          코스 ID: {courseId}
-                        </div>
                       </td>
-                      <td className="p-4 text-right whitespace-nowrap">
-                        <div className="font-extrabold text-gray-900 tracking-tighter">₩{(order.amount || 0).toLocaleString()}</div>
-                        <div className="text-[10px] text-gray-400 italic font-medium mt-0.5">{order.payment_method || 'CARD'}</div>
+
+                      {/* 5. 결제금액 */}
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap font-mono tabular-nums font-semibold text-slate-900">
+                        ₩{Number(order.amount || 0).toLocaleString()}
                       </td>
-                      <td className="p-4 text-center whitespace-nowrap">
-                        {getOrderStatusBadge(order.status)}
+
+                      {/* 6. 결제방법 (PC 또는 모바일) */}
+                      <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-700">
+                        <span className="font-semibold text-slate-900">{details.payDeviceLabel}</span>
+                        <span className="text-slate-300 mx-1.5" aria-hidden="true">·</span>
+                        <span className="text-slate-500">{details.payMethodLabel}</span>
                       </td>
-                      <td className="p-4 text-right">
-                        <div className="flex gap-1 justify-end flex-wrap max-w-[200px] ml-auto">
-                          
-                          {/* 환불 버튼 */}
-                          {(order.status === 'PAID' || order.status === 'COMPLETED') && (
-                            <Button 
-                              onClick={() => handleRefundOrder(order.id)}
+
+                      {/* 7. 결제 상태 */}
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        {renderStatusText(order.status)}
+                      </td>
+
+                      {/* 8. 메뉴: 상세보기 & 환불 */}
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center justify-end gap-1.5">
+                          <Button
+                            type="button"
+                            onClick={() => setDetailOrder(order)}
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-3 rounded-lg text-xs font-semibold text-slate-700 border-slate-200 hover:bg-slate-100 whitespace-nowrap shrink-0 gap-1 cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            상세보기
+                          </Button>
+
+                          {canRefund && (
+                            <Button
+                              type="button"
+                              onClick={() => openRefundModal(order)}
                               disabled={isProcessing !== null}
                               variant="outline"
-                              className="h-7 px-2 text-[9px] font-black rounded-lg text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 shrink-0 gap-1 shadow-xs cursor-pointer py-0"
+                              size="sm"
+                              className="h-8 px-3 rounded-lg text-xs font-semibold text-rose-600 border-rose-200 bg-rose-50/70 hover:bg-rose-100 whitespace-nowrap shrink-0 gap-1 cursor-pointer"
                             >
                               {isProcessing === order.id + '_refund' ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
                               ) : (
-                                <RefreshCw className="w-3 h-3" />
+                                <RotateCcw className="w-3.5 h-3.5" />
                               )}
                               환불
                             </Button>
                           )}
-                          <Button 
-                            onClick={() => handleReprocessOrder(order.id)}
-                            disabled={isProcessing !== null}
-                            variant="outline"
-                            className="h-7 px-2 text-[9px] font-black rounded-lg text-gray-600 border-gray-200 hover:bg-gray-50 shrink-0 gap-0.5 shadow-xs py-0"
-                          >
-                            재처리
-                          </Button>
-                          
-                          <Button 
-                            onClick={() => handleRegrantPermission(order.user_id, order.course_id, order.id)}
-                            disabled={isProcessing !== null}
-                            variant="outline"
-                            className="h-7 px-2 text-[9px] font-black rounded-lg text-amber-600 border-amber-100 hover:bg-amber-50 shrink-0 gap-0.5 shadow-xs py-0"
-                          >
-                            권한부여
-                          </Button>
-                          <Button 
-                            onClick={() => handleDeleteOrder(order.id)}
-                            disabled={isProcessing !== null}
-                            variant="outline"
-                            className="h-7 px-2 text-[9px] font-black rounded-lg text-rose-600 border-rose-100 hover:bg-rose-50 shrink-0 gap-0.5 shadow-xs py-0"
-                          >
-                            삭제
-                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -700,11 +786,11 @@ export default function AdminSalesManagement() {
                 })
               ) : (
                 <tr>
-                  <td colSpan={9} className="p-24 text-center">
+                  <td colSpan={8} className="py-20 text-center">
                     <div className="flex flex-col items-center gap-2">
-                       <CreditCard className="w-12 h-12 text-gray-100 mb-2" />
-                       <p className="text-sm font-black text-gray-400">조회된 결제 내역이 없습니다.</p>
-                       <p className="text-xs font-bold text-gray-300">검색어나 필터를 조정해보세요.</p>
+                      <CreditCard className="w-10 h-10 text-slate-200 mb-1" />
+                      <p className="text-sm font-semibold text-slate-500">조회된 결제 내역이 없습니다.</p>
+                      <p className="text-xs text-slate-400">검색어나 필터 조건을 조정해 보세요.</p>
                     </div>
                   </td>
                 </tr>
@@ -712,17 +798,256 @@ export default function AdminSalesManagement() {
             </tbody>
           </table>
         </div>
-        
-        {/* Pagination Placeholder */}
-        <div className="p-8 bg-gray-50/50 border-t border-gray-100 flex items-center justify-between">
-           <p className="text-xs font-bold text-gray-400 italic">Total {filteredOrders.length} records found.</p>
-           <div className="flex gap-2">
-              <Button disabled variant="outline" className="h-10 px-4 rounded-xl font-bold text-xs">이전</Button>
-              <Button disabled variant="outline" className="h-10 px-4 rounded-xl font-bold text-xs bg-white">1</Button>
-              <Button disabled variant="outline" className="h-10 px-4 rounded-xl font-bold text-xs">다음</Button>
-           </div>
+
+        <div className="px-5 py-3.5 bg-slate-50/70 border-t border-slate-200/80 flex items-center justify-between text-xs text-slate-500">
+          <span className="tabular-nums">총 {filteredOrders.length}건</span>
+          <span className="tabular-nums">
+            결제완료 {completedCount}건 · 환불완료 {refundedCount}건
+          </span>
         </div>
       </Card>
+
+      {/* 거래 상세보기 모달 */}
+      <Dialog open={Boolean(detailOrder)} onOpenChange={(open) => !open && setDetailOrder(null)}>
+        <DialogContent className="sm:max-w-lg bg-white p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-900">거래 상세 내역</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              해당 거래의 주문번호, 승인 거래번호(TID), 승인번호 및 결제 상세 정보입니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailOrder && detailPaymentInfo && (
+            <div className="space-y-4 py-1">
+              {/* PG 식별 정보 */}
+              <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 bg-slate-50/40">
+                <div className="flex items-center justify-between gap-3 px-4 py-3">
+                  <span className="text-xs font-medium text-slate-500 shrink-0">주문번호 (Merchant UID)</span>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-xs font-mono font-semibold text-slate-900 truncate">
+                      {detailOrder.merchant_uid || detailOrder.id}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText('주문번호', detailOrder.merchant_uid || detailOrder.id)}
+                      className="p-1 text-slate-400 hover:text-slate-700 rounded cursor-pointer shrink-0"
+                      title="주문번호 복사"
+                    >
+                      {copiedField === '주문번호' ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 px-4 py-3">
+                  <span className="text-xs font-medium text-slate-500 shrink-0">승인 거래번호 (TID)</span>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-xs font-mono font-semibold text-slate-900 truncate">
+                      {detailPaymentInfo.tid}
+                    </span>
+                    {detailPaymentInfo.tid !== '-' && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyText('승인 거래번호', detailPaymentInfo.tid)}
+                        className="p-1 text-slate-400 hover:text-slate-700 rounded cursor-pointer shrink-0"
+                        title="TID 복사"
+                      >
+                        {copiedField === '승인 거래번호' ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 px-4 py-3">
+                  <span className="text-xs font-medium text-slate-500 shrink-0">승인번호</span>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-xs font-mono font-bold text-indigo-700">
+                      {detailPaymentInfo.applNum}
+                    </span>
+                    {detailPaymentInfo.applNum !== '-' && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyText('승인번호', detailPaymentInfo.applNum)}
+                        className="p-1 text-slate-400 hover:text-slate-700 rounded cursor-pointer shrink-0"
+                        title="승인번호 복사"
+                      >
+                        {copiedField === '승인번호' ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 일반 거래 정보 */}
+              <div className="rounded-lg border border-slate-200 divide-y divide-slate-100">
+                <div className="flex items-center justify-between gap-4 px-4 py-2.5 text-xs">
+                  <span className="text-slate-500 shrink-0">결제 상태</span>
+                  <div>{renderStatusText(detailOrder.status)}</div>
+                </div>
+                <div className="flex items-center justify-between gap-4 px-4 py-2.5 text-xs">
+                  <span className="text-slate-500 shrink-0">결제일시 (승인일시)</span>
+                  <span className="font-mono tabular-nums text-slate-900">{detailPaymentInfo.applDateTime}</span>
+                </div>
+                <div className="flex items-center justify-between gap-4 px-4 py-2.5 text-xs">
+                  <span className="text-slate-500 shrink-0">구매자</span>
+                  <span className="text-slate-900 font-medium text-right">
+                    {detailOrder.profile?.name || detailOrder.profile?.nickname || '익명'}
+                    {detailOrder.profile?.email ? ` · ${detailOrder.profile.email}` : ''}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-4 px-4 py-2.5 text-xs">
+                  <span className="text-slate-500 shrink-0">상품 내용</span>
+                  <div className="text-right">
+                    <div className="text-slate-900 font-medium">
+                      {detailOrder.course?.title || detailOrder.order_name || '삭제된 강의 정보'}
+                    </div>
+                    {detailOrder.course_id && (
+                      <div className="text-[11px] font-mono text-slate-400 mt-0.5">
+                        코스 ID: {detailOrder.course_id}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-4 px-4 py-2.5 text-xs">
+                  <span className="text-slate-500 shrink-0">결제방법</span>
+                  <span className="text-slate-900 font-medium">
+                    {detailPaymentInfo.payDeviceLabel} · {detailPaymentInfo.payMethodLabel}
+                    {detailPaymentInfo.cardName ? ` (${detailPaymentInfo.cardName})` : ''}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-4 px-4 py-2.5 text-xs">
+                  <span className="text-slate-500 shrink-0">PG 연동</span>
+                  <span className="text-slate-900">
+                    {detailPaymentInfo.isInicisLinked ? 'KG이니시스 실시간 승인' : '수동/기타 처리'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm bg-slate-50/70">
+                  <span className="font-semibold text-slate-700">결제금액</span>
+                  <span className="font-mono tabular-nums font-bold text-slate-900">
+                    ₩{Number(detailOrder.amount || 0).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-2 bg-slate-50 -mx-6 -mb-6 px-6 py-4 rounded-b-xl border-t border-slate-100 flex flex-row justify-end gap-2">
+            {detailOrder && isOrderCompletedStatus(detailOrder.status) && (
+              <Button
+                type="button"
+                onClick={() => openRefundModal(detailOrder)}
+                disabled={isProcessing !== null}
+                variant="outline"
+                className="h-9 px-4 rounded-lg text-xs font-semibold text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 whitespace-nowrap shrink-0 gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                환불 처리
+              </Button>
+            )}
+            <Button
+              type="button"
+              onClick={() => setDetailOrder(null)}
+              className="h-9 px-4 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              닫기
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 환불 처리 확인 모달 */}
+      <Dialog
+        open={Boolean(refundTargetOrder)}
+        onOpenChange={(open) => {
+          if (!open && !isProcessing) setRefundTargetOrder(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md bg-white p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-900">결제 환불 처리</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              KG이니시스 승인 취소 및 수강 권한 회수가 즉시 실행됩니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          {refundTargetOrder && refundTargetInfo && (
+            <div className="space-y-4 py-1">
+              <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3.5 space-y-1.5 text-xs">
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-500">주문번호</span>
+                  <span className="font-mono font-semibold text-slate-900">
+                    {refundTargetOrder.merchant_uid || refundTargetOrder.id}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-500">구매자</span>
+                  <span className="font-semibold text-slate-900">
+                    {refundTargetOrder.profile?.name || refundTargetOrder.profile?.nickname || '익명'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-500">상품 내용</span>
+                  <span className="font-medium text-slate-800 truncate max-w-[220px]">
+                    {refundTargetOrder.course?.title || refundTargetOrder.order_name || '-'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2 pt-1 border-t border-slate-200/70">
+                  <span className="text-slate-600 font-semibold">환불 금액</span>
+                  <span className="font-mono tabular-nums font-bold text-rose-600">
+                    ₩{Number(refundTargetOrder.amount || 0).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 block">환불 사유</label>
+                <Input
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                  placeholder="환불 사유를 입력하세요 (예: 고객 요청 환불)"
+                  className="h-10 rounded-lg border-slate-200 text-sm"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-2 bg-slate-50 -mx-6 -mb-6 px-6 py-4 rounded-b-xl border-t border-slate-100 flex flex-row justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isProcessing !== null}
+              onClick={() => setRefundTargetOrder(null)}
+              className="h-9 px-4 rounded-lg text-xs font-semibold border-slate-200 whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              취소
+            </Button>
+            <Button
+              type="button"
+              disabled={isProcessing !== null}
+              onClick={handleConfirmRefund}
+              className="h-9 px-4 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white whitespace-nowrap shrink-0 gap-1.5 cursor-pointer"
+            >
+              {isProcessing === refundTargetOrder?.id + '_refund' ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="w-3.5 h-3.5" />
+              )}
+              환불 실행
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
