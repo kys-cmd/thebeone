@@ -9,7 +9,7 @@ export interface ResolvedCourseOgMeta {
   categoryLabel?: string;
 }
 
-const SITE_NAME = "BE ONE: 비원아카데미";
+const SITE_NAME = "비원아카데미: Beone";
 const DEFAULT_DESCRIPTION = "정규강의, 특강, 그리고 강력한 커뮤니티가 결합된 비원아카데미입니다.";
 
 export function escapeHtmlText(value: string): string {
@@ -207,9 +207,9 @@ export function injectOgTagsIntoHtml(
 
   let html = htmlTemplate;
 
-  // Replace existing <title>
+  // Keep browser <title> fixed to site name while og:title carries course title for link previews
   if (/<title[^>]*>[\s\S]*?<\/title>/i.test(html)) {
-    html = html.replace(/<title[^>]*>[\s\S]*?<\/title>/i, `<title>${safeTitle}</title>`);
+    html = html.replace(/<title[^>]*>[\s\S]*?<\/title>/i, `<title>${safeSiteName}</title>`);
   }
 
   // Strip existing description / og:* / twitter:* / canonical tags to avoid duplicates

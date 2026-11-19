@@ -330,13 +330,16 @@ export default function CourseDetail() {
   }, [id, user]);
 
   useEffect(() => {
+    const fixedSiteTitle = '비원아카데미: Beone';
+    const defaultDesc = '정규강의, 특강, 그리고 강력한 커뮤니티가 결합된 비원아카데미입니다.';
+    document.title = fixedSiteTitle;
+
     if (!course) return;
 
-    const siteName = 'BE ONE: 비원아카데미';
-    const fullTitle = course.title ? `${course.title} | ${siteName}` : siteName;
+    const fullTitle = course.title ? `${course.title} | ${fixedSiteTitle}` : fixedSiteTitle;
     const desc =
       String(course.description || '').replace(/\s+/g, ' ').trim() ||
-      `${course.instructor ? `${course.instructor} 강사 · ` : ''}정규강의, 특강, 그리고 강력한 커뮤니티가 결합된 비원아카데미입니다.`;
+      `${course.instructor ? `${course.instructor} 강사 · ` : ''}${defaultDesc}`;
     const pageUrl = `${window.location.origin}${window.location.pathname}`;
 
     const resolveAbsoluteImage = (raw?: string | null): string | null => {
@@ -379,8 +382,6 @@ export default function CourseDetail() {
       resolveAbsoluteImage(course.hero_image) ||
       resolveAbsoluteImage(blockImg);
 
-    document.title = fullTitle;
-
     const upsertMeta = (attr: 'name' | 'property', key: string, content: string | null) => {
       let tag = document.head.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
       if (!content) {
@@ -397,7 +398,7 @@ export default function CourseDetail() {
 
     upsertMeta('name', 'description', desc);
     upsertMeta('property', 'og:type', 'website');
-    upsertMeta('property', 'og:site_name', siteName);
+    upsertMeta('property', 'og:site_name', fixedSiteTitle);
     upsertMeta('property', 'og:title', fullTitle);
     upsertMeta('property', 'og:description', desc);
     upsertMeta('property', 'og:url', pageUrl);
@@ -415,6 +416,23 @@ export default function CourseDetail() {
       document.head.appendChild(canonical);
     }
     canonical.setAttribute('href', pageUrl);
+
+    return () => {
+      document.title = fixedSiteTitle;
+      upsertMeta('name', 'description', defaultDesc);
+      upsertMeta('property', 'og:site_name', fixedSiteTitle);
+      upsertMeta('property', 'og:title', fixedSiteTitle);
+      upsertMeta('property', 'og:description', defaultDesc);
+      upsertMeta('property', 'og:url', null);
+      upsertMeta('property', 'og:image', null);
+      upsertMeta('property', 'og:image:alt', null);
+      upsertMeta('name', 'twitter:card', 'summary_large_image');
+      upsertMeta('name', 'twitter:title', fixedSiteTitle);
+      upsertMeta('name', 'twitter:description', defaultDesc);
+      upsertMeta('name', 'twitter:image', null);
+      const existingCanonical = document.head.querySelector('link[rel="canonical"]');
+      if (existingCanonical) existingCanonical.remove();
+    };
   }, [course]);
 
   if (loading) {

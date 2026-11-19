@@ -214,6 +214,12 @@ export default function App() {
 }
 
 function AppContent() {
+  const location = useLocation();
+
+  useEffect(() => {
+    document.title = '비원아카데미: Beone';
+  }, [location.pathname, location.search]);
+
   return (
     <div className="flex min-h-screen flex-col font-sans antialiased">
       <Suspense fallback={
